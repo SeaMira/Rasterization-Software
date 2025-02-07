@@ -3,13 +3,14 @@
 
 #include <cstddef>
 #include <string>
+#include <glad/glad.h>
 
 #include "ux/input.h"
 
 class Window
     {
       public:
-        Window( std::string title, std::size_t width = 1280, std::size_t height = 720, bool shown = true );
+        Window( std::string& title, std::size_t width = 1280, std::size_t height = 720, bool shown = true );
 
         Window( const Window & )             = delete;
         Window & operator=( const Window & ) = delete;
@@ -23,11 +24,11 @@ class Window
 
         void resize( std::size_t width, std::size_t height );
 
-        inline SDL_Window *  getHandle();
-        inline SDL_GLContext getContext();
-        inline uint32_t      getWidth() const;
-        inline uint32_t      getHeight() const;
-        inline const Input & getInput() const;
+        inline SDL_Window *  getHandle() { return m_window; }
+        inline SDL_GLContext getContext() { return m_glContext; }
+        inline uint32_t      getWidth() const { return m_width; }
+        inline uint32_t      getHeight() const { return m_height; }
+        inline const Input & getInput() const { return m_input; }
 
       private:
         std::string m_title;
