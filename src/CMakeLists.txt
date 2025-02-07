@@ -41,7 +41,7 @@ set_property(TARGET raster_dependencies PROPERTY CXX_STANDARD 20)
 
 target_include_directories(raster_dependencies PUBLIC 
     ${OPENGL_INCLUDE_DIRS} 
-    ${SDL3_INCLUDE_DIRS} 
+    "${CMAKE_SOURCE_DIR}/extern/SDL/include" 
     "${CMAKE_SOURCE_DIR}/include" 
     ${raster_extern_includes}
 )
