@@ -65,7 +65,7 @@ Window::Window( std::string& title, std::size_t width, std::size_t height, bool 
     if (GLVersion.major < 4 || (GLVersion.major == 4 && GLVersion.minor < 5)) {
         throw std::runtime_error("OpenGL 4.5 is not supported");
     }
-
+    m_startTime = SDL_GetPerformanceCounter();
 }
 
 Window::Window( Window && other ) noexcept
@@ -117,6 +117,7 @@ bool Window::update()
     const uint64_t        now          = SDL_GetPerformanceCounter();
     m_input.deltaTime = static_cast<float>( static_cast<double>( now - m_lastTimeStep ) / sdlFrequency );
     m_lastTimeStep    = now;
+    m_elapsedTime    = (now - m_startTime)/ 100000.0f;
 
     bool      running = true;
     SDL_Event windowEvent;
