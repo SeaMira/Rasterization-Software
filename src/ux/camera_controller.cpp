@@ -37,7 +37,7 @@ void CameraController::keyBoardAction() const
     {
         m_camera->OnKeyboard(' ', m_input->deltaTime);  
     }
-    if (m_input->isKeyPressed(Key::L)) 
+    if (m_input->isKeyPressed(Key::LShift)) 
     {
         m_camera->OnKeyboard('l', m_input->deltaTime);  
     }
@@ -47,6 +47,7 @@ void CameraController::mouseAction() const
 {
     m_camera->OnMouse(m_input->mousePosition.x, m_input->mousePosition.y);
     m_camera->OnScroll(static_cast<float>(m_input->deltaMouseWheel));
+    m_camera->OnRender(m_input->deltaTime);
 }
 
 void CameraController::cameraUpdate() const
