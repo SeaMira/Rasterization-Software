@@ -138,6 +138,7 @@ bool Window::update()
             m_input.deltaMousePosition.y = windowEvent.motion.yrel;
             m_input.mousePosition.x      = windowEvent.motion.x;
             m_input.mousePosition.y      = windowEvent.motion.y;
+            // std::cout << m_input.mousePosition.x << ", " << m_input.mousePosition.y << std::endl;
             break;
         }
         case SDL_EVENT_KEY_DOWN:
@@ -198,6 +199,9 @@ bool Window::update()
         }
         }
     }
+
+    // Actualizar pantalla
+    SDL_GL_SwapWindow(m_window);
 
     return running;
 }

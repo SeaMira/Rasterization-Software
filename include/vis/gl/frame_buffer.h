@@ -16,6 +16,8 @@ public:
     void unbind() const;
     bool isComplete() const;
 
+    GLuint getId() const { return m_id; }
+
 private:
     GLuint m_id;
 };

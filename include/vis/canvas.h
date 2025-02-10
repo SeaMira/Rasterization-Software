@@ -27,6 +27,7 @@ public:
     void setTexture(GLenum target, GLenum internalFormat, GLsizei width, 
         GLsizei height, GLenum format, GLenum type);
     void setFBO(GLenum attachment);
+    void bindTexture(GLuint unit = 0) const;
     void bindFBO() const;
 
 private:

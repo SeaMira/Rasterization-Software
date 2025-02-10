@@ -11,9 +11,9 @@ Framebuffer::~Framebuffer() {
 void Framebuffer::attachTexture(GLenum attachment, const Texture& texture, 
     GLenum framebuffer) 
 {
-    glBindFramebuffer(GL_FRAMEBUFFER, m_id);
+    glBindFramebuffer(framebuffer, m_id);
     glFramebufferTexture2D(framebuffer, attachment, GL_TEXTURE_2D, texture.getId(), 0);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glBindFramebuffer(framebuffer, 0);
 }
 
 void Framebuffer::bind(GLenum target) const 

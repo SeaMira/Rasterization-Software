@@ -4,7 +4,8 @@
 
 Canvas::Canvas(GLenum target, GLenum internalFormat, GLsizei width, 
     GLsizei height, GLenum format, GLenum type):
-    m_canvas(target, internalFormat, width, height, format, type, nullptr)
+    m_canvas(target, internalFormat, width, height, format, type, nullptr), m_fbo(),
+    m_width(width), m_height(height)
 {}
 
 Canvas::Canvas( Canvas && other ) noexcept
@@ -35,6 +36,11 @@ void Canvas::setTexture(GLenum target, GLenum internalFormat, GLsizei width,
 void Canvas::setFBO(GLenum attachment)
 {
     m_fbo.attachTexture(attachment, m_canvas, GL_READ_FRAMEBUFFER);
+}
+
+void Canvas::bindTexture(GLuint unit) const
+{
+    m_canvas.bind(unit);
 }
 
 void Canvas::bindFBO() const
