@@ -16,6 +16,7 @@ uniform float FOV;
 
 uniform bool show_grid;
 uniform bool show_axis;
+uniform bool show_num;
 
 struct ProjectionResult
 {
@@ -172,9 +173,20 @@ void main() {
     vec3 ro = cameraPos;
     vec3 rd = normalize( uv.x * right + uv.y * up + fov * front );
 
-    const vec4 sph[3] = vec4[3]( vec4(-2.0, 1.0,0.0,1.1),
-                                vec4( 3.0, 1.5,1.0,1.2),
-                                vec4( 1.0,-1.0,1.0,1.3) );
+    // const vec4 sph[6] = vec4[6]( vec4(-2.0, 1.0,0.0,1.1),
+    //                             vec4( 3.0, 1.5,1.0,1.2),
+    //                             vec4( 1.0,-1.0,1.0,1.3),
+    //                             vec4( 3.0,-1.0,1.0,1.3),
+    //                             vec4( 6.0,-1.0,1.0,1.3),
+    //                             vec4( 9.0,-1.0,1.0,1.3) );
+
+    const int sphereCount = 100;
+
+    vec4 sph[sphereCount]; // Máximo de 20 esferas para evitar problemas de tamaño
+    for (int i = 0; i < sphereCount; i++) {
+        float x = float(i) * 3.0; // Separación de 3 unidades en X
+        sph[i] = vec4(x, 0.0, 0.0, 1.3); // Tamaños variables
+    }
 
     float tmin = 10000.0;
     vec3  nor = vec3(0.0);
@@ -182,7 +194,7 @@ void main() {
 
     vec3 sur = vec3(1.0);
 
-    for( int i=0; i<3; i++ )
+    for( int i=0; i<sphereCount; i++ )
     {
         float h = iSphere( ro, rd, sph[i] );
         if( h>0.0 && h<tmin ) 
@@ -214,7 +226,7 @@ void main() {
         
         vec3 lig = normalize( vec3(2.0,1.4,-1.0) );
         float sha = 1.0;
-        for( int i=0; i<3; i++ )
+        for( int i=0; i<6; i++ )
         {
             sha *= ssSphere( pos, lig, sph[i] );
         }
@@ -230,7 +242,7 @@ void main() {
     col = pow( col, vec3(0.45) );
 
     //-------------------------------------------------------
-    for( int i=0; i<3; i++ )
+    for( int i=0; i<sphereCount; i++ )
     {
         ProjectionResult res = projectSphere( sph[i], viewMatrix, fov );
         res.area *= screenResolution.y*screenResolution.y*0.25;
@@ -247,7 +259,10 @@ void main() {
                 col = mix( col, vec3(1.0,0.0,0.0), showMaths*(1.0-smoothstep(0.03,0.04, length(uv+res.center))));
             }
             vec2 pp = -res.center + 0.5 * max(max(res.axisA, -res.axisA), max(res.axisB, -res.axisB));
-            col = mix( col, vec3(1.0), PrintInt( (uv-pp)/0.07, floor(res.area) ) );
+            if (show_num) 
+            {
+                col = mix( col, vec3(1.0), PrintInt( (uv-pp)/0.07, floor(res.area) ) );
+            }
         }
     }
 
