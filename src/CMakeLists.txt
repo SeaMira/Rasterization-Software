@@ -12,8 +12,11 @@ set(raster_includes
     ${CMAKE_SOURCE_DIR}/include/ux/camera.h
     ${CMAKE_SOURCE_DIR}/include/ux/input.h
 
-    ${CMAKE_SOURCE_DIR}/include/vis/shader_program.h
+    ${CMAKE_SOURCE_DIR}/include/vis/compute_shader_program.h
     ${CMAKE_SOURCE_DIR}/include/vis/window.h
+    ${CMAKE_SOURCE_DIR}/include/vis/canvas.h
+    ${CMAKE_SOURCE_DIR}/include/vis/gl/frame_buffer.h
+    ${CMAKE_SOURCE_DIR}/include/vis/gl/texture.h
 )
 
 set(raster_source
@@ -29,8 +32,11 @@ set(raster_source
     ${CMAKE_SOURCE_DIR}/src/ux/camera.cpp
     ${CMAKE_SOURCE_DIR}/src/ux/input.cpp
 
-    ${CMAKE_SOURCE_DIR}/src/vis/shader_program.cpp
+    ${CMAKE_SOURCE_DIR}/src/vis/compute_shader_program.cpp
     ${CMAKE_SOURCE_DIR}/src/vis/window.cpp
+    ${CMAKE_SOURCE_DIR}/src/vis/canvas.cpp
+    ${CMAKE_SOURCE_DIR}/src/vis/gl/frame_buffer.cpp
+    ${CMAKE_SOURCE_DIR}/src/vis/gl/texture.cpp
 )
 
 add_library(raster_dependencies STATIC
