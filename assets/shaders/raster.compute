@@ -248,19 +248,19 @@ void main() {
         res.area *= screenResolution.y*screenResolution.y*0.25;
         if( res.area>0.0 )
         {
-            float f = res.a*uv.x*uv.x + res.b*uv.x*uv.y + res.c*uv.y*uv.y + res.d*uv.x + res.e*uv.y + res.f;
-            vec2  g = 2.0*vec2(res.a,res.c)*uv.xy + res.b*uv.yx + vec2(res.d,res.e);                   
-            float d = abs(f)/length(g);
             if (show_axis) {
+                float f = res.a*uv.x*uv.x + res.b*uv.x*uv.y + res.c*uv.y*uv.y + res.d*uv.x + res.e*uv.y + res.f;
+                vec2  g = 2.0*vec2(res.a,res.c)*uv.xy + res.b*uv.yx + vec2(res.d,res.e);                   
+                float d = abs(f)/length(g);
                 float showMaths = smoothstep( -0.5, 0.5, cos(0.5*6.2831*iTime) );
                 col = mix( col, vec3(1.0,0.0,0.0), showMaths*(1.0-smoothstep(0.00,0.01, d)));
                 col = mix( col, vec3(1.0,1.0,0.0), showMaths*(1.0-smoothstep(0.00,0.01, sdSegment( uv, -res.center-res.axisA, -res.center+res.axisA )) ));
                 col = mix( col, vec3(1.0,1.0,0.0), showMaths*(1.0-smoothstep(0.00,0.01, sdSegment( uv, -res.center-res.axisB, -res.center+res.axisB )) ));
                 col = mix( col, vec3(1.0,0.0,0.0), showMaths*(1.0-smoothstep(0.03,0.04, length(uv+res.center))));
             }
-            vec2 pp = -res.center + 0.5 * max(max(res.axisA, -res.axisA), max(res.axisB, -res.axisB));
             if (show_num) 
             {
+                vec2 pp = -res.center + 0.5 * max(max(res.axisA, -res.axisA), max(res.axisB, -res.axisB));
                 col = mix( col, vec3(1.0), PrintInt( (uv-pp)/0.07, floor(res.area) ) );
             }
         }

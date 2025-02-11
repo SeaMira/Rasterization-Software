@@ -4,27 +4,31 @@ set(raster_includes
 
     ${CMAKE_SOURCE_DIR}/include/geometry/cylinder/cylinder.h
     ${CMAKE_SOURCE_DIR}/include/geometry/sphere/sphere.h
-
+    
+    ${CMAKE_SOURCE_DIR}/include/molecule_loader/basic_loader.h
+    
     ${CMAKE_SOURCE_DIR}/include/utils/math_defines.h
     ${CMAKE_SOURCE_DIR}/include/utils/scene_descriptor.h
 
     ${CMAKE_SOURCE_DIR}/include/ux/camera_controller.h
     ${CMAKE_SOURCE_DIR}/include/ux/camera.h
     ${CMAKE_SOURCE_DIR}/include/ux/input.h
-
+    
     ${CMAKE_SOURCE_DIR}/include/vis/compute_shader_program.h
     ${CMAKE_SOURCE_DIR}/include/vis/window.h
     ${CMAKE_SOURCE_DIR}/include/vis/canvas.h
     ${CMAKE_SOURCE_DIR}/include/vis/gl/frame_buffer.h
     ${CMAKE_SOURCE_DIR}/include/vis/gl/texture.h
-)
+    )
 
 set(raster_source
     ${CMAKE_SOURCE_DIR}/src/algorithms/frustum_cull.cpp
     ${CMAKE_SOURCE_DIR}/src/algorithms/occlusion_cull.cpp
-
+    
     ${CMAKE_SOURCE_DIR}/src/geometry/cylinder/cylinder.cpp
     ${CMAKE_SOURCE_DIR}/src/geometry/sphere/sphere.cpp
+    
+    ${CMAKE_SOURCE_DIR}/src/molecule_loader/basic_loader.cpp
 
     ${CMAKE_SOURCE_DIR}/src/utils/scene_descriptor.cpp
 
