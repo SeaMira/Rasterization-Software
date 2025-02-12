@@ -4,6 +4,11 @@
 #include "molecule_loader/basic_loader.h"
 #include "utils/math_defines.h"
 
+ChemFilesLoader::ChemFilesLoader(const std::filesystem::path & path)
+{
+    load(path);
+}
+
 void ChemFilesLoader::load(const std::filesystem::path & path)
 {
     if (!std::filesystem::exists(path)) {

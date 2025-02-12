@@ -12,7 +12,7 @@ class ChemFilesLoader
 {
 public:
     ChemFilesLoader() = default;
-    ChemFilesLoader(const std::string& filename);
+    ChemFilesLoader(const std::filesystem::path & path);
     ChemFilesLoader(const ChemFilesLoader&) = delete;
     ChemFilesLoader& operator=(const ChemFilesLoader&) = delete;
     ChemFilesLoader(ChemFilesLoader&&) noexcept = default;
