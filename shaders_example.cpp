@@ -32,7 +32,7 @@ int main(int argc, char* argv[]) {
     Camera camera(SCR_WIDTH, SCR_HEIGHT);
     camera.SetPosition(3.0f, 0.0f, 0.0f);
     CameraController camera_controller(window, camera);
-    ComputeShader computeShader("raster.compute");
+    ComputeShader computeShader("shaders/raster.compute");
     computeShader.use();
     
     Canvas canvas(GL_TEXTURE_2D, GL_RGBA8, SCR_WIDTH, SCR_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE);
