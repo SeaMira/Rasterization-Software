@@ -48,7 +48,6 @@ int main(int argc, char* argv[]) {
     try
     {
         bool isRunning = true;
-        SDL_Event event;
         while ( isRunning )
         {
             if (window.getInput().isKeyDown(Key::G)) show_grid = !show_grid;
