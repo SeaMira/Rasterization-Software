@@ -6,6 +6,7 @@ function(add_dependency_folder folder_target input_folder output_folder)
 	set_property(TARGET ${folder_target} APPEND PROPERTY SOURCES ${folder_content}) 
 endfunction()
 
+
 project(compute_shaders_project LANGUAGES CXX C)
 set(CXX_STANDARD 20)
 
@@ -18,38 +19,23 @@ add_subdirectory(extern)
 set(SDL_SHARED OFF CACHE BOOL "" FORCE)   # Deactivates dynamic version
 set(SDL_STATIC ON CACHE BOOL "" FORCE)    # Activates static version
 
-add_executable(controllers_example "controllers_example.cpp")
-add_executable(shaders_example "shaders_example.cpp")
-add_executable(loader_example "loader_example.cpp")
-add_executable(brute_sequencial "brute_sequencial.cpp")
-
 add_dependency_folder(data_folder_bin "${CMAKE_CURRENT_SOURCE_DIR}/assets" "${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}")
 add_dependency_folder(data_folder "${CMAKE_CURRENT_SOURCE_DIR}/assets" "${CMAKE_BINARY_DIR}")
 
 target_link_libraries(raster_dependencies PUBLIC  glad glm)
 
-target_link_libraries(controllers_example PUBLIC raster_dependencies SDL3-static glad)
-target_link_libraries(shaders_example PUBLIC raster_dependencies SDL3-static glad)
-target_link_libraries(loader_example PUBLIC raster_dependencies)
-target_link_libraries(brute_sequencial PUBLIC raster_dependencies  SDL3-static glad)
+function(add_subproject project_name executable)
+	add_executable(${project_name} ${executable})
+	target_link_libraries(${project_name} PUBLIC raster_dependencies SDL3-static glad)
+	target_include_directories(${project_name} PUBLIC ${OPENGL_INCLUDE_DIRS} extern/SDL/include)
+endfunction()
 
-target_include_directories(controllers_example PUBLIC ${OPENGL_INCLUDE_DIRS} extern/SDL/include)
-target_include_directories(shaders_example PUBLIC ${OPENGL_INCLUDE_DIRS} extern/SDL/include)
-target_include_directories(loader_example PUBLIC ${OPENGL_INCLUDE_DIRS} extern/SDL/include)
-target_include_directories(brute_sequencial PUBLIC ${OPENGL_INCLUDE_DIRS} extern/SDL/include)
+add_subproject(controllers_example "controllers_example.cpp")
+add_subproject(shaders_example "shaders_example.cpp")
+add_subproject(loader_example "loader_example.cpp")
+add_subproject(brute_sequencial "brute_sequencial.cpp")
 
 add_dependencies(shaders_example data_folder_bin)
 add_dependencies(shaders_example data_folder)
 add_dependencies(loader_example data_folder_bin)
 add_dependencies(loader_example data_folder)
-
-# set(SHADER_FILES
-#     ${CMAKE_SOURCE_DIR}/assets/shaders/raster.compute
-# )
-
-# # Copia los archivos .cs al directorio de salida del ejecutable
-# add_custom_command(TARGET shaders_example POST_BUILD
-#     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-#     ${SHADER_FILES}
-#     $<TARGET_FILE_DIR:shaders_example>
-# )

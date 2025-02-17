@@ -157,14 +157,14 @@ void Camera::OnMouse(float x, float y) {
     float xpos = x;
     float ypos = y;
 
-    if (firstMouse)
-    {
-        lastX = xpos;
-        lastY = ypos;
-        yaw   = 90.0f;
-        pitch =  -45.0f;
-        firstMouse = false;
-    }
+    // if (firstMouse)
+    // {
+    //     lastX = xpos;
+    //     lastY = ypos;
+    //     yaw   = 90.0f;
+    //     pitch =  -45.0f;
+    //     firstMouse = false;
+    // }
 
     float xoffset = xpos - lastX;
     float yoffset = lastY - ypos; // reversed since y-coordinates go from bottom to top
@@ -175,7 +175,7 @@ void Camera::OnMouse(float x, float y) {
     xoffset *= sensitivity;
     yoffset *= sensitivity;
 
-    yaw -= xoffset;
+    yaw += xoffset;
     pitch += yoffset;
 
     // make sure that when pitch is out of bounds, screen doesn't get flipped
@@ -212,13 +212,13 @@ void Camera::OnMouse(float x, float y) {
 
     glm::vec3 front;
     front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-    front.y = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
-    front.z = sin(glm::radians(pitch));
-    // front.y = sin(glm::radians(pitch));
-    // front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+    // front.y = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+    // front.z = sin(glm::radians(pitch));
+    front.y = sin(glm::radians(pitch));
+    front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
     cameraFront = glm::normalize(front);
 
-    glm::vec3 right = glm::normalize(glm::cross(cameraFront, glm::vec3(0.0f, 0.0f, 1.0f))); // Right vector
+    glm::vec3 right = glm::normalize(glm::cross(cameraFront, glm::vec3(0.0f, 1.0f, 0.0f))); // Right vector
     cameraUp = glm::normalize(glm::cross(right, cameraFront));
 }
 
@@ -226,11 +226,11 @@ void Camera::OnRender(float dt) {
     bool ShouldUpdate = false;
 
     if (OnLeftEdge) {
-        yaw += EDGE_STEP*dt;
+        yaw -= EDGE_STEP*dt;
         ShouldUpdate = true;
     }
     else if (OnRightEdge) {
-        yaw -= EDGE_STEP*dt;
+        yaw += EDGE_STEP*dt;
         ShouldUpdate = true;
     }
 
@@ -253,14 +253,14 @@ void Camera::OnRender(float dt) {
         if (pitch < -89.0f)
             pitch = -89.0f;
         glm::vec3 front;
-        front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-        front.y = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
-        front.z = sin(glm::radians(pitch));
         // front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-        // front.y = sin(glm::radians(pitch));
-        // front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+        // front.y = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+        // front.z = sin(glm::radians(pitch));
+        front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
+        front.y = sin(glm::radians(pitch));
+        front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
         cameraFront = glm::normalize(front);
-        glm::vec3 right = glm::normalize(glm::cross(cameraFront, glm::vec3(0.0f, 0.0f, 1.0f))); // Right vector
+        glm::vec3 right = glm::normalize(glm::cross(cameraFront, glm::vec3(0.0f, 1.0f, 0.0f))); // Right vector
         cameraUp = glm::normalize(glm::cross(right, cameraFront));
     }
     
@@ -272,4 +272,17 @@ void Camera::OnScroll(float yoffset) {
         fov = 1.0f;
     if (fov > 45.0f)
         fov = 45.0f;
+}
+
+
+void Camera::showInfo()
+{
+    std::cout << "Camera Info" << std::endl;
+    std::cout << "Position: " << cameraPos.x << ", " << cameraPos.y << ", " << cameraPos.z << std::endl;
+    std::cout << "Front: " << cameraFront.x << ", " << cameraFront.y << ", " << cameraFront.z << std::endl;
+    std::cout << "Up: " << cameraUp.x << ", " << cameraUp.y << ", " << cameraUp.z << std::endl;
+    std::cout << "Right: " << getRight().x << ", " << getRight().y << ", " << getRight().z << std::endl;
+    std::cout << "Yaw: " << yaw << std::endl;
+    std::cout << "Pitch: " << pitch << std::endl;
+    std::cout << "FOV: " << fov << std::endl;
 }
