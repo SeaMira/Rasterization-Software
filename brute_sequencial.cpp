@@ -210,7 +210,7 @@ void renderFrame(std::vector<uint32_t>& framebuffer,
             
             for (int px = std::max(0, screenMin.x); px < std::min(screenMax.x, SCR_WIDTH); px++)
             {
-                for (int py = std::max(0, screenMin.y); py <= std::min(SCR_HEIGHT, screenMax.y); py++)
+                for (int py = std::max(0, screenMin.y); py < std::min(SCR_HEIGHT, screenMax.y); py++)
                 {
                     // if (px < 0 || px >= SCR_WIDTH || py <= 0 || py > SCR_HEIGHT) 
                     //     continue; 
@@ -226,7 +226,7 @@ void renderFrame(std::vector<uint32_t>& framebuffer,
                     bool showBbox = (px == screenMin.x || py == screenMin.y || px == screenMax.x - 1 || py == screenMax.y - 1);
                     if ((h > 0.0f) || showBbox) 
                     {
-                        int index = (SCR_HEIGHT - py) * SCR_WIDTH + px;
+                        int index = (SCR_HEIGHT - py - 1) * SCR_WIDTH + px;
                         glm::vec3 hit = viewImpPos * h;
                         float depth = hit.z < 0.0f ? (hit.z * proj[2].z + proj[3].z) / -hit.z : FLT_MAX;
                         if (depth < depthBuffer[index]) 
