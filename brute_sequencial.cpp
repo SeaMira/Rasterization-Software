@@ -48,7 +48,7 @@ float iSphere(glm::vec3 ro, glm::vec3 rd, glm::vec3 sph, float radius )
     float b = glm::dot( rd, sph );
     float c = glm::dot( sph, sph ) - radius*radius;
     float h = b*b - a * c;
-    if( h < 0.0f ) return -1.0f;
+    if( h < 0.0f || a == 0.0f) return -1.0f;
     return (b - std::sqrt( h ))/a;
 }
 
@@ -70,38 +70,55 @@ float iSphere(glm::vec3 ro, glm::vec3 rd, glm::vec3 sph, float radius )
 //     return 0.0f <= F && F <= 1.0f ; // Margen de error
 // }
 
-ProjectionResult projectSphere( /* sphere */ glm::vec4 sph, 
+float projectSphere( /* sphere */ glm::vec4 sph, 
     /* camera matrix */ glm::mat4 cam,
     /* projection    */ float fle )
 {
-// transform to camera space	
-glm::vec3  sph3(sph[0], sph[1], sph[2]);
-glm::vec3  o = glm::vec3(cam*glm::vec4(sph3, 1.0f));
+    // transform to camera space	
+    glm::vec3  sph3(sph[0], sph[1], sph[2]);
+    glm::vec3  o = glm::vec3(cam*glm::vec4(sph3, 1.0f));
 
-float r2 = sph[3]*sph[3];
-float z2 = o[2]*o[2];	
-float l2 = dot(o,o);
+    float r2 = sph[3]*sph[3];
+    float z2 = o[2]*o[2];	
+    float l2 = dot(o,o);
 
-float r2z2 = r2-z2;
-float area = -3.141593*fle*fle*r2*sqrt(abs((l2-r2)/(r2z2)))/(r2z2 + 1e-12);
+    float r2z2 = r2-z2;
 
-// axis
-glm::vec2 axa = fle*sqrt(-r2*(r2-l2)/((l2-z2)*(r2z2)*(r2z2) + 1e-12f)) * glm::vec2( o[0],o[1]);
-glm::vec2 axb = fle*sqrt(-r2/((l2-z2)*(r2z2) + 1e-6f))*glm::vec2(-o[1],o[0]);
-
-// center
-glm::vec2  cen = fle*o.z*glm::vec2(o[0], o[1])/(z2-r2);
-
-
-return { area, cen, axa, axb, 
-/* a */ r2 - o.y*o.y - z2,
-/* b */ 2.0f*o.x*o.y,
-/* c */ r2 - o.x*o.x - z2,
-/* d */ -2.0f*o.x*o.z*fle,
-/* e */ -2.0f*o.y*o.z*fle,
-/* f */ (r2-l2+z2)*fle*fle };
+    return -3.141593*fle*fle*r2*sqrt(abs((l2-r2)/(r2z2)))/(r2z2 + 1e-12);
 
 }
+// ProjectionResult projectSphere( /* sphere */ glm::vec4 sph, 
+//     /* camera matrix */ glm::mat4 cam,
+//     /* projection    */ float fle )
+// {
+// // transform to camera space	
+// glm::vec3  sph3(sph[0], sph[1], sph[2]);
+// glm::vec3  o = glm::vec3(cam*glm::vec4(sph3, 1.0f));
+
+// float r2 = sph[3]*sph[3];
+// float z2 = o[2]*o[2];	
+// float l2 = dot(o,o);
+
+// float r2z2 = r2-z2;
+// float area = -3.141593*fle*fle*r2*sqrt(abs((l2-r2)/(r2z2)))/(r2z2 + 1e-12);
+
+// // axis
+// glm::vec2 axa = fle*sqrt(-r2*(r2-l2)/((l2-z2)*(r2z2)*(r2z2) + 1e-12f)) * glm::vec2( o[0],o[1]);
+// glm::vec2 axb = fle*sqrt(-r2/((l2-z2)*(r2z2) + 1e-6f))*glm::vec2(-o[1],o[0]);
+
+// // center
+// glm::vec2  cen = fle*o.z*glm::vec2(o[0], o[1])/(z2-r2);
+
+
+// return { area, cen, axa, axb, 
+// /* a */ r2 - o.y*o.y - z2,
+// /* b */ 2.0f*o.x*o.y,
+// /* c */ r2 - o.x*o.x - z2,
+// /* d */ -2.0f*o.x*o.z*fle,
+// /* e */ -2.0f*o.y*o.z*fle,
+// /* f */ (r2-l2+z2)*fle*fle };
+
+// }
 
 uint32_t depthToColor(float depth, float minDepth, float maxDepth) 
 {
@@ -138,17 +155,7 @@ void renderFrame(std::vector<uint32_t>& framebuffer,
     
     for (const auto& sphere : spheres) 
     {
-        ProjectionResult sphRes = projectSphere(glm::vec4(sphere.first, sphere.second), view, glm::radians(fov));
-        sphRes.center = (-sphRes.center + glm::vec2(1.0f, 1.0f)) * resol /2.0f;
-        sphRes.center[0] = std::floor(sphRes.center[0]);
-        sphRes.center[1] = std::floor(sphRes.center[1]);
-        
-        sphRes.axisA = (-sphRes.axisA + glm::vec2(1.0f, 1.0f)) * resol /2.0f;
-        sphRes.axisA[0] = std::floor(sphRes.axisA[0]);
-        sphRes.axisA[1] = std::floor(sphRes.axisA[1]);
-        sphRes.axisB = (-sphRes.axisB + glm::vec2(1.0f, 1.0f)) * resol /2.0f;
-        sphRes.axisB[0] = std::floor(sphRes.axisB[0]);
-        sphRes.axisB[1] = std::floor(sphRes.axisB[1]);
+        float sphArea = projectSphere(glm::vec4(sphere.first, sphere.second), view, glm::radians(fov));
 
         glm::vec3 cameraSpaceSphere = glm::vec3(view * glm::vec4(sphere.first, 1.0f));
         glm::vec3 normCamSpaceSphere = glm::normalize(cameraSpaceSphere);
@@ -177,36 +184,36 @@ void renderFrame(std::vector<uint32_t>& framebuffer,
         glm::vec3 ndcDownRight = glm::vec3(downRightCorner) / downRight.w;
         glm::vec3 ndcDownLeft = glm::vec3(downLeftCorner) / downLeft.w;
 
-        glm::vec2 minCorner = glm::vec2(std::min(std::min(ndcUpRight[0], ndcUpLeft[0]), std::min(ndcDownRight[0], ndcDownLeft[0])),
-                                        std::min(std::min(ndcUpRight[1], ndcUpLeft[1]), std::min(ndcDownRight[1], ndcDownLeft[1])));
-        glm::vec2 maxCorner = glm::vec2(std::max(std::max(ndcUpRight[0], ndcUpLeft[0]), std::max(ndcDownRight[0], ndcDownLeft[0])),
-                                        std::max(std::max(ndcUpRight[1], ndcUpLeft[1]), std::max(ndcDownRight[1], ndcDownLeft[1])));
+
+        glm::vec2 minCorner = glm::vec2(std::min(ndcUpLeft[0], ndcDownLeft[0]),
+                                        std::min(ndcDownRight[1], ndcDownLeft[1]));
+        glm::vec2 maxCorner = glm::vec2(std::max(ndcUpRight[0], ndcDownRight[0]),
+                                        std::max(ndcUpRight[1], ndcUpLeft[1]));
+        // glm::vec2 minCorner = glm::vec2(std::min(std::min(ndcUpRight[0], ndcUpLeft[0]), std::min(ndcDownRight[0], ndcDownLeft[0])),
+        //                                 std::min(std::min(ndcUpRight[1], ndcUpLeft[1]), std::min(ndcDownRight[1], ndcDownLeft[1])));
+        // glm::vec2 maxCorner = glm::vec2(std::max(std::max(ndcUpRight[0], ndcUpLeft[0]), std::max(ndcDownRight[0], ndcDownLeft[0])),
+        //                                 std::max(std::max(ndcUpRight[1], ndcUpLeft[1]), std::max(ndcDownRight[1], ndcDownLeft[1])));
 
         glm::ivec2 screenMin, screenMax;
-        screenMin.x = (minCorner.x * 0.5f + 0.5f) * SCR_WIDTH;
+        float aspectRatio = ((float)SCR_WIDTH/(float)SCR_HEIGHT);
+        // float aspectRatio = 1.0f;
+
+        screenMin.x = ((minCorner.x/aspectRatio) * 0.5f + 0.5f) * SCR_WIDTH;
         screenMin.y = (minCorner.y * 0.5f + 0.5f) * SCR_HEIGHT;
-        screenMax.x = (maxCorner.x * 0.5f + 0.5f) * SCR_WIDTH;
+        screenMax.x = ((maxCorner.x/aspectRatio) * 0.5f + 0.5f) * SCR_WIDTH;
         screenMax.y = (maxCorner.y * 0.5f + 0.5f) * SCR_HEIGHT;
 
-        // std::cout << "AxisB " << sphRes.axisB[0] << ", " << sphRes.axisB[1] << std::endl;
-        // BoundingBox bbox = getEllipseBoundingBox(sphRes);
-        if (sphRes.area >0.0f) 
+        if (sphArea >0.0f) 
         {
             float difx = screenMax.x - screenMin.x;
             float dify = screenMax.y - screenMin.y;
-            // std::cout << "screenMin.x "<< screenMin.x << std::endl;
-            // std::cout << "screenMin.y "<< screenMin.y << std::endl;
-            // std::cout << "screenMax.x "<< screenMax.x << std::endl;
-            // std::cout << "screenMax.y "<< screenMax.y << std::endl;
-            for (int px = screenMin.x; px < screenMax.x; px++)
+            
+            for (int px = std::max(0, screenMin.x); px < std::min(screenMax.x, SCR_WIDTH); px++)
             {
-                for (int py = screenMin.y; py < screenMax.y; py++)
+                for (int py = std::max(0, screenMin.y); py <= std::min(SCR_HEIGHT, screenMax.y); py++)
                 {
-                    if (px < 0 || px >= SCR_WIDTH || py <= 0 || py > SCR_HEIGHT) 
-                        continue; 
-
-                    // glm::vec2 uv = glm::vec2((float)px, (float)py) * 2.0f /glm::vec2((float)SCR_WIDTH, (float)SCR_HEIGHT) - 1.0f;
-                    // glm::vec3 rd = glm::normalize( uv.x * right + uv.y * up + front );
+                    // if (px < 0 || px >= SCR_WIDTH || py <= 0 || py > SCR_HEIGHT) 
+                    //     continue; 
 
                     float u = (float)(px - screenMin.x)/ difx;
                     float v = (float)(py - screenMin.y)/ dify;
@@ -216,12 +223,18 @@ void renderFrame(std::vector<uint32_t>& framebuffer,
                     float h = iSphere(camPos, viewImpPos, cameraSpaceSphere, sphere.second);
 
                     // bool isInside = isInsideEllipse(px, py, sphRes);
-                    int index = (SCR_HEIGHT - py) * SCR_WIDTH + px;
                     bool showBbox = (px == screenMin.x || py == screenMin.y || px == screenMax.x - 1 || py == screenMax.y - 1);
-                    if ((h > 0.0f && depthBuffer[index] > h) || showBbox) 
+                    if ((h > 0.0f) || showBbox) 
                     {
-                        depthBuffer[index] = h;
-                        framebuffer[index] = depthToColor(h, minDepth, maxDepth);
+                        int index = (SCR_HEIGHT - py) * SCR_WIDTH + px;
+                        glm::vec3 hit = viewImpPos * h;
+                        float depth = hit.z < 0.0f ? (hit.z * proj[2].z + proj[3].z) / -hit.z : FLT_MAX;
+                        if (depth < depthBuffer[index]) 
+                        {
+                            depthBuffer[index] = depth;
+                            framebuffer[index] = depthToColor(depth, minDepth, maxDepth);
+                        }
+                        
                     }
                 }
             }
@@ -258,8 +271,8 @@ int main(int argc, char* argv[])
     std::vector<std::pair<glm::vec3, float>> spheres {
         {glm::vec3(0.0f, 0.0f, 1.0f),  0.3f},
         {glm::vec3(-2.0f, 0.0f, 1.0f), 0.3f},
-        // {glm::vec3(-1.0f, 0.0f, 1.0f), 0.3f},
-        // {glm::vec3(0.0f, 0.0f, -1.0f), 0.7f},
+        {glm::vec3(-1.0f, 0.0f, 1.0f), 0.3f},
+        {glm::vec3(0.0f, 0.0f, -1.0f), 0.7f},
         // {glm::vec3(1.0f, 0.0f, -1.0f), 0.7f},
         // {glm::vec3(2.0f, 0.0f, -1.0f), 0.7f},
         // {glm::vec3(3.0f, 0.0f, -1.0f), 0.7f},
