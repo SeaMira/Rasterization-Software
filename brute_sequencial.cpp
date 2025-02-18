@@ -42,51 +42,33 @@ struct ProjectionResult
 };
 
 
-struct BoundingBox 
+float iSphere(glm::vec3 ro, glm::vec3 rd, glm::vec3 sph, float radius )
 {
-    int xMin, xMax, yMin, yMax;
-};
-
-BoundingBox getEllipseBoundingBox(ProjectionResult ellipse) 
-{
-    // Obtener los puntos extremos de la elipse
-    glm::vec2 P1 = ellipse.center + 0.5f * ellipse.axisA;
-    glm::vec2 P2 = ellipse.center - 0.5f * ellipse.axisA;
-    glm::vec2 P3 = ellipse.center + 0.5f * ellipse.axisB;
-    glm::vec2 P4 = ellipse.center - 0.5f * ellipse.axisB;
-
-    // Calcular la bounding box
-    BoundingBox bbox;
-    bbox.xMin = std::floor(std::min(std::min(P1.x, P2.x), std::min(P3.x, P4.x)));
-    bbox.xMax = std::ceil(std::max(std::max(P1.x, P2.x), std::max(P3.x, P4.x)));
-    bbox.yMin = std::floor(std::min(std::min(P1.y, P2.y), std::min(P3.y, P4.y)));
-    bbox.yMax = std::ceil(std::max(std::max(P1.y, P2.y), std::max(P3.y, P4.y)));
-
-    // std::cout << bbox.xMin << ", " 
-    // << bbox.xMax << ", "
-    // << bbox.yMin << ", "
-    // << bbox.yMax
-    // << std::endl;
-    return bbox;
+    float a = glm::dot(rd, rd);
+    float b = glm::dot( rd, sph );
+    float c = glm::dot( sph, sph ) - radius*radius;
+    float h = b*b - a * c;
+    if( h < 0.0f ) return -1.0f;
+    return (b - std::sqrt( h ))/a;
 }
 
 
-bool isInsideEllipse(int x, int y, ProjectionResult& elipse) 
-{
-    // int ndcX = x;
-    // int ndcY = y;
-    float ndcX = (2.0f * x) / SCR_WIDTH - 1.0f;
-    float ndcY = (2.0f * y) / SCR_HEIGHT - 1.0f;
-    float F = elipse.a * ndcX * ndcX + 
-              elipse.b * ndcX * ndcY + 
-              elipse.c * ndcY * ndcY + 
-              elipse.d * ndcX + 
-              elipse.e * ndcY + 
-              elipse.f;
+// bool isInsideEllipse(int x, int y, ProjectionResult& elipse) 
+// {
+//     // int ndcX = x;
+//     // int ndcY = y;
+//     float ndcX = (2.0f * x) / SCR_WIDTH - 1.0f;
+//     float ndcY = (2.0f * y) / SCR_HEIGHT - 1.0f;
+//     float F = elipse.a * ndcX * ndcX + 
+//               elipse.b * ndcX * ndcY + 
+//               elipse.c * ndcY * ndcY + 
+//               elipse.d * ndcX + 
+//               elipse.e * ndcY + 
+//               elipse.f;
 
-    // std::cout << F << std::endl;
-    return 0.0f <= F && F <= 1.0f ; // Margen de error
-}
+//     // std::cout << F << std::endl;
+//     return 0.0f <= F && F <= 1.0f ; // Margen de error
+// }
 
 ProjectionResult projectSphere( /* sphere */ glm::vec4 sph, 
     /* camera matrix */ glm::mat4 cam,
@@ -121,28 +103,6 @@ return { area, cen, axa, axb,
 
 }
 
-
-// Convierte coordenadas de mundo a coordenadas de pantalla
-void worldToScreen(glm::vec3& worldPos, int& sx, int& sy, 
-    float& depth, glm::mat4& proj, glm::mat4& view, glm::vec3& right, int& radiusPixels, float radius = 0.0f) 
-{
-
-    glm::vec4 clipSpace = proj * view * glm::vec4(worldPos, 1.0f);
-    glm::vec4 clipEdge = proj * view * glm::vec4(worldPos + radius*right, 1.0f);
-
-    if (clipSpace.w <= 0) return;
-    glm::vec3 ndc = glm::vec3(clipSpace) / clipSpace.w;
-    glm::vec2 ndcEdge = glm::vec2(clipEdge) / clipEdge.w;
-
-    sx = (int)((ndc.x * 0.5f + 0.5f) * SCR_WIDTH);
-    sy = (int)((0.5f - ndc.y * 0.5f) * SCR_HEIGHT); 
-
-    int screenXEdge = (int)((ndcEdge.x * 0.5f + 0.5f) * SCR_WIDTH);
-
-    radiusPixels = std::abs((ndcEdge.x - ndc.x) * SCR_WIDTH / 2.0f);
-    depth = ndc.z; 
-}
-
 uint32_t depthToColor(float depth, float minDepth, float maxDepth) 
 {
     // if (maxDepth == minDepth) return 0xFFFFFF; // Evitar divisiones por cero
@@ -175,7 +135,7 @@ void renderFrame(std::vector<uint32_t>& framebuffer,
     glm::vec3& camPos = cam.getPosition();
     glm::vec2 resol = glm::vec2(SCR_WIDTH, SCR_HEIGHT);
     float fov = cam.getFov();
-
+    
     for (const auto& sphere : spheres) 
     {
         ProjectionResult sphRes = projectSphere(glm::vec4(sphere.first, sphere.second), view, glm::radians(fov));
@@ -190,59 +150,82 @@ void renderFrame(std::vector<uint32_t>& framebuffer,
         sphRes.axisB[0] = std::floor(sphRes.axisB[0]);
         sphRes.axisB[1] = std::floor(sphRes.axisB[1]);
 
-        // std::cout << "Center "<< sphRes.center[0] << ", " << sphRes.center[1] << std::endl;
-        // std::cout << "AxisA " << sphRes.axisA[0] << ", " << sphRes.axisA[1] << std::endl;
+        glm::vec3 cameraSpaceSphere = glm::vec3(view * glm::vec4(sphere.first, 1.0f));
+        glm::vec3 normCamSpaceSphere = glm::normalize(cameraSpaceSphere);
+        glm::vec3 camImposPos = cameraSpaceSphere - normCamSpaceSphere * sphere.second;
+
+        float sinAngle = sphere.second / (glm::length(cameraSpaceSphere) + 1e-6f);
+        float tanAngle = std::tan(std::asin(sinAngle));
+        float quadScale = tanAngle * glm::length(camImposPos);
+
+        glm::vec3 impU = glm::normalize(glm::cross(normCamSpaceSphere, up));
+        glm::vec3 impV = glm::cross(impU, normCamSpaceSphere) * quadScale;
+        impU *= quadScale;
+
+        glm::vec3 upRightCorner = camImposPos + impU + impV;
+        glm::vec3 upLeftCorner = camImposPos - impU + impV;
+        glm::vec3 downRightCorner = camImposPos + impU - impV;
+        glm::vec3 downLeftCorner = camImposPos - impU - impV;
+
+        glm::vec4 upRight = proj * glm::vec4(upRightCorner, 1.0f);
+        glm::vec4 upLeft = proj * glm::vec4(upLeftCorner, 1.0f);
+        glm::vec4 downRight = proj * glm::vec4(downRightCorner, 1.0f);
+        glm::vec4 downLeft = proj * glm::vec4(downLeftCorner, 1.0f);
+        
+        glm::vec3 ndcUpRight = glm::vec3(upRightCorner) / upRight.w;
+        glm::vec3 ndcUpLeft = glm::vec3(upLeftCorner) / upLeft.w;
+        glm::vec3 ndcDownRight = glm::vec3(downRightCorner) / downRight.w;
+        glm::vec3 ndcDownLeft = glm::vec3(downLeftCorner) / downLeft.w;
+
+        glm::vec2 minCorner = glm::vec2(std::min(std::min(ndcUpRight[0], ndcUpLeft[0]), std::min(ndcDownRight[0], ndcDownLeft[0])),
+                                        std::min(std::min(ndcUpRight[1], ndcUpLeft[1]), std::min(ndcDownRight[1], ndcDownLeft[1])));
+        glm::vec2 maxCorner = glm::vec2(std::max(std::max(ndcUpRight[0], ndcUpLeft[0]), std::max(ndcDownRight[0], ndcDownLeft[0])),
+                                        std::max(std::max(ndcUpRight[1], ndcUpLeft[1]), std::max(ndcDownRight[1], ndcDownLeft[1])));
+
+        glm::ivec2 screenMin, screenMax;
+        screenMin.x = (minCorner.x * 0.5f + 0.5f) * SCR_WIDTH;
+        screenMin.y = (minCorner.y * 0.5f + 0.5f) * SCR_HEIGHT;
+        screenMax.x = (maxCorner.x * 0.5f + 0.5f) * SCR_WIDTH;
+        screenMax.y = (maxCorner.y * 0.5f + 0.5f) * SCR_HEIGHT;
+
         // std::cout << "AxisB " << sphRes.axisB[0] << ", " << sphRes.axisB[1] << std::endl;
-        BoundingBox bbox = getEllipseBoundingBox(sphRes);
+        // BoundingBox bbox = getEllipseBoundingBox(sphRes);
         if (sphRes.area >0.0f) 
         {
-            // for (int px = bbox.xMin; px < bbox.xMax; px++)
-            // {
-            //     for (int py = bbox.yMin; py < bbox.yMax; py++)
-            //     {
-            //         if (px < 0 || px >= SCR_WIDTH || (SCR_HEIGHT - py) < 0 || (SCR_HEIGHT - py) >= SCR_HEIGHT) 
-            //             continue; 
-            //         bool isInside = isInsideEllipse(px, py, sphRes);
-            //         // Actualizar buffers si el píxel está más cerca
-            //         int index = (SCR_HEIGHT - py) * SCR_WIDTH + px;
-            //         if (isInside || (px == bbox.xMin || py == bbox.yMin || px == bbox.xMax - 1 || py == bbox.yMax - 1)) 
-            //         {
-            //             depthBuffer[index] = sphRes.area;
-            //             framebuffer[index] = depthToColor(sphRes.area, minDepth, maxDepth);
-            //         }
-            //     }
-            // }
-            
-            int current = 0;
-            int maxypixels = 0;
-            int x = sphRes.center[0];
-            int y = sphRes.center[1];
-            int px = x;
-            while (true)
+            float difx = screenMax.x - screenMin.x;
+            float dify = screenMax.y - screenMin.y;
+            // std::cout << "screenMin.x "<< screenMin.x << std::endl;
+            // std::cout << "screenMin.y "<< screenMin.y << std::endl;
+            // std::cout << "screenMax.x "<< screenMax.x << std::endl;
+            // std::cout << "screenMax.y "<< screenMax.y << std::endl;
+            for (int px = screenMin.x; px < screenMax.x; px++)
             {
-                int py = y + current;
-                while (isInsideEllipse(px, py, sphRes))
+                for (int py = screenMin.y; py < screenMax.y; py++)
                 {
-                    if (px > SCR_WIDTH) break;
-                    if (px < 0 || (SCR_HEIGHT - py) < 0 || (SCR_HEIGHT - py) >= SCR_HEIGHT) 
-                    {
-                        current++;
-                        py = y + current;
+                    if (px < 0 || px >= SCR_WIDTH || py <= 0 || py > SCR_HEIGHT) 
                         continue; 
-                    }
-                    int index = (SCR_HEIGHT - py) * SCR_WIDTH + px;
-                    
-                    depthBuffer[index] = sphRes.area;
-                    framebuffer[index] = depthToColor(sphRes.area, minDepth, maxDepth);
-                    current++;
-                    py = y + current;
-                    if (current > maxypixels) maxypixels = current;
-                }
-                if (current == 0) break;
-                px--;
-                current = 0;
-            }
 
+                    // glm::vec2 uv = glm::vec2((float)px, (float)py) * 2.0f /glm::vec2((float)SCR_WIDTH, (float)SCR_HEIGHT) - 1.0f;
+                    // glm::vec3 rd = glm::normalize( uv.x * right + uv.y * up + front );
+
+                    float u = (float)(px - screenMin.x)/ difx;
+                    float v = (float)(py - screenMin.y)/ dify;
+                    glm::vec3 A = glm::mix(upLeftCorner, upRightCorner, u);
+                    glm::vec3 B = glm::mix(downLeftCorner, downRightCorner, u);
+                    glm::vec3 viewImpPos = glm::mix(A, B, v);
+                    float h = iSphere(camPos, viewImpPos, cameraSpaceSphere, sphere.second);
+
+                    // bool isInside = isInsideEllipse(px, py, sphRes);
+                    int index = (SCR_HEIGHT - py) * SCR_WIDTH + px;
+                    bool showBbox = (px == screenMin.x || py == screenMin.y || px == screenMax.x - 1 || py == screenMax.y - 1);
+                    if ((h > 0.0f && depthBuffer[index] > h) || showBbox) 
+                    {
+                        depthBuffer[index] = h;
+                        framebuffer[index] = depthToColor(h, minDepth, maxDepth);
+                    }
+                }
+            }
+            
 
         }    
     }
@@ -275,7 +258,7 @@ int main(int argc, char* argv[])
     std::vector<std::pair<glm::vec3, float>> spheres {
         {glm::vec3(0.0f, 0.0f, 1.0f),  0.3f},
         {glm::vec3(-2.0f, 0.0f, 1.0f), 0.3f},
-        {glm::vec3(-1.0f, 0.0f, 1.0f), 0.3f},
+        // {glm::vec3(-1.0f, 0.0f, 1.0f), 0.3f},
         // {glm::vec3(0.0f, 0.0f, -1.0f), 0.7f},
         // {glm::vec3(1.0f, 0.0f, -1.0f), 0.7f},
         // {glm::vec3(2.0f, 0.0f, -1.0f), 0.7f},
@@ -288,11 +271,6 @@ int main(int argc, char* argv[])
         bool isRunning = true;
         while ( isRunning )
         {
-            
-            // if (window.getInput().isKeyDown(Key::G)) show_grid = !show_grid;
-            // if (window.getInput().isKeyDown(Key::H)) show_axes = !show_axes;
-            // if (window.getInput().isKeyDown(Key::J)) show_num = !show_num;
-            // if (window.getInput().isKeyDown(Key::F)) std::cout << 1/window.getInput().deltaTime << std::endl;
             
             // if (show_fps) std::cout << 1/window.getInput().deltaTime << std::endl;
             
