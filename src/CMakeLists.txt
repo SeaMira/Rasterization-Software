@@ -43,22 +43,53 @@ set(raster_source
     ${CMAKE_SOURCE_DIR}/src/vis/gl/texture.cpp
 )
 
+
 add_library(raster_dependencies STATIC
-    ${raster_includes} ${raster_source} ${raster_extern_includes}
+${raster_includes} ${raster_source} ${raster_extern_includes}
 )
 
 set_property(TARGET raster_dependencies PROPERTY CXX_STANDARD 20)
 
 target_include_directories(raster_dependencies PUBLIC 
-    ${OPENGL_INCLUDE_DIRS} 
-    "${CMAKE_SOURCE_DIR}/extern/SDL/include" 
-    "${CMAKE_SOURCE_DIR}/include" 
-    ${raster_extern_includes}
+${OPENGL_INCLUDE_DIRS} 
+"${CMAKE_SOURCE_DIR}/extern/SDL/include" 
+"${CMAKE_SOURCE_DIR}/include" 
+${raster_extern_includes}
 )
 
 target_link_libraries(raster_dependencies PUBLIC 
-    ${SDL3_LIBRARIES} 
-    glad 
-    glm 
-    chemfiles
+${SDL3_LIBRARIES} 
+glad 
+glm 
+chemfiles
 )
+    
+## Sequential Version Dependencies
+set(sequential_sources
+    ${CMAKE_SOURCE_DIR}/src/utils/sequential/aux_functions.cpp
+)
+
+set(sequential_includes
+    ${CMAKE_SOURCE_DIR}/include/utils/sequential/aux_functions.h
+)
+
+add_library(sequential_dependencies STATIC
+${sequential_sources}
+${sequential_includes}
+${CMAKE_SOURCE_DIR}/extern/glm
+)
+
+set_property(TARGET sequential_dependencies PROPERTY CXX_STANDARD 20)
+
+target_include_directories(sequential_dependencies PUBLIC
+"${CMAKE_SOURCE_DIR}/include" 
+)
+
+target_link_libraries(sequential_dependencies PUBLIC 
+glm 
+)
+find_package(OpenMP REQUIRED)
+if(OpenMP_CXX_FOUND)  
+    message(STATUS "OpenMP found: ${OpenMP_CXX_VERSION}")
+    target_link_libraries(sequential_dependencies PRIVATE OpenMP::OpenMP_CXX)
+endif()

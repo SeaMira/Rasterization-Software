@@ -23,6 +23,7 @@ add_dependency_folder(data_folder_bin "${CMAKE_CURRENT_SOURCE_DIR}/assets" "${CM
 add_dependency_folder(data_folder "${CMAKE_CURRENT_SOURCE_DIR}/assets" "${CMAKE_BINARY_DIR}")
 
 target_link_libraries(raster_dependencies PUBLIC  glad glm)
+target_link_libraries(sequential_dependencies PUBLIC glm)
 
 function(add_subproject project_name executable)
 	add_executable(${project_name} ${executable})
@@ -34,6 +35,9 @@ add_subproject(controllers_example "controllers_example.cpp")
 add_subproject(shaders_example "shaders_example.cpp")
 add_subproject(loader_example "loader_example.cpp")
 add_subproject(brute_sequencial "brute_sequencial.cpp")
+
+target_link_libraries(brute_sequencial PUBLIC sequential_dependencies)
+
 
 add_dependencies(shaders_example data_folder_bin)
 add_dependencies(shaders_example data_folder)
