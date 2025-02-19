@@ -25,21 +25,13 @@
 const int SCR_WIDTH = 800;
 const int SCR_HEIGHT = 600;
 
-const int sphere_count = 10;
+const int sphere_count = 126;
+const glm::vec3 lightColor(0.01f, 1.0f, 0.05f);
+const float diffuseI = 0.9f;
 
-std::string title = "Brute sequencial method"; 
+std::string title = "Brute Sequential Method"; 
 
 bool shown = true;
-
-struct ProjectionResult
-{
-    float area;      
-    glm::vec2  center;    
-    glm::vec2  axisA;     
-    glm::vec2  axisB;
-    // implicit ellipse f(x,y) = a·x² + b·x·y + c·y² + d·x + e·y + f = 0 */
-    float a, b, c, d, e, f; 
-};
 
 
 float iSphere(glm::vec3 ro, glm::vec3 rd, glm::vec3 sph, float radius )
@@ -70,23 +62,7 @@ float iSphere(glm::vec3 ro, glm::vec3 rd, glm::vec3 sph, float radius )
 //     return 0.0f <= F && F <= 1.0f ; // Margen de error
 // }
 
-float projectSphere( /* sphere */ glm::vec4 sph, 
-    /* camera matrix */ glm::mat4 cam,
-    /* projection    */ float fle )
-{
-    // transform to camera space	
-    glm::vec3  sph3(sph[0], sph[1], sph[2]);
-    glm::vec3  o = glm::vec3(cam*glm::vec4(sph3, 1.0f));
 
-    float r2 = sph[3]*sph[3];
-    float z2 = o[2]*o[2];	
-    float l2 = dot(o,o);
-
-    float r2z2 = r2-z2;
-
-    return -3.141593*fle*fle*r2*sqrt(abs((l2-r2)/(r2z2)))/(r2z2 + 1e-12);
-
-}
 // ProjectionResult projectSphere( /* sphere */ glm::vec4 sph, 
 //     /* camera matrix */ glm::mat4 cam,
 //     /* projection    */ float fle )
@@ -120,42 +96,30 @@ float projectSphere( /* sphere */ glm::vec4 sph,
 
 // }
 
-uint32_t depthToColor(float depth, float minDepth, float maxDepth) 
+uint32_t vecToColor(glm::vec3 lambertCos) 
 {
-    // if (maxDepth == minDepth) return 0xFFFFFF; // Evitar divisiones por cero
+    const uint8_t R = lambertCos.x;
+    const uint8_t G = lambertCos.y;
+    const uint8_t B = lambertCos.z;
 
-    // // Normalizar la profundidad a un rango de 0 a 1 usando la distancia real
-    // float normalizedDepth = (depth - minDepth) / (maxDepth - minDepth);
-    // normalizedDepth = glm::clamp(normalizedDepth, 0.0f, 1.0f);
-
-    // // Convertir a un gradiente de colores (por ejemplo, de azul a rojo)
-    // uint8_t red = static_cast<uint8_t>(normalizedDepth * 255.0f);
-    // uint8_t blue = static_cast<uint8_t>((1.0f - normalizedDepth) * 255.0f);
-    uint8_t color = static_cast<uint8_t>(255.0f/(depth + 1.0f));
-
-    // std::cout << depth << std::endl;
-
-    return (0xFF000000) | (color << 16) | (color << 8) | (color); // Gradiente de rojo a azul
+    return (0xFF000000) | (R << 16) | (G << 8) | B;
 }
 
 void renderFrame(std::vector<uint32_t>& framebuffer, 
     std::vector<float>& depthBuffer, std::vector<std::pair<glm::vec3, float>>& spheres,
     Camera& cam) 
 {
-    float minDepth = 0.0f, maxDepth = 10.0f;
-
-    glm::mat4& proj = cam.getProjection();
-    glm::mat4& view = cam.getView();
-    glm::vec3& up = cam.getUp();
-    glm::vec3& right = cam.getRight();
-    glm::vec3& front = cam.getFront();
-    glm::vec3& camPos = cam.getPosition();
-    glm::vec2 resol = glm::vec2(SCR_WIDTH, SCR_HEIGHT);
-    float fov = cam.getFov();
+    const glm::mat4& proj = cam.getProjection();
+    const glm::mat4& view = cam.getView();
+    const glm::vec3& up = cam.getUp();
+    // const glm::vec3& right = cam.getRight();
+    const glm::vec3& front = cam.getFront();
+    const glm::vec3& camPos = cam.getPosition();
+    // const glm::vec2 resol = glm::vec2(SCR_WIDTH, SCR_HEIGHT);
+    const float fov = cam.getFov();
     
     for (const auto& sphere : spheres) 
     {
-        float sphArea = projectSphere(glm::vec4(sphere.first, sphere.second), view, glm::radians(fov));
 
         glm::vec3 cameraSpaceSphere = glm::vec3(view * glm::vec4(sphere.first, 1.0f));
         glm::vec3 normCamSpaceSphere = glm::normalize(cameraSpaceSphere);
@@ -184,26 +148,22 @@ void renderFrame(std::vector<uint32_t>& framebuffer,
         glm::vec3 ndcDownRight = glm::vec3(downRightCorner) / downRight.w;
         glm::vec3 ndcDownLeft = glm::vec3(downLeftCorner) / downLeft.w;
 
-
-        glm::vec2 minCorner = glm::vec2(std::min(ndcUpLeft[0], ndcDownLeft[0]),
-                                        std::min(ndcDownRight[1], ndcDownLeft[1]));
-        glm::vec2 maxCorner = glm::vec2(std::max(ndcUpRight[0], ndcDownRight[0]),
-                                        std::max(ndcUpRight[1], ndcUpLeft[1]));
-        // glm::vec2 minCorner = glm::vec2(std::min(std::min(ndcUpRight[0], ndcUpLeft[0]), std::min(ndcDownRight[0], ndcDownLeft[0])),
-        //                                 std::min(std::min(ndcUpRight[1], ndcUpLeft[1]), std::min(ndcDownRight[1], ndcDownLeft[1])));
-        // glm::vec2 maxCorner = glm::vec2(std::max(std::max(ndcUpRight[0], ndcUpLeft[0]), std::max(ndcDownRight[0], ndcDownLeft[0])),
-        //                                 std::max(std::max(ndcUpRight[1], ndcUpLeft[1]), std::max(ndcDownRight[1], ndcDownLeft[1])));
+        glm::vec2 minCorner = glm::vec2(std::min(std::min(ndcUpRight[0], ndcUpLeft[0]), std::min(ndcDownRight[0], ndcDownLeft[0])),
+                                        std::min(std::min(ndcUpRight[1], ndcUpLeft[1]), std::min(ndcDownRight[1], ndcDownLeft[1])));
+        glm::vec2 maxCorner = glm::vec2(std::max(std::max(ndcUpRight[0], ndcUpLeft[0]), std::max(ndcDownRight[0], ndcDownLeft[0])),
+                                        std::max(std::max(ndcUpRight[1], ndcUpLeft[1]), std::max(ndcDownRight[1], ndcDownLeft[1])));
 
         glm::ivec2 screenMin, screenMax;
         float aspectRatio = ((float)SCR_WIDTH/(float)SCR_HEIGHT);
-        // float aspectRatio = 1.0f;
 
         screenMin.x = ((minCorner.x/aspectRatio) * 0.5f + 0.5f) * SCR_WIDTH;
         screenMin.y = (minCorner.y * 0.5f + 0.5f) * SCR_HEIGHT;
         screenMax.x = ((maxCorner.x/aspectRatio) * 0.5f + 0.5f) * SCR_WIDTH;
         screenMax.y = (maxCorner.y * 0.5f + 0.5f) * SCR_HEIGHT;
+        // std::cout << screenMin.x << ", " << screenMin.y << std::endl;
+        // std::cout << screenMax.x << ", " << screenMax.y << std::endl;   
 
-        if (sphArea >0.0f) 
+        if (glm::dot(sphere.first - camPos, front) > 0.5f && !((screenMin.x < 0 && screenMax.x > SCR_WIDTH) || (screenMin.y < 0 && screenMax.y > SCR_HEIGHT))) 
         {
             float difx = screenMax.x - screenMin.x;
             float dify = screenMax.y - screenMin.y;
@@ -212,8 +172,6 @@ void renderFrame(std::vector<uint32_t>& framebuffer,
             {
                 for (int py = std::max(0, screenMin.y); py < std::min(SCR_HEIGHT, screenMax.y); py++)
                 {
-                    // if (px < 0 || px >= SCR_WIDTH || py <= 0 || py > SCR_HEIGHT) 
-                    //     continue; 
 
                     float u = (float)(px - screenMin.x)/ difx;
                     float v = (float)(py - screenMin.y)/ dify;
@@ -222,17 +180,18 @@ void renderFrame(std::vector<uint32_t>& framebuffer,
                     glm::vec3 viewImpPos = glm::mix(A, B, v);
                     float h = iSphere(camPos, viewImpPos, cameraSpaceSphere, sphere.second);
 
-                    // bool isInside = isInsideEllipse(px, py, sphRes);
                     bool showBbox = (px == screenMin.x || py == screenMin.y || px == screenMax.x - 1 || py == screenMax.y - 1);
-                    if ((h > 0.0f) || showBbox) 
+                    if ((h > 0.0f)) 
                     {
                         int index = (SCR_HEIGHT - py - 1) * SCR_WIDTH + px;
-                        glm::vec3 hit = viewImpPos * h;
+                        const glm::vec3 hit = viewImpPos * h;
                         float depth = hit.z < 0.0f ? (hit.z * proj[2].z + proj[3].z) / -hit.z : FLT_MAX;
                         if (depth < depthBuffer[index]) 
                         {
+                            const glm::vec3 normal = glm::normalize( hit - cameraSpaceSphere );
+                            const float lambertCos = glm::dot(normal, -glm::normalize(hit));
                             depthBuffer[index] = depth;
-                            framebuffer[index] = depthToColor(depth, minDepth, maxDepth);
+                            framebuffer[index] = vecToColor(255 * lambertCos * lightColor * diffuseI);
                         }
                         
                     }
@@ -267,31 +226,20 @@ int main(int argc, char* argv[])
     std::filesystem::path path = "molecules/1AGA.mmtf";
     ChemFilesLoader loader(path);
     std::vector<std::pair<glm::vec3, float>> positions = loader.getSphereInfo();
-    // std::vector<std::pair<glm::vec3, float>> spheres(positions.begin(), positions.begin() + std::min(positions.size(), static_cast<size_t>(sphere_count)));
-    std::vector<std::pair<glm::vec3, float>> spheres {
-        {glm::vec3(0.0f, 0.0f, 1.0f),  0.3f},
-        {glm::vec3(-2.0f, 0.0f, 1.0f), 0.3f},
-        {glm::vec3(-1.0f, 0.0f, 1.0f), 0.3f},
-        {glm::vec3(0.0f, 0.0f, -1.0f), 0.7f},
-        // {glm::vec3(1.0f, 0.0f, -1.0f), 0.7f},
-        // {glm::vec3(2.0f, 0.0f, -1.0f), 0.7f},
-        // {glm::vec3(3.0f, 0.0f, -1.0f), 0.7f},
-        // {glm::vec3(4.0f, 0.0f, -1.0f), 0.7f}
-    };
-    
+    std::vector<std::pair<glm::vec3, float>> spheres(positions.begin(), positions.begin() + std::min(positions.size(), static_cast<size_t>(sphere_count)));
+
+    bool show_fps = true;
     try
     {
         bool isRunning = true;
         while ( isRunning )
         {
-            
-            // if (show_fps) std::cout << 1/window.getInput().deltaTime << std::endl;
+
+            if (window.getInput().isKeyDown(Key::F)) show_fps = !show_fps;
+            if (show_fps) std::cout << 1/window.getInput().deltaTime << std::endl;
             
             camera_controller.keyBoardAction();
             camera_controller.mouseAction();
-
-            // glm::vec3 camFront = camera.getFront();
-            // std::cout << camFront.x << ", " << camFront.y << ", " << camFront.z << std::endl;
 
             std::fill(framebuffer.begin(), framebuffer.end(), 0xFFFFFF00);
             std::fill(depthBuffer.begin(), depthBuffer.end(), FLT_MAX);
