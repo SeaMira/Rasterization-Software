@@ -36,6 +36,7 @@ add_subproject(shaders_example "${CMAKE_SOURCE_DIR}/executables/shaders_example.
 add_subproject(loader_example "${CMAKE_SOURCE_DIR}/executables/loader_example.cpp")
 add_subproject(brute_sequencial "${CMAKE_SOURCE_DIR}/executables/brute_sequencial.cpp")
 add_subproject(fst_parallel "${CMAKE_SOURCE_DIR}/executables/fst_parallel.cpp")
+add_subproject(gltexstor_ex "${CMAKE_SOURCE_DIR}/executables/gltexstor_ex.cpp")
 
 target_link_libraries(brute_sequencial PUBLIC sequential_dependencies)
 

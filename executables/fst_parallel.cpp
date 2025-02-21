@@ -9,9 +9,6 @@
 #include <filesystem>
 #include "molecule_loader/basic_loader.h"
 
-#include "utils/math_defines.h"
-#include "utils/sequential/aux_functions.h"
-
 #include "ux/input.h"
 #include "ux/camera_controller.h"
 

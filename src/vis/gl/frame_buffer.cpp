@@ -20,6 +20,19 @@ void Framebuffer::attachTexture(GLenum attachment, const Texture& texture,
     glBindFramebuffer(framebuffer, 0);
 }
 
+void Framebuffer::attachTextureImage(GLenum attachment, const Texture& texture, 
+    GLenum framebuffer) 
+{
+    glBindFramebuffer(framebuffer, m_id);
+    glFramebufferTexture(framebuffer, attachment, texture.getId(), 0);
+    glDrawBuffer(GL_NONE);
+    GLenum status = glCheckFramebufferStatus(framebuffer);
+    if (status != GL_FRAMEBUFFER_COMPLETE) {
+        std::cerr << "Framebuffer error: " << status << std::endl;
+    }
+    glBindFramebuffer(framebuffer, 0);
+}
+
 void Framebuffer::bind(GLenum target) const 
 {
     glBindFramebuffer(target, m_id);
