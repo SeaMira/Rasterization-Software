@@ -48,7 +48,7 @@ void ChemFilesLoader::load(const std::filesystem::path & path)
                 // Obtén el radio del átomo (si está disponible)
                 float radius = SymbolRadius[atom.atomic_number().value_or( 0 )];
 
-                m_positions.push_back({{position[0], position[1], position[2]}, radius});
+                m_positions.push_back({position[0], position[1], position[2], radius});
             }
         }
 
@@ -71,7 +71,7 @@ void ChemFilesLoader::prepareChemfiles()
         chemfiles::set_warning_callback(callback);
 }
 
-std::vector<std::pair<glm::vec3, float>> & ChemFilesLoader::getSphereInfo()
+std::vector<glm::vec4> & ChemFilesLoader::getSphereInfo()
 {
     return m_positions;
 }

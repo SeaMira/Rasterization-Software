@@ -22,7 +22,7 @@ set(SDL_STATIC ON CACHE BOOL "" FORCE)    # Activates static version
 add_dependency_folder(data_folder_bin "${CMAKE_CURRENT_SOURCE_DIR}/assets" "${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}")
 add_dependency_folder(data_folder "${CMAKE_CURRENT_SOURCE_DIR}/assets" "${CMAKE_BINARY_DIR}")
 
-target_link_libraries(raster_dependencies PUBLIC  glad glm)
+target_link_libraries(raster_dependencies PUBLIC  glad glm chemfiles)
 target_link_libraries(sequential_dependencies PUBLIC glm)
 
 function(add_subproject project_name executable)
@@ -31,10 +31,11 @@ function(add_subproject project_name executable)
 	target_include_directories(${project_name} PUBLIC ${OPENGL_INCLUDE_DIRS} extern/SDL/include)
 endfunction()
 
-add_subproject(controllers_example "controllers_example.cpp")
-add_subproject(shaders_example "shaders_example.cpp")
-add_subproject(loader_example "loader_example.cpp")
-add_subproject(brute_sequencial "brute_sequencial.cpp")
+add_subproject(controllers_example "${CMAKE_SOURCE_DIR}/executables/controllers_example.cpp")
+add_subproject(shaders_example "${CMAKE_SOURCE_DIR}/executables/shaders_example.cpp")
+add_subproject(loader_example "${CMAKE_SOURCE_DIR}/executables/loader_example.cpp")
+add_subproject(brute_sequencial "${CMAKE_SOURCE_DIR}/executables/brute_sequencial.cpp")
+add_subproject(fst_parallel "${CMAKE_SOURCE_DIR}/executables/fst_parallel.cpp")
 
 target_link_libraries(brute_sequencial PUBLIC sequential_dependencies)
 

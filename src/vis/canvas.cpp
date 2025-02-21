@@ -8,6 +8,12 @@ Canvas::Canvas(GLenum target, GLenum internalFormat, GLsizei width,
     m_width(width), m_height(height)
 {}
 
+Canvas::Canvas(GLenum target, GLenum internalFormat, GLsizei width, 
+    GLsizei height):
+    m_canvas(target, internalFormat, width, height), m_fbo(),
+    m_width(width), m_height(height)
+{}
+
 Canvas::Canvas( Canvas && other ) noexcept
 {
     std::swap( m_fbo, other.m_fbo );
@@ -33,9 +39,15 @@ void Canvas::setTexture(GLenum target, GLenum internalFormat, GLsizei width,
     m_canvas = Texture(target, internalFormat, width, height, format, type, nullptr);
 }
 
+void Canvas::setTextureImage(GLenum target, GLenum internalFormat, GLsizei width, 
+    GLsizei height)
+{
+    m_canvas = Texture(target, internalFormat, width, height);
+}
+
 void Canvas::setFBO(GLenum attachment)
 {
-    m_fbo.attachTexture(attachment, m_canvas, GL_READ_FRAMEBUFFER);
+    m_fbo.attachTexture(attachment, m_canvas, GL_FRAMEBUFFER);
 }
 
 void Canvas::bindTexture(GLuint unit) const
@@ -43,9 +55,14 @@ void Canvas::bindTexture(GLuint unit) const
     m_canvas.bind(unit);
 }
 
+void Canvas::bindTextureImage(GLuint unit, GLenum access, GLenum format) const
+{
+    m_canvas.bindImage(unit, access, format);
+}
+
 void Canvas::bindFBO() const
 {
-    m_fbo.bind(GL_READ_FRAMEBUFFER);
+    m_fbo.bind(GL_FRAMEBUFFER);
 }
 
 Texture& Canvas::getTexture() { return m_canvas; }

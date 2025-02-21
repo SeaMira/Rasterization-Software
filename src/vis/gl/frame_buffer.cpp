@@ -13,6 +13,10 @@ void Framebuffer::attachTexture(GLenum attachment, const Texture& texture,
 {
     glBindFramebuffer(framebuffer, m_id);
     glFramebufferTexture2D(framebuffer, attachment, GL_TEXTURE_2D, texture.getId(), 0);
+    GLenum status = glCheckFramebufferStatus(framebuffer);
+    if (status != GL_FRAMEBUFFER_COMPLETE) {
+        std::cerr << "Framebuffer error: " << status << std::endl;
+    }
     glBindFramebuffer(framebuffer, 0);
 }
 

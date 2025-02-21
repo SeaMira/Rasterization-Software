@@ -59,15 +59,15 @@ void drawSphere(const glm::mat4& proj, const glm::mat4& view,
     const glm::vec3& up, const glm::vec3& front, const glm::vec3& camPos, 
     const int SCR_WIDTH, const int SCR_HEIGHT,
     const float fov, const float aspectRatio, 
-    const std::pair<glm::vec3, float>& sphere,
+    const glm::vec4& sphere,
     std::vector<uint32_t>& framebuffer, std::vector<float>& depthBuffer)
 {
-    glm::vec3 cameraSpaceSphere = glm::vec3(view * glm::vec4(sphere.first, 1.0f));
+    glm::vec3 cameraSpaceSphere = glm::vec3(view * glm::vec4(glm::vec3(sphere[0], sphere[1], sphere[2]), 1.0f));
     glm::vec3 normCamSpaceSphere = glm::normalize(cameraSpaceSphere);
-    glm::vec3 camImposPos = cameraSpaceSphere - normCamSpaceSphere * sphere.second;
+    glm::vec3 camImposPos = cameraSpaceSphere - normCamSpaceSphere * sphere.w;
 
     bboxCorners sphereBbox = getSphereBbox(cameraSpaceSphere, camImposPos,
-        normCamSpaceSphere, proj, camPos, front, up, sphere.second, fov, aspectRatio);
+        normCamSpaceSphere, proj, camPos, front, up, sphere.w, fov, aspectRatio);
     
         glm::ivec2 screenMin, screenMax;
 
@@ -78,7 +78,7 @@ void drawSphere(const glm::mat4& proj, const glm::mat4& view,
     // std::cout << screenMin.x << ", " << screenMin.y << std::endl;
     // std::cout << screenMax.x << ", " << screenMax.y << std::endl;   
 
-    if (glm::dot(sphere.first - camPos, front) > 0.5f && !((screenMin.x < 0 && screenMax.x > SCR_WIDTH) || (screenMin.y < 0 && screenMax.y > SCR_HEIGHT))) 
+    if (glm::dot(glm::vec3(sphere[0], sphere[1], sphere[2]) - camPos, front) > 0.5f && !((screenMin.x < 0 && screenMax.x > SCR_WIDTH) || (screenMin.y < 0 && screenMax.y > SCR_HEIGHT))) 
     {
         const float difx = screenMax.x - screenMin.x;
         const float dify = screenMax.y - screenMin.y;
@@ -94,7 +94,7 @@ void drawSphere(const glm::mat4& proj, const glm::mat4& view,
                 const glm::vec3 A = glm::mix(sphereBbox.upLeftCorner, sphereBbox.upRightCorner, u);
                 const glm::vec3 B = glm::mix(sphereBbox.downLeftCorner, sphereBbox.downRightCorner, u);
                 const glm::vec3 viewImpPos = glm::mix(A, B, v);
-                const float h = iSphere(camPos, viewImpPos, cameraSpaceSphere, sphere.second);
+                const float h = iSphere(camPos, viewImpPos, cameraSpaceSphere, sphere.w);
 
                 const bool showBbox = (px == screenMin.x || py == screenMin.y || px == screenMax.x - 1 || py == screenMax.y - 1);
                 if ((h > 0.0f)) 

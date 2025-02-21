@@ -83,7 +83,7 @@ bool shown = true;
 // }
 
 void renderFrame(std::vector<uint32_t>& framebuffer, 
-    std::vector<float>& depthBuffer, std::vector<std::pair<glm::vec3, float>>& spheres,
+    std::vector<float>& depthBuffer, std::vector<glm::vec4>& spheres,
     Camera& cam) 
 {
     const glm::mat4& proj = cam.getProjection();
@@ -126,8 +126,8 @@ int main(int argc, char* argv[])
    
     std::filesystem::path path = "molecules/1AGA.mmtf";
     ChemFilesLoader loader(path);
-    std::vector<std::pair<glm::vec3, float>> positions = loader.getSphereInfo();
-    std::vector<std::pair<glm::vec3, float>> spheres(positions.begin(), positions.begin() + std::min(positions.size(), static_cast<size_t>(sphere_count)));
+    std::vector<glm::vec4> positions = loader.getSphereInfo();
+    std::vector<glm::vec4> spheres(positions.begin(), positions.begin() + std::min(positions.size(), static_cast<size_t>(sphere_count)));
 
     try
     {

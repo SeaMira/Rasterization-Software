@@ -10,6 +10,8 @@ public:
     Canvas() = default;
     Canvas(GLenum target, GLenum internalFormat, GLsizei width, 
         GLsizei height, GLenum format, GLenum type);
+    Canvas(GLenum target, GLenum internalFormat, GLsizei width, 
+        GLsizei height);
 
     Canvas( const Canvas& ) = delete;
     Canvas& operator=( const Canvas& ) = delete;
@@ -26,8 +28,11 @@ public:
 
     void setTexture(GLenum target, GLenum internalFormat, GLsizei width, 
         GLsizei height, GLenum format, GLenum type);
+    void setTextureImage(GLenum target, GLenum internalFormat, GLsizei width, 
+        GLsizei height);
     void setFBO(GLenum attachment);
     void bindTexture(GLuint unit = 0) const;
+    void bindTextureImage(GLuint unit, GLenum access, GLenum format) const;
     void bindFBO() const;
 
 private:

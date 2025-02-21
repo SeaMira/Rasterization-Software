@@ -2,7 +2,8 @@
 #define _FRAME_BUFFER_H
 
 #include <glad/glad.h>
-
+#include <iostream>
+#include <stdexcept>
 #include "vis/gl/texture.h"
 
 class Framebuffer {

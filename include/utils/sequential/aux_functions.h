@@ -40,7 +40,7 @@ void drawSphere(const glm::mat4& proj, const glm::mat4& view,
     const glm::vec3& up, const glm::vec3& front, const glm::vec3& camPos, 
     const int SCR_WIDTH, const int SCR_HEIGHT,
     const float fov, const float aspectRatio, 
-    const std::pair<glm::vec3, float>& sphere,
+    const glm::vec4& sphere,
     std::vector<uint32_t>& framebuffer, std::vector<float>& depthBuffer);
 
-    #endif // _AUX_SEQUENTIAL_H_
+#endif // _AUX_SEQUENTIAL_H_

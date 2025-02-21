@@ -23,10 +23,10 @@ public:
     
     void load( const std::filesystem::path & path );
 
-    std::vector<std::pair<glm::vec3, float>> & getSphereInfo();
+    std::vector<glm::vec4> & getSphereInfo();
 
 private:
-    std::vector<std::pair<glm::vec3, float>> m_positions;
+    std::vector<glm::vec4> m_positions;
 
 
 };
