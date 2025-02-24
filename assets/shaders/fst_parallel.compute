@@ -15,7 +15,7 @@ layout(std430, binding = 1) buffer SphereBuffer
 
 layout(std430, binding = 2) buffer DepthBuffer 
 {
-    int depthData[];
+    float depthData[];
 };
 
 uniform mat4 view;
@@ -46,6 +46,7 @@ struct bboxCorners
     // screen space
     vec2 minCorner;
     vec2 maxCorner;
+    
 };
 
 uint vecToColor(vec3 lambertCos) {
@@ -109,10 +110,10 @@ void drawSphere(Sphere sphere)
     
     ivec2 screenMin, screenMax;
 
-    screenMin.x = int(((sphereBbox.minCorner.x/aspectRatio) * 0.5f + 0.5f) * screenResolution.x);
-    screenMin.y = int((sphereBbox.minCorner.y * 0.5f + 0.5f) * screenResolution.y);
-    screenMax.x = int(((sphereBbox.maxCorner.x/aspectRatio) * 0.5f + 0.5f) * screenResolution.x);
-    screenMax.y = int((sphereBbox.maxCorner.y * 0.5f + 0.5f) * screenResolution.y);
+    screenMin.x = int( ((sphereBbox.minCorner.x/aspectRatio) * 0.5f + 0.5f) * float(screenResolution.x));
+    screenMin.y = int((sphereBbox.minCorner.y * 0.5f + 0.5f) * float(screenResolution.y));
+    screenMax.x = int(((sphereBbox.maxCorner.x/aspectRatio) * 0.5f + 0.5f) * float(screenResolution.x));
+    screenMax.y = int((sphereBbox.maxCorner.y * 0.5f + 0.5f) * float(screenResolution.y));
 
     if (dot(sphere.positionr.xyz - cameraPos, front) > 0.5f && 
         !((screenMin.x < 0 && screenMax.x > screenResolution.x) || 
@@ -133,19 +134,22 @@ void drawSphere(Sphere sphere)
                 const vec3 viewImpPos = mix(A, B, v);
                 const float h = iSphere(cameraPos, viewImpPos, cameraSpaceSphere, sphere.positionr.w);
 
-                const bool showBbox = (px == screenMin.x || py == screenMin.y || px == screenMax.x - 1 || py == screenMax.y - 1);
-                if ((h > 0.0f)) 
+                // imageStore(outputImage, ivec2(px, py), vec4(1.0, 1.0, 1.0, 1.0));
+                // const bool showBbox = (px == screenMin.x || py == screenMin.y || px == screenMax.x - 1 || py == screenMax.y - 1);
+                if (h > 0.0f) 
                 {
+                    // imageStore(outputImage, ivec2(px, py), vec4(1.0, 0.0, 0.0, 1.0));
                     const int index = (screenResolution.y - py - 1) * screenResolution.x + px;
                     const vec3 hit = viewImpPos * h;
-                    const float depth = hit.z < 0.0f ? (hit.z * proj[2].z + proj[3].z) / -hit.z : 30000.0f;
-                    const int idepth = floatBitsToInt(depth);
-                    const int old = atomicMin(depthData[index], int(idepth));
+                    const float depth = hit.z < 0.0f ? (hit.z * proj[2].z + proj[3].z) / -hit.z : 1000.0f;
                     const vec3 normal = normalize( hit - cameraSpaceSphere );
                     const float lambertCos = dot(normal, -normalize(hit));
-                    if (old > idepth) continue;
+                    if (depthData[index] > depth) 
+                    {
+                        depthData[index] = depth;
+                        imageStore(outputImage, ivec2(px, py), vec4(lambertCos * lightColor * diffuseI, 1.0));
 
-                    imageStore(outputImage, ivec2(px, py), vec4(lambertCos * lightColor * diffuseI, 1.0));
+                    }
                     
                 }
             }

@@ -17,6 +17,10 @@ void StorageBuffer::generateBufferData(int size, GLuint index,
     glBindBuffer(m_target, m_id);
     glBufferData(m_target, size, data, usage);
     glBindBufferBase(m_target, index, m_id);
+    GLenum error = glGetError();
+    if (error != GL_NO_ERROR) {
+        std::cerr << "OpenGL Error: " << error << std::endl;
+    }
 }
 
 void StorageBuffer::bind() const

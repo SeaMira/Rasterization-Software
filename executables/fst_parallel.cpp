@@ -25,7 +25,7 @@ using uint = unsigned int;
 const int SCR_WIDTH = 800;
 const int SCR_HEIGHT = 600;
 
-const int sphere_count = 20;
+const int sphere_count = 128;
 
 std::string title = "First Parallel Version"; 
 
@@ -55,15 +55,20 @@ int main(int argc, char* argv[])
     std::filesystem::path path = "molecules/1AGA.mmtf";
     ChemFilesLoader loader(path);
     std::vector<glm::vec4> positions = loader.getSphereInfo();
-    std::vector<glm::vec4> spheres(positions.begin(), positions.begin() + std::min(positions.size(), static_cast<size_t>(sphere_count)));
-
+    // std::vector<glm::vec4> spheres(positions.begin(), positions.begin() + std::min(positions.size(), static_cast<size_t>(sphere_count)));
+    std::vector<glm::vec4> spheres;
+    for (int i = 0; i < sphere_count; i++)
+    {
+        spheres.push_back({(float)(i%100)*2.0f, (float)(i/100) * 2.0f, (float)(i%100)*2.0f, 1.0f});
+    }
     StorageBuffer sphereBuffer(GL_SHADER_STORAGE_BUFFER);
     sphereBuffer.generateBufferData(spheres.size() * sizeof(glm::vec4), 1, 
         spheres.data(), GL_STATIC_DRAW);
     sphereBuffer.unbind();
     
+    std::vector<float> depth_b(SCR_WIDTH * SCR_HEIGHT, FLT_MAX);
     StorageBuffer depthBuffer(GL_SHADER_STORAGE_BUFFER);
-    depthBuffer.generateBufferData(SCR_WIDTH * SCR_HEIGHT * sizeof(int), 2);
+    depthBuffer.generateBufferData(SCR_WIDTH * SCR_HEIGHT * sizeof(float), 2, depth_b.data(), GL_DYNAMIC_COPY);
     // Calculating number of work groups (based on the number of threads and spheres)
     GLuint numGroupsX = (sphere_count + workGroupSizeX - 1) / workGroupSizeX;
     GLuint numGroupsY = 1;
@@ -83,8 +88,9 @@ int main(int argc, char* argv[])
             camera_controller.mouseAction();
 
             cleaningComputeShader.use();
+            cleaningComputeShader.setVec2I("screenResolution", screenResolution);
             glDispatchCompute((SCR_WIDTH + workGroupSizeX - 1) / 16, (SCR_HEIGHT + workGroupSizeY - 1) / 16, 1);
-
+            glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
             computeShader.use();
             computeShader.setInt("sphereCount", sphere_count);
             computeShader.setVec2I("screenResolution", screenResolution);
@@ -97,7 +103,7 @@ int main(int argc, char* argv[])
             computeShader.setFloat("fov", camera.getFov());
 
             glDispatchCompute(numGroupsX, numGroupsY, 1);
-            glMemoryBarrier(GL_FRAMEBUFFER_BARRIER_BIT);
+            glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
             // Blit from framebuffer to default framebuffer (screen)
             glBindFramebuffer(GL_READ_FRAMEBUFFER, canvas.getFramebuffer().getId());
             glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
@@ -111,6 +117,7 @@ int main(int argc, char* argv[])
         std::cerr << "Error: " << e.what() << std::endl;
         return 1;
     }
+
 
     return 0;
 }

@@ -62,7 +62,7 @@ void drawSphere(const glm::mat4& proj, const glm::mat4& view,
     const glm::vec4& sphere,
     std::vector<uint32_t>& framebuffer, std::vector<float>& depthBuffer)
 {
-    glm::vec3 cameraSpaceSphere = glm::vec3(view * glm::vec4(glm::vec3(sphere[0], sphere[1], sphere[2]), 1.0f));
+    glm::vec3 cameraSpaceSphere = glm::vec3(view * glm::vec4(sphere[0], sphere[1], sphere[2], 1.0f));
     glm::vec3 normCamSpaceSphere = glm::normalize(cameraSpaceSphere);
     glm::vec3 camImposPos = cameraSpaceSphere - normCamSpaceSphere * sphere.w;
 
@@ -96,7 +96,7 @@ void drawSphere(const glm::mat4& proj, const glm::mat4& view,
                 const glm::vec3 viewImpPos = glm::mix(A, B, v);
                 const float h = iSphere(camPos, viewImpPos, cameraSpaceSphere, sphere.w);
 
-                const bool showBbox = (px == screenMin.x || py == screenMin.y || px == screenMax.x - 1 || py == screenMax.y - 1);
+                // const bool showBbox = (px == screenMin.x || py == screenMin.y || px == screenMax.x - 1 || py == screenMax.y - 1);
                 if ((h > 0.0f)) 
                 {
                     const int index = (SCR_HEIGHT - py - 1) * SCR_WIDTH + px;

@@ -25,7 +25,7 @@
 const int SCR_WIDTH = 800;
 const int SCR_HEIGHT = 600;
 
-const int sphere_count = 126;
+const int sphere_count = 10;
 
 std::string title = "Brute Sequential Method"; 
 
@@ -127,8 +127,12 @@ int main(int argc, char* argv[])
     std::filesystem::path path = "molecules/1AGA.mmtf";
     ChemFilesLoader loader(path);
     std::vector<glm::vec4> positions = loader.getSphereInfo();
-    std::vector<glm::vec4> spheres(positions.begin(), positions.begin() + std::min(positions.size(), static_cast<size_t>(sphere_count)));
-
+    // std::vector<glm::vec4> spheres(positions.begin(), positions.begin() + std::min(positions.size(), static_cast<size_t>(sphere_count)));
+    std::vector<glm::vec4> spheres;
+    for (int i = 0; i < sphere_count; i++)
+    {
+        spheres.push_back({(float)(i%100)*2.0f, (float)(i/100) * 2.0f, (float)(i%100)*2.0f, 1.0f});
+    }
     try
     {
         bool isRunning = true;
