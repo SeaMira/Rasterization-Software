@@ -1,4 +1,4 @@
-#version 430
+#version 460
 
 layout(local_size_x = 16, local_size_y = 16) in;
 layout(rgba8, binding = 0) uniform image2D outputImage;
@@ -144,11 +144,11 @@ void drawSphere(Sphere sphere)
                     const float depth = hit.z < 0.0f ? (hit.z * proj[2].z + proj[3].z) / -hit.z : 1000.0f;
                     const vec3 normal = normalize( hit - cameraSpaceSphere );
                     const float lambertCos = dot(normal, -normalize(hit));
+                    // const float old = atomicMin(depthData[index], depth);
                     if (depthData[index] > depth) 
                     {
                         depthData[index] = depth;
                         imageStore(outputImage, ivec2(px, py), vec4(lambertCos * lightColor * diffuseI, 1.0));
-
                     }
                     
                 }

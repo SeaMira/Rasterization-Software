@@ -29,10 +29,16 @@ GLuint workGroupSizeY = 16;  // Deifining threads-per-group (Y)
 
 int main(int argc, char* argv[]) 
 {
-    Window window { title, SCR_WIDTH, SCR_HEIGHT, true };
+    Window window { title, SCR_WIDTH, SCR_HEIGHT, shown };
     
     ComputeShader computeShader("shaders/set_to_blue.compute");
 
+    // GLint numExtensions;
+    // glGetIntegerv(GL_NUM_EXTENSIONS, &numExtensions);
+
+    // for (GLint i = 0; i < numExtensions; i++) {
+    //     std::cout << glGetStringi(GL_EXTENSIONS, i) << std::endl;
+    // }
     // Crear la textura donde el Compute Shader escribirá
     GLuint textureID;
     glGenTextures(1, &textureID);
@@ -40,8 +46,8 @@ int main(int argc, char* argv[])
     glTexStorage2D(GL_TEXTURE_2D, 1, GL_R32UI, SCR_WIDTH, SCR_HEIGHT);
     // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glBindTexture(GL_TEXTURE_2D, 0);
 
     // Crear framebuffer y adjuntar la textura
@@ -49,14 +55,16 @@ int main(int argc, char* argv[])
     glGenFramebuffers(1, &fbo);
     glBindFramebuffer(GL_FRAMEBUFFER, fbo);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, textureID, 0);
-
+    
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
         std::cerr << "Framebuffer no está completo" << std::endl;
     }
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
+    
     // Vincular la textura para el Compute Shader
-    glBindImageTexture(0, textureID, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_R32UI);
+    glBindTexture(GL_TEXTURE_2D, textureID);
+    // glBindImageTexture(0, textureID, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_R32UI);
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
 
     try {
         bool isRunning = true;
@@ -64,7 +72,7 @@ int main(int argc, char* argv[])
             // Ejecutar el Compute Shader
             computeShader.use();
             glDispatchCompute((SCR_WIDTH + 15) / 16, (SCR_HEIGHT + 15) / 16, 1);
-            glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+            glMemoryBarrier(GL_FRAMEBUFFER_BARRIER_BIT);
 
             // Copiar la textura procesada a la pantalla
             glBindFramebuffer(GL_READ_FRAMEBUFFER, fbo);
