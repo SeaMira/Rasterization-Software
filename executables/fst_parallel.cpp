@@ -25,7 +25,7 @@ using uint = unsigned int;
 const int SCR_WIDTH = 800;
 const int SCR_HEIGHT = 600;
 
-const int sphere_count = 1032;
+const int sphere_count = 65536*256;
 
 std::string title = "First Parallel Version"; 
 
@@ -55,12 +55,12 @@ int main(int argc, char* argv[])
     std::filesystem::path path = "molecules/1AGA.mmtf";
     ChemFilesLoader loader(path);
     std::vector<glm::vec4> positions = loader.getSphereInfo();
-    // std::vector<glm::vec4> spheres(positions.begin(), positions.begin() + std::min(positions.size(), static_cast<size_t>(sphere_count)));
-    std::vector<glm::vec4> spheres;
-    for (int i = 0; i < sphere_count; i++)
-    {
-        spheres.push_back({(float)(i%100)*2.0f, (float)(i/100) * 2.0f, (float)(i%100)*2.0f, 1.0f});
-    }
+    std::vector<glm::vec4> spheres(positions.begin(), positions.begin() + std::min(positions.size(), static_cast<size_t>(sphere_count)));
+    // std::vector<glm::vec4> spheres;
+    // for (int i = 0; i < sphere_count; i++)
+    // {
+    //     spheres.push_back({(float)(i%100)*2.0f, (float)(i/100) * 2.0f, (float)(i%100)*2.0f, 1.0f});
+    // }
     StorageBuffer sphereBuffer(GL_SHADER_STORAGE_BUFFER);
     sphereBuffer.generateBufferData(spheres.size() * sizeof(glm::vec4), 1, 
         spheres.data(), GL_STATIC_DRAW);

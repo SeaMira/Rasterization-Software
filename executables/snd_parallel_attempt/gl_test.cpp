@@ -84,6 +84,10 @@ int main(int argc, char* argv[])
         std::cerr << "Error mapping SSBO." << std::endl;
     }
 
+    int sharedMemory;
+    glGetIntegerv(GL_MAX_COMPUTE_SHARED_MEMORY_SIZE, &sharedMemory);
+    printf("Memoria compartida por workgroup: %d bytes\n", sharedMemory);
+
     sphereBillboardBuffer.unbind();
 
 

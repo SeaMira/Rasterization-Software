@@ -47,6 +47,7 @@ float iSphere(vec3 ro, vec3 rd, vec3 sph, float radius )
 void main()
 {
     const ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
+    if (coords.x + screenResolution.x * (screenResolution.y - coords.y - 1) > screenResolution.x*screenResolution.y) return;
 
     const int localID = int(gl_LocalInvocationIndex);
     const int threadsPerWorkGroup = int(gl_WorkGroupSize.x * gl_WorkGroupSize.y * gl_WorkGroupSize.z);
@@ -55,6 +56,8 @@ void main()
     int count = threadsPerWorkGroup;
 
     float minDepth = MAX_DEPTH;
+    bool colorChanged = false;
+    vec4 color = vec4(0.0);
 
     for (int batch = 0; batch < batches; batch++)
     {
@@ -78,8 +81,8 @@ void main()
             const ivec2 screenMin = ivec2(int(sphereBillboard.downRightCornerMinX.w), int(sphereBillboard.downLeftCornerMinY.w));
             const ivec2 screenMax = ivec2(int(sphereBillboard.upRightCornerMaxX.w), int(sphereBillboard.upLeftCornerMaxY.w));
             // pixel not in the bounding box
-            if ( !(screenMin.x <= coords.x && coords.x < screenMax.x) || 
-                !(screenMin.y <= coords.y && coords.y < screenMax.y) ) 
+            if ( !(screenMin.x <= coords.x && coords.x <= screenMax.x) || 
+                !(screenMin.y <= coords.y && coords.y <= screenMax.y) ) 
                     continue;
 
             const float difx = screenMax.x - screenMin.x;
@@ -91,7 +94,7 @@ void main()
             const vec3 viewImpPos = mix(A, B, v);
             const float h = iSphere(cameraPos, viewImpPos, sphereBillboard.cameraSpaceSphPosR.xyz, sphereBillboard.cameraSpaceSphPosR.w);
 
-            imageStore(outputImage, coords, vec4(0.0));
+            // imageStore(outputImage, coords, vec4(0.0));
             if (h > 0.0f) 
             {
                 const vec3 hit = viewImpPos * h;
@@ -101,11 +104,14 @@ void main()
                     const vec3 normal = normalize( hit - sphereBillboard.cameraSpaceSphPosR.xyz );
                     const float lambertCos = dot(normal, -normalize(hit));
                     minDepth = depth;
-                    imageStore(outputImage, coords, vec4(lambertCos * lightColor * diffuseI, 1.0));
+                    color = vec4(lambertCos * lightColor * diffuseI, 1.0);
+                    if (!colorChanged) colorChanged = true;
                 }
                 
             }
                 
         }
     }
+    if (colorChanged) imageStore(outputImage, coords, color);
+    // else imageStore(outputImage, coords, vec4(1.0, 0.0, 0.0, 1.0));
 }

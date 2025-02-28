@@ -25,7 +25,7 @@ using uint = unsigned int;
 const int SCR_WIDTH = 800;
 const int SCR_HEIGHT = 600;
 
-const int sphere_count = 512;
+const int sphere_count = 65536;
 
 std::string title = "Second Parallel Version"; 
 
@@ -41,7 +41,7 @@ struct SphereBillboard
     glm::vec4 upLeftCornerMaxY;      // 16b - up left corner of the billboard in camera space and the max Y coordinate in screen space
     glm::vec4 downRightCornerMinX;   // 16b - down right corner of the billboard in camera space and the min X coordinate in screen space
     glm::vec4 downLeftCornerMinY;    // 16b - down left corner of the billboard in camera space and the min Y coordinate in screen space
-    // 64b
+    // 80b
 }; 
 
 int main(int argc, char* argv[]) 
