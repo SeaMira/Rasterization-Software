@@ -1,0 +1,111 @@
+#version 430
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+layout(rgba8, binding = 0) uniform image2D outputImage;
+
+// layout(std430, binding = 2) buffer DepthBuffer 
+// {
+//     float depthData[];
+// };
+
+struct SphereBillboard 
+{
+    vec4 cameraSpaceSphPosR;     // 16b - camera space position of the sphere and radius
+    vec4 upRightCornerMaxX;     // 16b - up right corner of the billboard in camera space and the max X coordinate in screen space 
+    vec4 upLeftCornerMaxY;      // 16b - up left corner of the billboard in camera space and the max Y coordinate in screen space
+    vec4 downRightCornerMinX;   // 16b - down right corner of the billboard in camera space and the min X coordinate in screen space
+    vec4 downLeftCornerMinY;    // 16b - down left corner of the billboard in camera space and the min Y coordinate in screen space
+    // 80b
+}; 
+
+layout(std430, binding = 2) buffer SphereBillboardDataBuffer
+{
+    SphereBillboard sphereBillboardData[];
+};
+
+shared SphereBillboard sharedSphereBillboards[int(gl_WorkGroupSize.x * gl_WorkGroupSize.y * gl_WorkGroupSize.z)];
+
+uniform mat4 proj;
+uniform vec3 cameraPos;
+uniform ivec2 screenResolution;
+uniform int sphereCount;
+uniform float MAX_DEPTH = 1000.0f;
+
+vec3 lightColor = vec3(0.01, 1.0, 0.05);
+float diffuseI = 0.9;
+
+float iSphere(vec3 ro, vec3 rd, vec3 sph, float radius )
+{
+    float a = dot(rd, rd);
+    float b = dot( rd, sph );
+    float c = dot( sph, sph ) - radius*radius;
+    float h = b*b - a * c;
+    if( h < 0.0f) return -1.0f;
+    return (b - sqrt( h ))/a;
+}
+
+void main()
+{
+    const ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
+
+    const int localID = int(gl_LocalInvocationIndex);
+    const int threadsPerWorkGroup = int(gl_WorkGroupSize.x * gl_WorkGroupSize.y * gl_WorkGroupSize.z);
+    const int batches = int((sphereCount-1) / threadsPerWorkGroup) + 1;
+    const int lastBatchAmount = sphereCount - (batches-1) * threadsPerWorkGroup;
+    int count = threadsPerWorkGroup;
+
+    float minDepth = MAX_DEPTH;
+
+    for (int batch = 0; batch < batches; batch++)
+    {
+        int batchIndex = localID + batch * threadsPerWorkGroup;
+        if (batchIndex < sphereCount)
+        {
+            sharedSphereBillboards[localID] = sphereBillboardData[batchIndex];
+        }
+        barrier();
+
+        count = threadsPerWorkGroup;
+        if (batch == batches - 1 && lastBatchAmount > 0) count = lastBatchAmount;
+
+        for (int index = 0; index < count; index++)
+        {
+            SphereBillboard sphereBillboard = sharedSphereBillboards[index];
+
+            // bounding box not on screen
+            if (sphereBillboard.cameraSpaceSphPosR.w <= 0.0) continue;
+
+            const ivec2 screenMin = ivec2(int(sphereBillboard.downRightCornerMinX.w), int(sphereBillboard.downLeftCornerMinY.w));
+            const ivec2 screenMax = ivec2(int(sphereBillboard.upRightCornerMaxX.w), int(sphereBillboard.upLeftCornerMaxY.w));
+            // pixel not in the bounding box
+            if ( !(screenMin.x <= coords.x && coords.x < screenMax.x) || 
+                !(screenMin.y <= coords.y && coords.y < screenMax.y) ) 
+                    continue;
+
+            const float difx = screenMax.x - screenMin.x;
+            const float dify = screenMax.y - screenMin.y;
+            const float u = float(coords.x - screenMin.x)/ difx;
+            const float v = float(coords.y - screenMin.y)/ dify;
+            vec3 A = mix(sphereBillboard.upLeftCornerMaxY.xyz, sphereBillboard.upRightCornerMaxX.xyz, u);
+            vec3 B = mix(sphereBillboard.downLeftCornerMinY.xyz, sphereBillboard.downRightCornerMinX.xyz, u);
+            const vec3 viewImpPos = mix(A, B, v);
+            const float h = iSphere(cameraPos, viewImpPos, sphereBillboard.cameraSpaceSphPosR.xyz, sphereBillboard.cameraSpaceSphPosR.w);
+
+            imageStore(outputImage, coords, vec4(0.0));
+            if (h > 0.0f) 
+            {
+                const vec3 hit = viewImpPos * h;
+                const float depth = hit.z < 0.0f ? (hit.z * proj[2].z + proj[3].z) / -hit.z : 1000.0f;
+                if (minDepth > depth) 
+                {
+                    const vec3 normal = normalize( hit - sphereBillboard.cameraSpaceSphPosR.xyz );
+                    const float lambertCos = dot(normal, -normalize(hit));
+                    minDepth = depth;
+                    imageStore(outputImage, coords, vec4(lambertCos * lightColor * diffuseI, 1.0));
+                }
+                
+            }
+                
+        }
+    }
+}

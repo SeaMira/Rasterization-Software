@@ -25,15 +25,24 @@ using uint = unsigned int;
 const int SCR_WIDTH = 800;
 const int SCR_HEIGHT = 600;
 
-const int sphere_count = 1032;
+const int sphere_count = 512;
 
-std::string title = "First Parallel Version"; 
+std::string title = "Second Parallel Version"; 
 
 bool shown = true;
 
 GLuint workGroupSizeX = 16;  // Deifining threads-per-group (X)
 GLuint workGroupSizeY = 16;  // Deifining threads-per-group (Y)
 
+struct SphereBillboard 
+{
+    glm::vec4 cameraSpaceSphPosR;   // 16b - camera space position of the sphere and radius
+    glm::vec4 upRightCornerMaxX;     // 16b - up right corner of the billboard in camera space and the max X coordinate in screen space 
+    glm::vec4 upLeftCornerMaxY;      // 16b - up left corner of the billboard in camera space and the max Y coordinate in screen space
+    glm::vec4 downRightCornerMinX;   // 16b - down right corner of the billboard in camera space and the min X coordinate in screen space
+    glm::vec4 downLeftCornerMinY;    // 16b - down left corner of the billboard in camera space and the min Y coordinate in screen space
+    // 64b
+}; 
 
 int main(int argc, char* argv[]) 
 {
@@ -42,13 +51,15 @@ int main(int argc, char* argv[])
     camera.SetPosition(.0f, .0f, .0f);
     CameraController camera_controller(window, camera);
     
-    ComputeShader computeShader("shaders/fst_parallel.compute");
-    ComputeShader cleaningComputeShader("shaders/set_to_black.compute");
+    ComputeShader bboxExtractionShader("shaders/snd_parallel_attempt/bbox_extraction.compute");
+    ComputeShader bboxIntersectionShader("shaders/snd_parallel_attempt/bbox_intersect.compute");
+    ComputeShader cleaningComputeShader("shaders/snd_parallel_attempt/set_to_black.compute");
 
     Canvas canvas(GL_TEXTURE_2D, GL_RGBA8, SCR_WIDTH, SCR_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE);
     canvas.setFBO(GL_COLOR_ATTACHMENT0);
     
-    if (!canvas.getFramebuffer().isComplete()) {
+    if (!canvas.getFramebuffer().isComplete()) 
+    {
         throw std::runtime_error("Error: Incomplete Framebuffer.");
     }
     
@@ -66,13 +77,18 @@ int main(int argc, char* argv[])
         spheres.data(), GL_STATIC_DRAW);
     sphereBuffer.unbind();
     
-    std::vector<float> depth_b(SCR_WIDTH * SCR_HEIGHT, FLT_MAX);
-    StorageBuffer depthBuffer(GL_SHADER_STORAGE_BUFFER);
-    depthBuffer.generateBufferData(SCR_WIDTH * SCR_HEIGHT * sizeof(float), 2, depth_b.data(), GL_DYNAMIC_COPY);
+    // std::vector<float> depth_b(SCR_WIDTH * SCR_HEIGHT, FLT_MAX);
+    // StorageBuffer depthBuffer(GL_SHADER_STORAGE_BUFFER);
+    // depthBuffer.generateBufferData(SCR_WIDTH * SCR_HEIGHT * sizeof(float), 2, depth_b.data(), GL_DYNAMIC_COPY);
+    // depthBuffer.unbind();
+    
+    StorageBuffer sphereBillboardBuffer(GL_SHADER_STORAGE_BUFFER);
+    sphereBillboardBuffer.generateBufferData(spheres.size() * sizeof(SphereBillboard), 2, nullptr, GL_DYNAMIC_COPY);
+    sphereBillboardBuffer.unbind();
+    
     // Calculating number of work groups (based on the number of threads and spheres)
     GLuint numGroupsX = (sphere_count + workGroupSizeX - 1) / workGroupSizeX;
     GLuint numGroupsY = 1;
-    depthBuffer.unbind();
 
     canvas.bindTexture(0);
     canvas.bindFBO();
@@ -87,23 +103,35 @@ int main(int argc, char* argv[])
             camera_controller.keyBoardAction();
             camera_controller.mouseAction();
 
+            // cleaning shader
             cleaningComputeShader.use();
             cleaningComputeShader.setVec2I("screenResolution", screenResolution);
             glDispatchCompute((SCR_WIDTH + workGroupSizeX - 1) / 16, (SCR_HEIGHT + workGroupSizeY - 1) / 16, 1);
-            glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-            computeShader.use();
-            computeShader.setInt("sphereCount", sphere_count);
-            computeShader.setVec2I("screenResolution", screenResolution);
-            computeShader.setMat4("proj", camera.getProjection());
-            computeShader.setMat4("view", camera.getView());
-            computeShader.setVec3("up", camera.getUp());
-            computeShader.setVec3("front", camera.getFront());
-            computeShader.setVec3("cameraPos", camera.getPosition());
-            computeShader.setFloat("aspectRatio", aspectRatio);
-            computeShader.setFloat("fov", camera.getFov());
-
+            // glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+            
+            // bbox extraction shader
+            bboxExtractionShader.use();
+            bboxExtractionShader.setInt("sphereCount", sphere_count);
+            bboxExtractionShader.setVec2I("screenResolution", screenResolution);
+            bboxExtractionShader.setMat4("proj", camera.getProjection());
+            bboxExtractionShader.setMat4("view", camera.getView());
+            bboxExtractionShader.setVec3("up", camera.getUp());
+            bboxExtractionShader.setVec3("front", camera.getFront());
+            bboxExtractionShader.setVec3("cameraPos", camera.getPosition());
+            bboxExtractionShader.setFloat("aspectRatio", aspectRatio);
+            bboxExtractionShader.setFloat("fov", camera.getFov());
             glDispatchCompute(numGroupsX, numGroupsY, 1);
+            glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+            
+            // bbox intersection shader
+            bboxIntersectionShader.use();
+            bboxIntersectionShader.setInt("sphereCount", sphere_count);
+            bboxIntersectionShader.setVec2I("screenResolution", screenResolution);
+            bboxIntersectionShader.setMat4("proj", camera.getProjection());
+            bboxIntersectionShader.setVec3("cameraPos", camera.getPosition());
+            glDispatchCompute((SCR_WIDTH + workGroupSizeX - 1) / 16, (SCR_HEIGHT + workGroupSizeY - 1) / 16, 1);
             glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+
             // Blit from framebuffer to default framebuffer (screen)
             glBindFramebuffer(GL_READ_FRAMEBUFFER, canvas.getFramebuffer().getId());
             glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);

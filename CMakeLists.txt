@@ -34,9 +34,17 @@ endfunction()
 add_subproject(controllers_example "${CMAKE_SOURCE_DIR}/executables/controllers_example.cpp")
 add_subproject(shaders_example "${CMAKE_SOURCE_DIR}/executables/shaders_example.cpp")
 add_subproject(loader_example "${CMAKE_SOURCE_DIR}/executables/loader_example.cpp")
+
+# Sequential attempt define
 add_subproject(brute_sequencial "${CMAKE_SOURCE_DIR}/executables/brute_sequencial.cpp")
+
+# First parallel attempt define
 add_subproject(fst_parallel "${CMAKE_SOURCE_DIR}/executables/fst_parallel.cpp")
 add_subproject(gltexstor_ex "${CMAKE_SOURCE_DIR}/executables/gltexstor_ex.cpp")
+
+# Second parallel attempt define
+add_subproject(snd_parallel "${CMAKE_SOURCE_DIR}/executables/snd_parallel_attempt/bbox_intersect.cpp")
+add_subproject(snd_parallel_gl_testing "${CMAKE_SOURCE_DIR}/executables/snd_parallel_attempt/gl_test.cpp")
 
 target_link_libraries(brute_sequencial PUBLIC sequential_dependencies)
 

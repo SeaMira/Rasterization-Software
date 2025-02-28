@@ -32,6 +32,13 @@ int main(int argc, char* argv[])
     Window window { title, SCR_WIDTH, SCR_HEIGHT, shown };
     
     ComputeShader computeShader("shaders/set_to_blue.compute");
+    GLint maxSSBOSize = 0;
+    glGetIntegerv(GL_MAX_SHADER_STORAGE_BLOCK_SIZE, &maxSSBOSize);
+    std::cout << "Tamaño máximo de SSBO: " << maxSSBOSize << " bytes" << std::endl;
+
+    GLint maxTotalSSBOSize = 0;
+    glGetIntegerv(GL_MAX_SHADER_STORAGE_BUFFER_BINDINGS, &maxTotalSSBOSize);
+    std::cout << "Número máximo de SSBO bindings: " << maxTotalSSBOSize << std::endl;
 
     // GLint numExtensions;
     // glGetIntegerv(GL_NUM_EXTENSIONS, &numExtensions);

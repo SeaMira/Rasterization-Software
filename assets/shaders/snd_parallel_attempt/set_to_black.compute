@@ -1,0 +1,18 @@
+#version 430
+
+
+layout(local_size_x = 16, local_size_y = 16) in;
+layout(rgba8, binding = 0) uniform image2D outputImage;
+
+// layout(std430, binding = 2) buffer DepthBuffer 
+// {
+//     float depthData[];
+// };
+
+uniform ivec2 screenResolution;
+
+void main() {
+    ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
+    // depthData[coords.y * screenResolution.x + coords.x] = 1000.0f;
+    imageStore(outputImage, coords, vec4(1.0, 1.0, 0.0, 1.0)); 
+}
