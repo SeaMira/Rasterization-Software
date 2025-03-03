@@ -44,51 +44,54 @@ int main(int argc, char* argv[])
 {
     Window window { title, SCR_WIDTH, SCR_HEIGHT, shown };
     
-    ComputeShader glTestingShader("shaders/snd_parallel_attempt/gl_testing.compute");
-    std::vector<SphereBillboard> sphB;
-    for (int i = 0; i < sphere_count; i++)
-    {
-        sphB.push_back({glm::vec4((float)i, 0.0f, 0.0f, (float)i),
-            glm::vec4(0.0f, 0.0f, 0.0f, (float)i),
-            glm::vec4(0.0f, 0.0f, 0.0f, (float)i),
-            glm::vec4(0.0f, 0.0f, 0.0f, (float)i),
-            glm::vec4(-2.5f, 0.0f, 0.0f, (float)i)
-        });
-    }
-    StorageBuffer sphereBillboardBuffer(GL_SHADER_STORAGE_BUFFER);
-    sphereBillboardBuffer.generateBufferData(sphere_count*sizeof(SphereBillboard), 0, sphB.data(), GL_DYNAMIC_COPY);
-    sphereBillboardBuffer.unbind();
+    // ComputeShader glTestingShader("shaders/snd_parallel_attempt/gl_testing.compute");
+    // std::vector<SphereBillboard> sphB;
+    // for (int i = 0; i < sphere_count; i++)
+    // {
+    //     sphB.push_back({glm::vec4((float)i, 0.0f, 0.0f, (float)i),
+    //         glm::vec4(0.0f, 0.0f, 0.0f, (float)i),
+    //         glm::vec4(0.0f, 0.0f, 0.0f, (float)i),
+    //         glm::vec4(0.0f, 0.0f, 0.0f, (float)i),
+    //         glm::vec4(-2.5f, 0.0f, 0.0f, (float)i)
+    //     });
+    // }
+    // StorageBuffer sphereBillboardBuffer(GL_SHADER_STORAGE_BUFFER);
+    // sphereBillboardBuffer.generateBufferData(sphere_count*sizeof(SphereBillboard), 0, sphB.data(), GL_DYNAMIC_COPY);
+    // sphereBillboardBuffer.unbind();
     
-    // testing shader
-    glTestingShader.use();
-    glTestingShader.setInt("sphereCount", sphere_count);
-    glDispatchCompute((SCR_WIDTH + workGroupSizeX - 1) / 16, (SCR_HEIGHT + workGroupSizeY - 1) / 16, 1);
-    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    // // testing shader
+    // glTestingShader.use();
+    // glTestingShader.setInt("sphereCount", sphere_count);
+    // glDispatchCompute((SCR_WIDTH + workGroupSizeX - 1) / 16, (SCR_HEIGHT + workGroupSizeY - 1) / 16, 1);
+    // glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
 
-    sphereBillboardBuffer.bind();
-    SphereBillboard* mappedData = (SphereBillboard*)glMapBufferRange(GL_SHADER_STORAGE_BUFFER, 0, sphere_count * sizeof(SphereBillboard), GL_MAP_READ_BIT);
+    // sphereBillboardBuffer.bind();
+    // SphereBillboard* mappedData = (SphereBillboard*)glMapBufferRange(GL_SHADER_STORAGE_BUFFER, 0, sphere_count * sizeof(SphereBillboard), GL_MAP_READ_BIT);
 
-    if (mappedData) {
-        std::vector<SphereBillboard> sphB_CPU(mappedData, mappedData + sphere_count);  // Copiar datos al vector
+    // if (mappedData) {
+    //     std::vector<SphereBillboard> sphB_CPU(mappedData, mappedData + sphere_count);  // Copiar datos al vector
 
-        // Imprimir la componente .w de cameraSpaceSphPosR para verificar
-        for (int i = 0; i < sphere_count; i++) {  // Solo imprimir los primeros 10 elementos
-            std::cout << "Sphere " << i << " cameraSpaceSphPosR.w: " << sphB_CPU[i].cameraSpaceSphPosR.w 
-            << " and downLeftCornerMinY.w " << sphB_CPU[i].downLeftCornerMinY.w << std::endl;
-        }
+    //     // Imprimir la componente .w de cameraSpaceSphPosR para verificar
+    //     for (int i = 0; i < sphere_count; i++) {  // Solo imprimir los primeros 10 elementos
+    //         std::cout << "Sphere " << i << " cameraSpaceSphPosR.w: " << sphB_CPU[i].cameraSpaceSphPosR.w 
+    //         << " and downLeftCornerMinY.w " << sphB_CPU[i].downLeftCornerMinY.w << std::endl;
+    //     }
 
-        // Desmapear el buffer
-        glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
-    } else {
-        std::cerr << "Error mapping SSBO." << std::endl;
-    }
+    //     // Desmapear el buffer
+    //     glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+    // } else {
+    //     std::cerr << "Error mapping SSBO." << std::endl;
+    // }
+    // sphereBillboardBuffer.unbind();
 
     int sharedMemory;
     glGetIntegerv(GL_MAX_COMPUTE_SHARED_MEMORY_SIZE, &sharedMemory);
     printf("Memoria compartida por workgroup: %d bytes\n", sharedMemory);
-
-    sphereBillboardBuffer.unbind();
+    
+    int maxWorkGroups;
+    glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_SIZE, 0, &maxWorkGroups);
+    printf("Maxima cantidad de work groups: %d \n", maxWorkGroups);
 
 
     return 0;

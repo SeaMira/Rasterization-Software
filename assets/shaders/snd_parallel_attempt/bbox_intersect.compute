@@ -23,7 +23,7 @@ layout(std430, binding = 2) buffer SphereBillboardDataBuffer
     SphereBillboard sphereBillboardData[];
 };
 
-shared SphereBillboard sharedSphereBillboards[int(gl_WorkGroupSize.x * gl_WorkGroupSize.y * gl_WorkGroupSize.z)];
+shared SphereBillboard sharedSphereBillboards[1+ int(gl_WorkGroupSize.x * gl_WorkGroupSize.y * gl_WorkGroupSize.z)];
 
 uniform mat4 proj;
 uniform vec3 cameraPos;
@@ -31,7 +31,7 @@ uniform ivec2 screenResolution;
 uniform int sphereCount;
 uniform float MAX_DEPTH = 1000.0f;
 
-vec3 lightColor = vec3(0.01, 1.0, 0.05);
+vec3 lightColor = vec3(0.05, 1.0, 0.01);
 float diffuseI = 0.9;
 
 float iSphere(vec3 ro, vec3 rd, vec3 sph, float radius )
@@ -69,7 +69,7 @@ void main()
         barrier();
 
         count = threadsPerWorkGroup;
-        if (batch == batches - 1 && lastBatchAmount > 0) count = lastBatchAmount;
+        if (batch == batches - 1) count = min(threadsPerWorkGroup, lastBatchAmount);
 
         for (int index = 0; index < count; index++)
         {
@@ -94,7 +94,7 @@ void main()
             const vec3 viewImpPos = mix(A, B, v);
             const float h = iSphere(cameraPos, viewImpPos, sphereBillboard.cameraSpaceSphPosR.xyz, sphereBillboard.cameraSpaceSphPosR.w);
 
-            // imageStore(outputImage, coords, vec4(0.0));
+            // imageStore(outputImage, coords, vec4(1.0));
             if (h > 0.0f) 
             {
                 const vec3 hit = viewImpPos * h;
@@ -111,6 +111,7 @@ void main()
             }
                 
         }
+        barrier();
     }
     if (colorChanged) imageStore(outputImage, coords, color);
     // else imageStore(outputImage, coords, vec4(1.0, 0.0, 0.0, 1.0));

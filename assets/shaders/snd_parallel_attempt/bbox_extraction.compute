@@ -117,7 +117,7 @@ void storeSphereBBox(Sphere sphere)
     
     ivec2 screenMin, screenMax;
 
-    screenMin.x = int( ((sphereBbox.minCorner.x/aspectRatio) * 0.5f + 0.5f) * float(screenResolution.x));
+    screenMin.x = int(((sphereBbox.minCorner.x/aspectRatio) * 0.5f + 0.5f) * float(screenResolution.x));
     screenMin.y = int((sphereBbox.minCorner.y * 0.5f + 0.5f) * float(screenResolution.y));
     screenMax.x = int(((sphereBbox.maxCorner.x/aspectRatio) * 0.5f + 0.5f) * float(screenResolution.x));
     screenMax.y = int((sphereBbox.maxCorner.y * 0.5f + 0.5f) * float(screenResolution.y));

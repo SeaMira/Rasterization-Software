@@ -25,7 +25,7 @@ using uint = unsigned int;
 const int SCR_WIDTH = 800;
 const int SCR_HEIGHT = 600;
 
-const int sphere_count = 65536;
+const int sphere_count = 512;
 
 std::string title = "Second Parallel Version"; 
 
@@ -82,8 +82,9 @@ int main(int argc, char* argv[])
     // depthBuffer.generateBufferData(SCR_WIDTH * SCR_HEIGHT * sizeof(float), 2, depth_b.data(), GL_DYNAMIC_COPY);
     // depthBuffer.unbind();
     
+    std::vector<SphereBillboard> billboards(spheres.size());
     StorageBuffer sphereBillboardBuffer(GL_SHADER_STORAGE_BUFFER);
-    sphereBillboardBuffer.generateBufferData(spheres.size() * sizeof(SphereBillboard), 2, nullptr, GL_DYNAMIC_COPY);
+    sphereBillboardBuffer.generateBufferData(spheres.size() * sizeof(SphereBillboard), 2, billboards.data(), GL_DYNAMIC_COPY);
     sphereBillboardBuffer.unbind();
     
     // Calculating number of work groups (based on the number of threads and spheres)
@@ -107,7 +108,7 @@ int main(int argc, char* argv[])
             cleaningComputeShader.use();
             cleaningComputeShader.setVec2I("screenResolution", screenResolution);
             glDispatchCompute((SCR_WIDTH + workGroupSizeX - 1) / 16, (SCR_HEIGHT + workGroupSizeY - 1) / 16, 1);
-            // glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+            glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
             
             // bbox extraction shader
             bboxExtractionShader.use();
@@ -121,7 +122,7 @@ int main(int argc, char* argv[])
             bboxExtractionShader.setFloat("aspectRatio", aspectRatio);
             bboxExtractionShader.setFloat("fov", camera.getFov());
             glDispatchCompute(numGroupsX, numGroupsY, 1);
-            glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+            glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
             
             // bbox intersection shader
             bboxIntersectionShader.use();
