@@ -3,14 +3,13 @@
 
 #include <vector>
 #include "ux/cinematic/camera_controlled_movement.h"
-#include "ux/input.h"
-#include "ux/camera.h"
+#include "ux/camera_controller.h"
 
 
 class Benchmark
 {
     public:
-        Benchmark(Camera& camera, Input& input, std::vector<std::pair<glm::vec3, glm::vec3>> checkpoints);
+        Benchmark(CameraController& camera_controller, std::vector<std::pair<glm::vec3, glm::vec3>> checkpoints);
         
         void goToNextCheckpoint();
         void goToLastCheckpoint();
@@ -25,8 +24,7 @@ class Benchmark
         void update();
         void checkInput();
     private:
-        Camera* m_camera;
-        Input* m_input;
+        CameraController* m_camera_controller;
         CameraControlledPath m_camera_path;
         bool m_play = true;
 

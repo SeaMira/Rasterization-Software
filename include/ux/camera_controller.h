@@ -16,6 +16,9 @@ class CameraController
 
         void setBenchmark(bool benchmark);
         bool onBenchmark();
+
+        inline const Input* inputHandle() { return m_input; }
+        inline Camera* cameraHandle() { return m_camera; }
     
     private:
         Window* m_window;

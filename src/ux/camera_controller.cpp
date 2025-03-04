@@ -42,7 +42,7 @@ void CameraController::mouseAction() const
 
 void CameraController::cameraUpdate()
 {
-    if (m_hasBenchmark && m_input->isKeyPressed(Key::B)) m_onBenchmark = !m_onBenchmark;
+    if (m_hasBenchmark && m_input->isKeyDown(Key::B)) m_onBenchmark = !m_onBenchmark;
     if (!m_onBenchmark)
     {
         keyBoardAction();

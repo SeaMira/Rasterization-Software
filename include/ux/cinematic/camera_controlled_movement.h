@@ -17,7 +17,7 @@ public:
         Checkpoint(glm::vec3 pos, glm::vec3 tgt) : position(pos), target(tgt) {}
     };
 
-    CameraControlledPath(Camera& camera, Input& input) : 
+    CameraControlledPath(Camera& camera, const Input& input) : 
         m_camera(&camera), m_input(&input), m_currentIndex(0), m_progress(0.0f), m_speed(1.0f) {}
 
     void addCheckpoint(const glm::vec3& pos, const glm::vec3& tgt);
@@ -35,7 +35,7 @@ public:
 
 private:
     Camera* m_camera;
-    Input* m_input;
+    const Input* m_input;
 
     std::vector<Checkpoint> m_checkpoints;
     int m_currentIndex;

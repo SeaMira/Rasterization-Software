@@ -1,4 +1,5 @@
 #include "ux/camera.h"
+#include <cmath>
 
 Camera::Camera(int SCR_WIDTH, int SCR_HEIGHT) {
     this->SCR_WIDTH = (float)SCR_WIDTH;
@@ -104,9 +105,9 @@ void Camera::lookAtTarget(const glm::vec3& target) {
 
     yaw = glm::degrees(atan2(cameraFront.z, cameraFront.x)); 
     pitch = glm::degrees(asin(cameraFront.y));
-
-    glm::vec3 right = glm::normalize(glm::cross(cameraFront, glm::vec3(0.0f, 1.0f, 0.0f)));
-    cameraUp = glm::normalize(glm::cross(right, cameraFront));
+    update();
+    // glm::vec3 right = glm::normalize(glm::cross(cameraFront, glm::vec3(0.0f, 1.0f, 0.0f)));
+    // cameraUp = glm::normalize(glm::cross(right, cameraFront));
 }
 
 void Camera::OnKeyboard(int key, float dt) {
