@@ -25,6 +25,8 @@ public:
     void SetMargin(float newMargin);
     void SetEdgeStep(float newEdgeStep);
     void SetScrSize(int width, int height);
+
+    void lookAtTarget(const glm::vec3& target);
     
     // void updateCameraVectors();
     void OnKeyboard(int key, float dt);
@@ -45,6 +47,7 @@ public:
     float getYaw();
     float getPitch();
 
+    void update();
     void showInfo();
 
 

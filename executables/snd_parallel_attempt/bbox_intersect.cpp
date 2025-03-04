@@ -101,8 +101,7 @@ int main(int argc, char* argv[])
         bool isRunning = true;
         while ( isRunning )
         {
-            camera_controller.keyBoardAction();
-            camera_controller.mouseAction();
+            camera_controller.cameraUpdate();
 
             // cleaning shader
             cleaningComputeShader.use();

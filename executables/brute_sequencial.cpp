@@ -139,8 +139,7 @@ int main(int argc, char* argv[])
         while ( isRunning )
         {
             
-            camera_controller.keyBoardAction();
-            camera_controller.mouseAction();
+            camera_controller.cameraUpdate();
 
             std::fill(framebuffer.begin(), framebuffer.end(), 0xFFFFFF00);
             std::fill(depthBuffer.begin(), depthBuffer.end(), FLT_MAX);
