@@ -1,6 +1,7 @@
 #ifndef _CANVAS_H_
 #define _CANVAS_H_
 
+#include <SDL3/SDL.h>
 #include "vis/gl/frame_buffer.h"
 #include "vis/gl/texture.h"
 
@@ -34,6 +35,9 @@ public:
     void bindTexture(GLuint unit = 0) const;
     void bindTextureImage(GLuint unit, GLenum access, GLenum format) const;
     void bindFBO() const;
+
+    void takeScreenshot(std::string screenshot_file) const;
+
 
 private:
     Texture m_canvas;

@@ -25,7 +25,7 @@ using uint = unsigned int;
 const int SCR_WIDTH = 800;
 const int SCR_HEIGHT = 600;
 
-const int sphere_count = 65536*256;
+const int sphere_count = 256;
 
 std::string title = "First Parallel Version"; 
 
@@ -107,6 +107,9 @@ int main(int argc, char* argv[])
             glBindFramebuffer(GL_READ_FRAMEBUFFER, canvas.getFramebuffer().getId());
             glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
             glBlitFramebuffer(0, 0, SCR_WIDTH, SCR_HEIGHT, 0, 0, SCR_WIDTH, SCR_HEIGHT, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+            
+            if (window.getInput().isKeyDown(Key::F10)) 
+                canvas.takeScreenshot("off/fst_parallel/test.bmp");
 
             isRunning = window.update();
         }

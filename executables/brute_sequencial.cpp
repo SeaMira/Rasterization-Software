@@ -125,6 +125,14 @@ int main(int argc, char* argv[])
             
             renderFrame(framebuffer, depthBuffer, spheres, camera);
             drawSDL(renderer, texture, framebuffer);
+            if (window.getInput().isKeyDown(Key::F10)) 
+            {
+                SDL_Surface* sshot = SDL_RenderReadPixels(renderer, nullptr);
+                bool sshot_saved = SDL_SaveBMP(sshot, "off/seq/test.bmp");
+                if (sshot_saved) std::cout << "sshot saved." << std::endl;
+                else std::cout << "sshot couldnt be saved." << std::endl;
+                SDL_DestroySurface(sshot);
+            }
 
             isRunning = window.update();
         }
