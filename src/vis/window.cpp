@@ -13,6 +13,8 @@ Window::Window( std::string& title, std::size_t width, std::size_t height, bool 
         std::cout << "alo" << std::endl;
         throw std::runtime_error( SDL_GetError() );
     }
+    m_setupTime = SDL_GetPerformanceCounter();
+
     SDL_GL_SetAttribute( SDL_GL_CONTEXT_FLAGS, 0 );
     SDL_GL_SetAttribute( SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE );
     SDL_GL_SetAttribute( SDL_GL_CONTEXT_MAJOR_VERSION, 4 );
@@ -66,6 +68,7 @@ Window::Window( std::string& title, std::size_t width, std::size_t height, bool 
         throw std::runtime_error("OpenGL 4.5 is not supported");
     }
     m_startTime = SDL_GetPerformanceCounter();
+    m_setupTime -= m_startTime;
 }
 
 Window::Window( Window && other ) noexcept
@@ -118,6 +121,7 @@ bool Window::update()
     m_input.deltaTime = static_cast<float>( static_cast<double>( now - m_lastTimeStep ) / sdlFrequency );
     m_lastTimeStep    = now;
     m_elapsedTime    = (now - m_startTime)/ 100000.0f;
+    m_frame_counter++;
 
     bool      running = true;
     SDL_Event windowEvent;

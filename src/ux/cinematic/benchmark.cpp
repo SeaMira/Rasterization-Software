@@ -76,3 +76,8 @@ void Benchmark::checkInput()
     if (m_camera_controller->inputHandle()->isKeyDown(Key::Down)) speedDown();
 
 }
+
+int Benchmark::getCheckpointID() const
+{
+    return m_camera_path.getCurrentIndex();
+}

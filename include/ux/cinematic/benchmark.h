@@ -23,6 +23,8 @@ class Benchmark
         
         void update();
         void checkInput();
+
+        int getCheckpointID() const;
     private:
         CameraController* m_camera_controller;
         CameraControlledPath m_camera_path;

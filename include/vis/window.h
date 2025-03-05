@@ -40,9 +40,11 @@ class Window
     SDL_GLContext m_glContext = nullptr;
 
     Input    m_input {};
+    uint64_t m_setupTime = 0;
     uint64_t m_lastTimeStep = 0;
     uint64_t m_startTime = 0;
     uint64_t m_elapsedTime = 0;
+    uint64_t m_frame_counter = 0;
     bool     m_isVisible    = true;
 };
 

@@ -15,6 +15,7 @@ set(raster_includes
     ${CMAKE_SOURCE_DIR}/include/ux/input.h
     ${CMAKE_SOURCE_DIR}/include/ux/cinematic/camera_controlled_movement.h
     ${CMAKE_SOURCE_DIR}/include/ux/cinematic/benchmark.h
+    ${CMAKE_SOURCE_DIR}/include/ux/profiler/profiler.h
     
     ${CMAKE_SOURCE_DIR}/include/vis/compute_shader_program.h
     ${CMAKE_SOURCE_DIR}/include/vis/window.h
@@ -40,6 +41,7 @@ set(raster_source
     ${CMAKE_SOURCE_DIR}/src/ux/input.cpp
     ${CMAKE_SOURCE_DIR}/src/ux/cinematic/camera_controlled_movement.cpp
     ${CMAKE_SOURCE_DIR}/src/ux/cinematic/benchmark.cpp
+    ${CMAKE_SOURCE_DIR}/src/ux/profiler/profiler.cpp
 
     ${CMAKE_SOURCE_DIR}/src/vis/compute_shader_program.cpp
     ${CMAKE_SOURCE_DIR}/src/vis/window.cpp

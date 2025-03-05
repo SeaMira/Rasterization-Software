@@ -69,3 +69,5 @@ glm::vec3 CameraControlledPath::getTarget() const { return m_checkpoints[m_curre
 
 void CameraControlledPath::setSpeed(float newSpeed) { m_speed = newSpeed; }
 float CameraControlledPath::getSpeed() const { return m_speed; }
+
+int CameraControlledPath::getCurrentIndex() const { return m_currentIndex; }

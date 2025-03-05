@@ -6,6 +6,7 @@
 #include <SDL3/SDL.h>
 #include <vector>
 #include <cmath>
+#include <string>
 
 #include <filesystem>
 #include "molecule_loader/basic_loader.h"
@@ -16,6 +17,7 @@
 #include "ux/input.h"
 #include "ux/camera_controller.h"
 #include "ux/cinematic/benchmark.h"
+#include "ux/profiler/profiler.h"
 
 #include "vis/window.h"
 #include "vis/gl/frame_buffer.h"
@@ -27,7 +29,7 @@
 const int SCR_WIDTH = 800;
 const int SCR_HEIGHT = 600;
 
-const int sphere_count = 1024;
+const int sphere_count = 126;
 
 std::string title = "Brute Sequential Method"; 
 
@@ -105,6 +107,7 @@ int main(int argc, char* argv[])
     std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints = benchmark2_loaded_molecules(spheres, interleaveAngle, interleaveZ, interleaveY);
     
     Benchmark benchmark(camera_controller, chkPoints);
+    Profiler profiler(window, "off/seq/frame_times.off", "off/seq/process_times.off");
     try
     {
         bool isRunning = true;
@@ -113,6 +116,9 @@ int main(int argc, char* argv[])
             
             camera_controller.cameraUpdate();
             benchmark.update();
+
+            profiler.updateProfiler();
+            if (window.getInput().isKeyDown(Key::T)) profiler.startSavingNextFrames(benchmark.getCheckpointID());
 
             std::fill(framebuffer.begin(), framebuffer.end(), 0xFFFFFF00);
             std::fill(depthBuffer.begin(), depthBuffer.end(), FLT_MAX);

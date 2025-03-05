@@ -32,6 +32,7 @@ public:
     void setSpeed(float newSpeed);
     float getSpeed() const;
 
+    int getCurrentIndex() const;
 
 private:
     Camera* m_camera;
