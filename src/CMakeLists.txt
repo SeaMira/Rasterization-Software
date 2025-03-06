@@ -53,7 +53,7 @@ set(raster_source
 
 
 add_library(raster_dependencies STATIC
-${raster_includes} ${raster_source} ${raster_extern_includes}
+${raster_includes} ${raster_source} ${raster_extern_includes} 
 )
 
 set_property(TARGET raster_dependencies PROPERTY CXX_STANDARD 20)
@@ -70,6 +70,7 @@ ${SDL3_LIBRARIES}
 glad 
 glm 
 chemfiles
+imgui
 )
     
 ## Sequential Version Dependencies
