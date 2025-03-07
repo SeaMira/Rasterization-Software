@@ -23,9 +23,12 @@ set(raster_includes
     ${CMAKE_SOURCE_DIR}/include/vis/gl/frame_buffer.h
     ${CMAKE_SOURCE_DIR}/include/vis/gl/texture.h
     ${CMAKE_SOURCE_DIR}/include/vis/gl/storage_buffer.h
-    )
 
-set(raster_source
+    ${CMAKE_SOURCE_DIR}/include/appSDLGL.h
+    ${CMAKE_SOURCE_DIR}/include/appSDLRenderer.h
+    )
+    
+    set(raster_source
     ${CMAKE_SOURCE_DIR}/src/algorithms/frustum_cull.cpp
     ${CMAKE_SOURCE_DIR}/src/algorithms/occlusion_cull.cpp
     
@@ -35,20 +38,23 @@ set(raster_source
     ${CMAKE_SOURCE_DIR}/src/molecule_loader/basic_loader.cpp
 
     ${CMAKE_SOURCE_DIR}/src/utils/scene_descriptor.cpp
-
+    
     ${CMAKE_SOURCE_DIR}/src/ux/camera_controller.cpp
     ${CMAKE_SOURCE_DIR}/src/ux/camera.cpp
     ${CMAKE_SOURCE_DIR}/src/ux/input.cpp
     ${CMAKE_SOURCE_DIR}/src/ux/cinematic/camera_controlled_movement.cpp
     ${CMAKE_SOURCE_DIR}/src/ux/cinematic/benchmark.cpp
     ${CMAKE_SOURCE_DIR}/src/ux/profiler/profiler.cpp
-
+    
     ${CMAKE_SOURCE_DIR}/src/vis/compute_shader_program.cpp
     ${CMAKE_SOURCE_DIR}/src/vis/window.cpp
     ${CMAKE_SOURCE_DIR}/src/vis/canvas.cpp
     ${CMAKE_SOURCE_DIR}/src/vis/gl/frame_buffer.cpp
     ${CMAKE_SOURCE_DIR}/src/vis/gl/texture.cpp
     ${CMAKE_SOURCE_DIR}/src/vis/gl/storage_buffer.cpp
+    
+    ${CMAKE_SOURCE_DIR}/src/appSDLGL.cpp
+    ${CMAKE_SOURCE_DIR}/src/appSDLRenderer.cpp
 )
 
 

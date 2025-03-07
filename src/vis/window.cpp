@@ -6,7 +6,7 @@
     
 
 Window::Window( std::string& title, std::size_t width, std::size_t height, bool shown ) :
-    m_title( std::move( title ) ), m_width( width ), m_height( height )
+    m_title( std::move( title ) ), m_width( width ), m_height( height ), io(nullptr)
 {
     if ( SDL_Init( SDL_INIT_VIDEO ) < 0 )
     {
@@ -54,21 +54,7 @@ Window::Window( std::string& title, std::size_t width, std::size_t height, bool 
     if ( !m_window )
         throw std::runtime_error( SDL_GetError() );
 
-    m_glContext = SDL_GL_CreateContext( m_window );
-    if ( !m_glContext )
-        throw std::runtime_error( SDL_GetError() );
-
-    SDL_GL_MakeCurrent( m_window, m_glContext );
-
-    if (!gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress)) {
-        throw std::runtime_error("Failed to initialize GLAD");
-    }
-
-    if (GLVersion.major < 4 || (GLVersion.major == 4 && GLVersion.minor < 5)) {
-        throw std::runtime_error("OpenGL 4.5 is not supported");
-    }
-    m_startTime = SDL_GetPerformanceCounter();
-    m_setupTime -= m_startTime;
+    
 }
 
 Window::Window( Window && other ) noexcept
@@ -77,7 +63,6 @@ Window::Window( Window && other ) noexcept
     std::swap( m_width, other.m_width );
     std::swap( m_height, other.m_height );
     std::swap( m_window, other.m_window );
-    std::swap( m_glContext, other.m_glContext );
     std::swap( m_input, other.m_input );
     std::swap( m_lastTimeStep, other.m_lastTimeStep );
     std::swap( m_isVisible, other.m_isVisible );
@@ -89,7 +74,6 @@ Window & Window::operator=( Window && other ) noexcept
     std::swap( m_width, other.m_width );
     std::swap( m_height, other.m_height );
     std::swap( m_window, other.m_window );
-    std::swap( m_glContext, other.m_glContext );
     std::swap( m_input, other.m_input );
     std::swap( m_lastTimeStep, other.m_lastTimeStep );
     std::swap( m_isVisible, other.m_isVisible );
@@ -99,114 +83,115 @@ Window & Window::operator=( Window && other ) noexcept
 
 Window::~Window()
 {
-    if ( m_glContext )
-        SDL_GL_DestroyContext( m_glContext );
-
     if ( m_window )
+    {
         SDL_DestroyWindow( m_window );
-
+        m_window = nullptr;
+    }
+    SDL_QuitSubSystem(SDL_INIT_VIDEO);
     SDL_Quit();
 }
 
 static Key toKey( SDL_Scancode scanCode );
 
-bool Window::update()
+void Window::updateTimes()
 {
-    m_input.reset();
-
-    // Based on ImGui
-    // https://github.com/ocornut/imgui/blob/master/backends/imgui_impl_sdl.cpp#L557
     static const uint64_t sdlFrequency = SDL_GetPerformanceFrequency();
     const uint64_t        now          = SDL_GetPerformanceCounter();
     m_input.deltaTime = static_cast<float>( static_cast<double>( now - m_lastTimeStep ) / sdlFrequency );
     m_lastTimeStep    = now;
     m_elapsedTime    = (now - m_startTime)/ 100000.0f;
     m_frame_counter++;
+}
 
-    bool      running = true;
+void Window::checkInputs(bool& running)
+{
+    m_input.reset();
     SDL_Event windowEvent;
-
     while ( SDL_PollEvent( &windowEvent ) )
     {
+        // ImGUI
+        ImGui_ImplSDL3_ProcessEvent(&windowEvent);
+
+        // SDL
         switch ( windowEvent.type )
         {
-        case SDL_EVENT_QUIT: running = false; break;
-        case SDL_EVENT_MOUSE_WHEEL:
-        {
-            m_input.deltaMouseWheel = windowEvent.wheel.y;
-            break;
-        }
-        case SDL_EVENT_MOUSE_MOTION:
-        {
-            m_input.deltaMousePosition.x = windowEvent.motion.xrel;
-            m_input.deltaMousePosition.y = windowEvent.motion.yrel;
-            m_input.mousePosition.x      = windowEvent.motion.x;
-            m_input.mousePosition.y      = windowEvent.motion.y;
-            break;
-        }
-        case SDL_EVENT_KEY_DOWN:
-        {
-            Key key = toKey( windowEvent.key.scancode );
-            if (key == Key::Escape) return false;
-            m_input.keysPressed.emplace( key );
-            m_input.keysDown.emplace( key );
-            break;
-        }
-        case SDL_EVENT_KEY_UP:
-        {
-            Key key = toKey( windowEvent.key.scancode );
-            m_input.keysPressed.erase( key );
-            m_input.keysUp.emplace( key );
-            break;
-        }
-        case SDL_EVENT_MOUSE_BUTTON_DOWN:
-        {
-            switch ( windowEvent.button.button )
+            case SDL_EVENT_QUIT: running = false; break;
+            case SDL_EVENT_MOUSE_WHEEL:
             {
-            case SDL_BUTTON_LEFT:
-            {
-                m_input.mouseLeftPressed = true;
-                m_input.mouseLeftClicked = true;
-                m_input.doubleLeftClick  = windowEvent.button.clicks == 2;
+                m_input.deltaMouseWheel = windowEvent.wheel.y;
                 break;
             }
-            case SDL_BUTTON_RIGHT:
-                m_input.mouseRightPressed = true;
-                m_input.mouseRightClicked = true;
-                break;
-            case SDL_BUTTON_MIDDLE:
-                m_input.mouseMiddlePressed = true;
-                m_input.mouseMiddleClicked = true;
-                break;
-            }
-            break;
-        }
-        case SDL_EVENT_MOUSE_BUTTON_UP:
-        {
-            switch ( windowEvent.button.button )
+            case SDL_EVENT_MOUSE_MOTION:
             {
-            case SDL_BUTTON_LEFT: m_input.mouseLeftPressed = false; break;
-            case SDL_BUTTON_RIGHT: m_input.mouseRightPressed = false; break;
-            case SDL_BUTTON_MIDDLE: m_input.mouseMiddlePressed = false; break;
+                m_input.deltaMousePosition.x = windowEvent.motion.xrel;
+                m_input.deltaMousePosition.y = windowEvent.motion.yrel;
+                m_input.mousePosition.x      = windowEvent.motion.x;
+                m_input.mousePosition.y      = windowEvent.motion.y;
+                break;
             }
-            break;
-        }
-        case SDL_EVENT_WINDOW_RESIZED:
-        {
-            m_width  = windowEvent.window.data1;
-            m_height = windowEvent.window.data2;
+            case SDL_EVENT_KEY_DOWN:
+            {
+                Key key = toKey( windowEvent.key.scancode );
+                if (key == Key::Escape)
+                {
+                    running = false;
+                    return ;
+                } 
+                m_input.keysPressed.emplace( key );
+                m_input.keysDown.emplace( key );
+                break;
+            }
+            case SDL_EVENT_KEY_UP:
+            {
+                Key key = toKey( windowEvent.key.scancode );
+                m_input.keysPressed.erase( key );
+                m_input.keysUp.emplace( key );
+                break;
+            }
+            case SDL_EVENT_MOUSE_BUTTON_DOWN:
+            {
+                switch ( windowEvent.button.button )
+                {
+                case SDL_BUTTON_LEFT:
+                {
+                    m_input.mouseLeftPressed = true;
+                    m_input.mouseLeftClicked = true;
+                    m_input.doubleLeftClick  = windowEvent.button.clicks == 2;
+                    break;
+                }
+                case SDL_BUTTON_RIGHT:
+                    m_input.mouseRightPressed = true;
+                    m_input.mouseRightClicked = true;
+                    break;
+                case SDL_BUTTON_MIDDLE:
+                    m_input.mouseMiddlePressed = true;
+                    m_input.mouseMiddleClicked = true;
+                    break;
+                }
+                break;
+            }
+            case SDL_EVENT_MOUSE_BUTTON_UP:
+            {
+                switch ( windowEvent.button.button )
+                {
+                case SDL_BUTTON_LEFT: m_input.mouseLeftPressed = false; break;
+                case SDL_BUTTON_RIGHT: m_input.mouseRightPressed = false; break;
+                case SDL_BUTTON_MIDDLE: m_input.mouseMiddlePressed = false; break;
+                }
+                break;
+            }
+            case SDL_EVENT_WINDOW_RESIZED:
+            {
+                m_width  = windowEvent.window.data1;
+                m_height = windowEvent.window.data2;
 
-            m_input.windowSize    = { m_width, m_height };
-            m_input.windowResized = true;
-            break;
-        }
+                m_input.windowSize    = { m_width, m_height };
+                m_input.windowResized = true;
+                break;
+            }
         }
     }
-
-    // Actualizar pantalla
-    SDL_GL_SwapWindow(m_window);
-
-    return running;
 }
 
 void Window::resize( std::size_t width, std::size_t height ) { SDL_SetWindowSize( m_window, width, height ); }
@@ -280,4 +265,36 @@ static Key toKey( SDL_Scancode scanCode )
 }
 
 
+void Window::initImGuiContext()
+{
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    io = &ImGui::GetIO();
+    io->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    io->ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
 
+    ImGui::StyleColorsDark();
+}
+
+
+void Window::renderImGui() const 
+{
+    ImGui_ImplSDL3_NewFrame();
+    ImGui::NewFrame();
+
+    ImGui::Begin("Control Panel");
+    ImGui::Text("This is an ImGui window!");
+    if (ImGui::Button("Button")) {
+        std::cout << "Button clicked!" << std::endl;
+    }
+    ImGui::End();
+
+    ImGui::Render();
+}
+
+void Window::shutdownImGuiContext() const
+{
+    ImGui_ImplSDL3_Shutdown();
+    ImGui::DestroyContext();
+    
+}

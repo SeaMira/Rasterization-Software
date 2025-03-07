@@ -117,6 +117,14 @@ struct Input
     bool isKeyActivated( const Key key, const KeyAction action ) const;
 
     void reset();
+
+    ~Input()
+    {
+        keysPressed = {};
+        keysDown = {};
+        keysUp = {};
+
+    }
 };
 
 

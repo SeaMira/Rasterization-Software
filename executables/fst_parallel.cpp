@@ -6,13 +6,16 @@
 #include <SDL3/SDL.h>
 #include <vector>
 
+
+#include <backends/imgui_impl_opengl3.h>
+
 #include <filesystem>
 #include "molecule_loader/basic_loader.h"
 
 #include "ux/input.h"
 #include "ux/camera_controller.h"
 
-#include "vis/window.h"
+#include "appSDLGL.h"
 #include "vis/gl/frame_buffer.h"
 #include "vis/gl/storage_buffer.h"
 #include "vis/gl/texture.h"
@@ -37,13 +40,14 @@ GLuint workGroupSizeY = 16;  // Deifining threads-per-group (Y)
 
 int main(int argc, char* argv[]) 
 {
-    Window window { title, SCR_WIDTH, SCR_HEIGHT, shown };
+    AppOpenGL window { title, SCR_WIDTH, SCR_HEIGHT, shown };
+
     Camera camera(SCR_WIDTH, SCR_HEIGHT);
     camera.SetPosition(.0f, .0f, .0f);
     CameraController camera_controller(window, camera);
     
-    ComputeShader computeShader("shaders/fst_parallel.compute");
-    ComputeShader cleaningComputeShader("shaders/set_to_black.compute");
+    ComputeShader computeShader("assets/shaders/fst_parallel.compute");
+    ComputeShader cleaningComputeShader("assets/shaders/set_to_black.compute");
 
     Canvas canvas(GL_TEXTURE_2D, GL_RGBA8, SCR_WIDTH, SCR_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE);
     canvas.setFBO(GL_COLOR_ATTACHMENT0);
@@ -52,7 +56,7 @@ int main(int argc, char* argv[])
         throw std::runtime_error("Error: Incomplete Framebuffer.");
     }
     
-    std::filesystem::path path = "molecules/1AGA.mmtf";
+    std::filesystem::path path = "assets/molecules/1AGA.mmtf";
     ChemFilesLoader loader(path);
     std::vector<glm::vec4> positions = loader.getSphereInfo();
     std::vector<glm::vec4> spheres(positions.begin(), positions.begin() + std::min(positions.size(), static_cast<size_t>(sphere_count)));
@@ -103,15 +107,16 @@ int main(int argc, char* argv[])
 
             glDispatchCompute(numGroupsX, numGroupsY, 1);
             glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+
+            
             // Blit from framebuffer to default framebuffer (screen)
             glBindFramebuffer(GL_READ_FRAMEBUFFER, canvas.getFramebuffer().getId());
-            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-            glBlitFramebuffer(0, 0, SCR_WIDTH, SCR_HEIGHT, 0, 0, SCR_WIDTH, SCR_HEIGHT, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+            
+            isRunning = window.update();
             
             if (window.getInput().isKeyDown(Key::F10)) 
                 canvas.takeScreenshot("off/fst_parallel/test.bmp");
 
-            isRunning = window.update();
         }
     }
     catch (const std::exception& e)

@@ -8,9 +8,7 @@
 #include <cmath>
 #include <string>
 
-#include <imgui.h>
-#include <backends/imgui_impl_sdl3.h>
-#include <backends/imgui_impl_sdlrenderer3.h>
+#include "appSDLRenderer.h"
 
 #include <filesystem>
 #include "molecule_loader/basic_loader.h"
@@ -75,33 +73,13 @@ void renderFrame(std::vector<uint32_t>& framebuffer,
     }
 }
 
-void drawSDL(SDL_Renderer* renderer, SDL_Texture* texture, std::vector<uint32_t>& framebuffer) {
-    SDL_UpdateTexture(texture, nullptr, framebuffer.data(), SCR_WIDTH * sizeof(uint32_t));
-    SDL_RenderClear(renderer);
-    SDL_RenderTexture(renderer, texture, nullptr, nullptr);
-    ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);
-    SDL_RenderPresent(renderer);
-}
-
 int main(int argc, char* argv[]) 
 {
-    Window window { title, SCR_WIDTH, SCR_HEIGHT, shown };
+    AppRenderer window { title, SCR_WIDTH, SCR_HEIGHT, shown };
     Camera camera(SCR_WIDTH, SCR_HEIGHT);
     camera.SetPosition(.0f, .0f, .0f);
     CameraController camera_controller(window, camera);
 
-    // Setup Dear ImGui context
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO(); (void)io;
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
-
-    // Setup Dear ImGui style
-    ImGui::StyleColorsDark();
-    //ImGui::StyleColorsLight();
-
-    
     
     // benchmark settings
     // std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints = benchmark1_structured_grid(spheresGridWidth, interleaveW, interleaveH, interleaveZ);
@@ -116,12 +94,6 @@ int main(int argc, char* argv[])
     std::vector<uint32_t> framebuffer(SCR_WIDTH * SCR_HEIGHT);
     std::vector<float> depthBuffer(SCR_WIDTH * SCR_HEIGHT, FLT_MAX);
     
-    SDL_Renderer* renderer = SDL_CreateRenderer(window.getHandle(), nullptr);
-    SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, SCR_WIDTH, SCR_HEIGHT);
-    
-    // Setup Platform/Renderer backends
-    ImGui_ImplSDL3_InitForSDLRenderer(window.getHandle(), renderer);
-    ImGui_ImplSDLRenderer3_Init(renderer);
    
     std::filesystem::path path = "assets/molecules/1AGA.mmtf";
     ChemFilesLoader loader(path);
@@ -132,20 +104,11 @@ int main(int argc, char* argv[])
     Benchmark benchmark(camera_controller, chkPoints);
     Profiler profiler(window, "media/off/seq/frame_times.off", "media/off/seq/process_times.off");
     
-    float f = 0.0f;
-    int counter = 0;
-    ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
     try
     {
         bool isRunning = true;
         while ( isRunning )
         {
-
-            SDL_Event event;
-            while (SDL_PollEvent(&event))
-            {
-                ImGui_ImplSDL3_ProcessEvent(&event);
-            }
             
             camera_controller.cameraUpdate();
             benchmark.update();
@@ -157,49 +120,24 @@ int main(int argc, char* argv[])
             std::fill(depthBuffer.begin(), depthBuffer.end(), FLT_MAX);
             
             renderFrame(framebuffer, depthBuffer, spheres, camera);
-            // Start the Dear ImGui frame
-            ImGui_ImplSDLRenderer3_NewFrame();
-            ImGui_ImplSDL3_NewFrame();
-            ImGui::NewFrame();
-
-            {
-                ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
-
-                ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
-
-                ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
-
-                ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
-                ImGui::End();
-            }
-            ImGui::Render();
             
-            drawSDL(renderer, texture, framebuffer);
+            window.updateTexture(framebuffer);
 
+            isRunning = window.update();
 
             if (window.getInput().isKeyDown(Key::F10)) 
             {
                 std::string sshot_name  = "media/img/seq/frame_" + std::to_string(benchmark.getCheckpointID()) + ".bmp";
-                takeScreenshot(renderer, sshot_name);   
+                takeScreenshot(window.getRenderer(), sshot_name);   
             }
 
-            isRunning = window.update();
         }
     }
     catch (const std::exception& e)
     {
         std::cerr << "Error: " << e.what() << std::endl;
-        SDL_DestroyTexture(texture);
-        SDL_DestroyRenderer(renderer);
         return 1;
     }
-
-    ImGui_ImplSDLRenderer3_Shutdown();
-    ImGui_ImplSDL3_Shutdown();
-    ImGui::DestroyContext();
-    
-    SDL_DestroyTexture(texture);
-    SDL_DestroyRenderer(renderer);
 
     return 0;
 }
