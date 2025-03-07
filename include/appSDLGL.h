@@ -38,7 +38,8 @@ public:
         
         // Actualizar pantalla
         renderFrame();
-        renderImGui();
+        startRenderImGui();
+        presentRenderImGui();
         presentFrame();
     
         return running;
@@ -98,10 +99,15 @@ protected:
         ImGui_ImplOpenGL3_Init("#version 130");
     }
 
-    void renderImGui() const override 
+    void startRenderImGui() const override 
     {
         ImGui_ImplOpenGL3_NewFrame();
-        Window::renderImGui();  
+        Window::startRenderImGui();  
+    }
+    
+    virtual void presentRenderImGui() const override
+    {
+        Window::presentRenderImGui();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     }
 

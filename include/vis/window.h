@@ -37,7 +37,8 @@ class Window
     void updateTimes();
     void checkInputs(bool& running);
     virtual void initImGuiContext();
-    virtual void renderImGui() const;
+    virtual void startRenderImGui() const;
+    virtual void presentRenderImGui() const;
     virtual void shutdownImGuiContext() const;
     virtual bool update() = 0;
     virtual void createGraphicsContext() = 0;

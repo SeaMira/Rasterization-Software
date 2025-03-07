@@ -7,6 +7,12 @@ set(raster_includes
     
     ${CMAKE_SOURCE_DIR}/include/molecule_loader/basic_loader.h
     
+    ${CMAKE_SOURCE_DIR}/include/ui/components/scene_info.h
+    ${CMAKE_SOURCE_DIR}/include/ui/components/camera_info.h
+    ${CMAKE_SOURCE_DIR}/include/ui/app_ui.h
+    ${CMAKE_SOURCE_DIR}/include/ui/component.h
+    ${CMAKE_SOURCE_DIR}/include/ui/element.h
+
     ${CMAKE_SOURCE_DIR}/include/utils/math_defines.h
     ${CMAKE_SOURCE_DIR}/include/utils/scene_descriptor.h
 
@@ -36,6 +42,11 @@ set(raster_includes
     ${CMAKE_SOURCE_DIR}/src/geometry/sphere/sphere.cpp
     
     ${CMAKE_SOURCE_DIR}/src/molecule_loader/basic_loader.cpp
+    
+    ${CMAKE_SOURCE_DIR}/src/ui/components/scene_info.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/components/camera_info.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/app_ui.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/component.cpp
 
     ${CMAKE_SOURCE_DIR}/src/utils/scene_descriptor.cpp
     

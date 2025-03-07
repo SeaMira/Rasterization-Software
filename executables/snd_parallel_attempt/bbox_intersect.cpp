@@ -12,7 +12,7 @@
 #include "ux/input.h"
 #include "ux/camera_controller.h"
 
-#include "vis/window.h"
+#include "appSDLGL.h"
 #include "vis/gl/frame_buffer.h"
 #include "vis/gl/storage_buffer.h"
 #include "vis/gl/texture.h"
@@ -25,7 +25,7 @@ using uint = unsigned int;
 const int SCR_WIDTH = 800;
 const int SCR_HEIGHT = 600;
 
-const int sphere_count = 512;
+const int sphere_count = 128;
 
 std::string title = "Second Parallel Version"; 
 
@@ -46,14 +46,14 @@ struct SphereBillboard
 
 int main(int argc, char* argv[]) 
 {
-    Window window { title, SCR_WIDTH, SCR_HEIGHT, shown };
+    AppOpenGL window { title, SCR_WIDTH, SCR_HEIGHT, shown };
     Camera camera(SCR_WIDTH, SCR_HEIGHT);
     camera.SetPosition(.0f, .0f, .0f);
     CameraController camera_controller(window, camera);
     
-    ComputeShader bboxExtractionShader("shaders/snd_parallel_attempt/bbox_extraction.compute");
-    ComputeShader bboxIntersectionShader("shaders/snd_parallel_attempt/bbox_intersect.compute");
-    ComputeShader cleaningComputeShader("shaders/snd_parallel_attempt/set_to_black.compute");
+    ComputeShader bboxExtractionShader("assets/shaders/snd_parallel_attempt/bbox_extraction.compute");
+    ComputeShader bboxIntersectionShader("assets/shaders/snd_parallel_attempt/bbox_intersect.compute");
+    ComputeShader cleaningComputeShader("assets/shaders/snd_parallel_attempt/set_to_black.compute");
 
     Canvas canvas(GL_TEXTURE_2D, GL_RGBA8, SCR_WIDTH, SCR_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE);
     canvas.setFBO(GL_COLOR_ATTACHMENT0);
@@ -63,7 +63,7 @@ int main(int argc, char* argv[])
         throw std::runtime_error("Error: Incomplete Framebuffer.");
     }
     
-    std::filesystem::path path = "molecules/1AGA.mmtf";
+    std::filesystem::path path = "assets/molecules/1AGA.mmtf";
     ChemFilesLoader loader(path);
     std::vector<glm::vec4> positions = loader.getSphereInfo();
     // std::vector<glm::vec4> spheres(positions.begin(), positions.begin() + std::min(positions.size(), static_cast<size_t>(sphere_count)));
@@ -134,10 +134,11 @@ int main(int argc, char* argv[])
 
             // Blit from framebuffer to default framebuffer (screen)
             glBindFramebuffer(GL_READ_FRAMEBUFFER, canvas.getFramebuffer().getId());
-            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-            glBlitFramebuffer(0, 0, SCR_WIDTH, SCR_HEIGHT, 0, 0, SCR_WIDTH, SCR_HEIGHT, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 
             isRunning = window.update();
+
+            if (window.getInput().isKeyDown(Key::F10)) 
+                canvas.takeScreenshot("off/scnd_parallel/test.bmp");
         }
     }
     catch (const std::exception& e)

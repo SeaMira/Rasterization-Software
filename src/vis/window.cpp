@@ -8,11 +8,8 @@
 Window::Window( std::string& title, std::size_t width, std::size_t height, bool shown ) :
     m_title( std::move( title ) ), m_width( width ), m_height( height ), io(nullptr)
 {
-    if ( SDL_Init( SDL_INIT_VIDEO ) < 0 )
-    {
-        std::cout << "alo" << std::endl;
+    if (!SDL_Init( SDL_INIT_VIDEO ))
         throw std::runtime_error( SDL_GetError() );
-    }
     m_setupTime = SDL_GetPerformanceCounter();
 
     SDL_GL_SetAttribute( SDL_GL_CONTEXT_FLAGS, 0 );
@@ -277,18 +274,28 @@ void Window::initImGuiContext()
 }
 
 
-void Window::renderImGui() const 
+void Window::startRenderImGui() const
 {
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
 
     ImGui::Begin("Control Panel");
-    ImGui::Text("This is an ImGui window!");
+    ImGui::Text("Application average %.2f ms/frame (%.0f FPS)", 1000.0f / io->Framerate, io->Framerate);
     if (ImGui::Button("Button")) {
         std::cout << "Button clicked!" << std::endl;
     }
+    bool opcion1 = false, opcion2 = false;
+    if (ImGui::CollapsingHeader("Opciones")) {
+        ImGui::Text("Configuración 1");
+        ImGui::Checkbox("Opción 1", &opcion1);
+        ImGui::Text("Configuración 2");
+        ImGui::Checkbox("Opción 2", &opcion2);
+    }
     ImGui::End();
+}
 
+void Window::presentRenderImGui() const
+{
     ImGui::Render();
 }
 

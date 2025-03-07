@@ -43,7 +43,8 @@ public:
     
         // Actualizar pantalla
         renderFrame();
-        renderImGui();
+        startRenderImGui();
+        presentRenderImGui();
         presentFrame();
     
         return running;
@@ -100,10 +101,15 @@ protected:
         ImGui_ImplSDLRenderer3_Init(m_renderer);
     }
 
-    void renderImGui() const override 
+    void startRenderImGui() const override 
     {
         ImGui_ImplSDLRenderer3_NewFrame();
-        Window::renderImGui();  
+        Window::startRenderImGui();  
+    }
+    
+    virtual void presentRenderImGui() const override
+    {
+        Window::presentRenderImGui();
         ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), m_renderer);
     }
 

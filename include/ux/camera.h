@@ -76,6 +76,8 @@ private:
     bool OnRightEdge;
 
     float mSpeed = 10.0f;
+
+    friend class CameraInfoComponent;
     
 };
 
