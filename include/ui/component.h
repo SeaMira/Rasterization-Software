@@ -13,13 +13,13 @@ public:
     virtual ~Component() = default;
 
     // Component rendering
-    void render();
+    virtual void render();
 
     inline void addElement(std::unique_ptr<Element> e) { elements.push_back(std::move(e));}
     // Menu name getter
     inline std::string& getName() { return m_name; }
 
-private:
+protected:
     std::string m_name;
     std::vector<std::unique_ptr<Element>> elements;
 };

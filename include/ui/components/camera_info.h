@@ -10,7 +10,7 @@ class CameraInfoComponent : public Component
 public:
     CameraInfoComponent(std::string name, Camera* camera);
 
-public:
+private:
     Camera* m_camera;
 };
 

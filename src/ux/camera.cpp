@@ -36,7 +36,7 @@ glm::vec3 Camera::getRight() {
 }
 
 glm::mat4 Camera::getProjection() {
-    return glm::perspective(glm::radians(fov), SCR_WIDTH/SCR_HEIGHT, 0.1f, 10000.0f);
+    return glm::perspective(glm::radians(fov), SCR_WIDTH/SCR_HEIGHT, mNear, mFar);
 }
 
 glm::mat4 Camera::getView() {
@@ -263,8 +263,8 @@ void Camera::OnScroll(float yoffset) {
     fov -= yoffset;
     if (fov < 1.0f)
         fov = 1.0f;
-    if (fov > 45.0f)
-        fov = 45.0f;
+    if (fov > 180.0f)
+        fov = 180.0f;
 }
 
 void Camera::update()
