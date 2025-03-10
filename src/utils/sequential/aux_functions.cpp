@@ -1,3 +1,4 @@
+#include <iostream>
 #include "utils/sequential/aux_functions.h"
 
 
@@ -14,7 +15,7 @@ float iSphere(glm::vec3 ro, glm::vec3 rd, glm::vec3 sph, float radius )
 
 bboxCorners getSphereBbox(const glm::vec3& cameraSpaceSphere, const glm::vec3& camImposPos, 
     const glm::vec3& normCamSpaceSphere, const glm::mat4& proj, const glm::vec3& camPos, 
-    const glm::vec3& front, const glm::vec3& up,const float sphRadius, const float fov, const float aspectRatio)
+    const glm::vec3& front, const glm::vec3& up,const float sphRadius)
 {
     const float sinAngle = sphRadius / (glm::length(cameraSpaceSphere) + 1e-6f);
     const float tanAngle = std::tan(std::asin(sinAngle));
@@ -34,10 +35,11 @@ bboxCorners getSphereBbox(const glm::vec3& cameraSpaceSphere, const glm::vec3& c
     const glm::vec4 downRight = proj * glm::vec4(downRightCorner, 1.0f);
     const glm::vec4 downLeft = proj * glm::vec4(downLeftCorner, 1.0f);
     
-    const glm::vec3 ndcUpRight = glm::vec3(upRightCorner) / upRight.w;
-    const glm::vec3 ndcUpLeft = glm::vec3(upLeftCorner) / upLeft.w;
-    const glm::vec3 ndcDownRight = glm::vec3(downRightCorner) / downRight.w;
-    const glm::vec3 ndcDownLeft = glm::vec3(downLeftCorner) / downLeft.w;
+    glm::vec3 ndcUpRight = glm::vec3(upRight.x / upRight.w, upRight.y / upRight.w, upRight.z / upRight.w);
+    glm::vec3 ndcUpLeft = glm::vec3(upLeft.x / upLeft.w, upLeft.y / upLeft.w, upLeft.z / upLeft.w);
+    glm::vec3 ndcDownRight = glm::vec3(downRight.x / downRight.w, downRight.y / downRight.w, downRight.z / downRight.w);
+    glm::vec3 ndcDownLeft = glm::vec3(downLeft.x / downLeft.w, downLeft.y / downLeft.w, downLeft.z / downLeft.w);
+
 
     glm::vec2 minCorner = glm::min(glm::min(ndcUpRight, ndcUpLeft), glm::min(ndcDownRight, ndcDownLeft));
     glm::vec2 maxCorner = glm::max(glm::max(ndcUpRight, ndcUpLeft), glm::max(ndcDownRight, ndcDownLeft));
@@ -57,8 +59,7 @@ uint32_t vecToColor(glm::vec3 lambertCos)
 
 void drawSphere(const glm::mat4& proj, const glm::mat4& view, 
     const glm::vec3& up, const glm::vec3& front, const glm::vec3& camPos, 
-    const int SCR_WIDTH, const int SCR_HEIGHT,
-    const float fov, const float aspectRatio, 
+    const int SCR_WIDTH, const int SCR_HEIGHT, 
     const glm::vec4& sphere,
     std::vector<uint32_t>& framebuffer, std::vector<float>& depthBuffer)
 {
@@ -67,13 +68,13 @@ void drawSphere(const glm::mat4& proj, const glm::mat4& view,
     glm::vec3 camImposPos = cameraSpaceSphere - normCamSpaceSphere * sphere.w;
 
     bboxCorners sphereBbox = getSphereBbox(cameraSpaceSphere, camImposPos,
-        normCamSpaceSphere, proj, camPos, front, up, sphere.w, fov, aspectRatio);
+        normCamSpaceSphere, proj, camPos, front, up, sphere.w);
     
-        glm::ivec2 screenMin, screenMax;
+    glm::ivec2 screenMin, screenMax;
 
-    screenMin.x = ((sphereBbox.minCorner.x/aspectRatio) * 0.5f + 0.5f) * SCR_WIDTH;
+    screenMin.x = ((sphereBbox.minCorner.x) * 0.5f + 0.5f) * SCR_WIDTH;
     screenMin.y = (sphereBbox.minCorner.y * 0.5f + 0.5f) * SCR_HEIGHT;
-    screenMax.x = ((sphereBbox.maxCorner.x/aspectRatio) * 0.5f + 0.5f) * SCR_WIDTH;
+    screenMax.x = ((sphereBbox.maxCorner.x) * 0.5f + 0.5f) * SCR_WIDTH;
     screenMax.y = (sphereBbox.maxCorner.y * 0.5f + 0.5f) * SCR_HEIGHT;
     // std::cout << screenMin.x << ", " << screenMin.y << std::endl;
     // std::cout << screenMax.x << ", " << screenMax.y << std::endl;   
