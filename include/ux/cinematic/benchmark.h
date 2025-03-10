@@ -4,6 +4,7 @@
 #include <vector>
 #include "ux/cinematic/camera_controlled_movement.h"
 #include "ux/camera_controller.h"
+// #include "ui/components/benchmark_info.h"
 
 
 class Benchmark
@@ -29,6 +30,8 @@ class Benchmark
         CameraController* m_camera_controller;
         CameraControlledPath m_camera_path;
         bool m_play = true;
+
+        friend class BenchmarkInfoComponent;
 
 };
 

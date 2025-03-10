@@ -44,11 +44,33 @@ public:
         // Actualizar pantalla
         renderFrame();
         startRenderImGui();
+        m_ui->render();
         presentRenderImGui();
         presentFrame();
     
         return running;
     }
+    
+    void setupSceneInfoGui(std::string name, std::unordered_map<std::string, int*>& scene_data) override
+    {
+        Window::setupSceneInfoGui(name, scene_data);
+    }
+
+    void setupCameraGui(std::string name, Camera* camera) override
+    {
+        Window::setupCameraGui(name, camera);
+    }
+    
+    void setupInputInfoGui(std::string name) override
+    {
+        Window::setupInputInfoGui(name);
+    }
+    
+    void setupBenchmarkInfoGui(std::string name, Benchmark* benchmark) override
+    {
+        Window::setupBenchmarkInfoGui(name, benchmark);
+    }
+
 
     inline SDL_Renderer* getRenderer() const { return m_renderer; }
 protected:
@@ -106,6 +128,7 @@ protected:
         ImGui_ImplSDLRenderer3_NewFrame();
         Window::startRenderImGui();  
     }
+
     
     virtual void presentRenderImGui() const override
     {

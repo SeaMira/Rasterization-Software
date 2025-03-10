@@ -6,8 +6,14 @@
 #include <glad/glad.h>
 #include <imgui.h>
 #include <backends/imgui_impl_sdl3.h>
+#include <unordered_map>
 
 #include "ux/input.h"
+#include "ux/camera.h"
+// #include "ux/cinematic/benchmark.h"
+#include "ui/app_ui.h"
+
+class Benchmark;
 
 class Window
 {
@@ -37,6 +43,10 @@ class Window
     void updateTimes();
     void checkInputs(bool& running);
     virtual void initImGuiContext();
+    virtual void setupSceneInfoGui(std::string name, std::unordered_map<std::string, int*>& scene_data);
+    virtual void setupCameraGui(std::string name, Camera* camera);
+    virtual void setupInputInfoGui(std::string name);
+    virtual void setupBenchmarkInfoGui(std::string name, Benchmark* benchmark);
     virtual void startRenderImGui() const;
     virtual void presentRenderImGui() const;
     virtual void shutdownImGuiContext() const;
@@ -61,7 +71,9 @@ class Window
     uint64_t m_elapsedTime = 0;
     uint64_t m_frame_counter = 0;
     bool     m_isVisible    = true;
+
     ImGuiIO* io;
+    std::unique_ptr<AppUI> m_ui;
 };
 
 #endif

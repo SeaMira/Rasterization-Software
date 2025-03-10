@@ -29,10 +29,10 @@
 
 
 // Settings
-const int SCR_WIDTH = 800;
-const int SCR_HEIGHT = 600;
+int SCR_WIDTH = 800;
+int SCR_HEIGHT = 600;
 
-const int sphere_count = 126;
+int sphere_count = 126;
 
 std::string title = "Brute Sequential Method"; 
 
@@ -62,25 +62,26 @@ void renderFrame(std::vector<uint32_t>& framebuffer,
     const glm::vec3& front = cam.getFront();
     const glm::vec3& camPos = cam.getPosition();
     // const glm::vec2 resol = glm::vec2(SCR_WIDTH, SCR_HEIGHT);
-    const float fov = cam.getFov();
-    float aspectRatio = ((float)SCR_WIDTH/(float)SCR_HEIGHT);
     
     for (const auto& sphere : spheres) 
-    {
-        drawSphere(proj, view, up, front, camPos, SCR_WIDTH, SCR_HEIGHT, 
-            fov, aspectRatio, sphere, 
+        drawSphere(proj, view, up, front, camPos, SCR_WIDTH, SCR_HEIGHT, sphere, 
             framebuffer, depthBuffer);
-    }
+    
 }
 
 int main(int argc, char* argv[]) 
 {
+    std::unordered_map<std::string, int*> scene_data = {
+        {"Screen width", &SCR_WIDTH},
+        {"Screen height", &SCR_HEIGHT},
+        {"Sphere count", &sphere_count}
+    };
+
     AppRenderer window { title, SCR_WIDTH, SCR_HEIGHT, shown };
     Camera camera(SCR_WIDTH, SCR_HEIGHT);
     camera.SetPosition(.0f, .0f, .0f);
     CameraController camera_controller(window, camera);
 
-    
     // benchmark settings
     // std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints = benchmark1_structured_grid(spheresGridWidth, interleaveW, interleaveH, interleaveZ);
     
@@ -104,6 +105,10 @@ int main(int argc, char* argv[])
     Benchmark benchmark(camera_controller, chkPoints);
     Profiler profiler(window, "media/off/seq/frame_times.off", "media/off/seq/process_times.off");
     
+    window.setupSceneInfoGui("Scene Info", scene_data);
+    window.setupCameraGui("Camera Info", &camera);
+    window.setupInputInfoGui("General Input Info");
+    window.setupBenchmarkInfoGui("Benchmark", &benchmark);
     try
     {
         bool isRunning = true;

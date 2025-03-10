@@ -51,7 +51,7 @@ Window::Window( std::string& title, std::size_t width, std::size_t height, bool 
     if ( !m_window )
         throw std::runtime_error( SDL_GetError() );
 
-    
+    m_ui = std::make_unique<AppUI>();   
 }
 
 Window::Window( Window && other ) noexcept
@@ -269,10 +269,29 @@ void Window::initImGuiContext()
     io = &ImGui::GetIO();
     io->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io->ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
-
+    ImGui::GetIO().FontGlobalScale = 1.5f;
     ImGui::StyleColorsDark();
 }
 
+void Window::setupSceneInfoGui(std::string name, std::unordered_map<std::string, int*>& scene_data)
+{
+    m_ui->addSceneInfoComponent(name, scene_data);
+}
+
+void Window::setupCameraGui(std::string name, Camera* camera)
+{
+    m_ui->addCameraInfoComponent(name, camera);
+}
+
+void Window::setupInputInfoGui(std::string name)
+{
+    m_ui->addInputInfoComponent(name, &m_input);
+}
+
+void Window::setupBenchmarkInfoGui(std::string name, Benchmark* benchmark)
+{
+    m_ui->addBenchmarkInfoComponent(name, benchmark);
+}
 
 void Window::startRenderImGui() const
 {
@@ -281,21 +300,12 @@ void Window::startRenderImGui() const
 
     ImGui::Begin("Control Panel");
     ImGui::Text("Application average %.2f ms/frame (%.0f FPS)", 1000.0f / io->Framerate, io->Framerate);
-    if (ImGui::Button("Button")) {
-        std::cout << "Button clicked!" << std::endl;
-    }
-    bool opcion1 = false, opcion2 = false;
-    if (ImGui::CollapsingHeader("Opciones")) {
-        ImGui::Text("Configuración 1");
-        ImGui::Checkbox("Opción 1", &opcion1);
-        ImGui::Text("Configuración 2");
-        ImGui::Checkbox("Opción 2", &opcion2);
-    }
-    ImGui::End();
+
 }
 
 void Window::presentRenderImGui() const
 {
+    ImGui::End();
     ImGui::Render();
 }
 

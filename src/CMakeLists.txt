@@ -9,6 +9,8 @@ set(raster_includes
     
     ${CMAKE_SOURCE_DIR}/include/ui/components/scene_info.h
     ${CMAKE_SOURCE_DIR}/include/ui/components/camera_info.h
+    ${CMAKE_SOURCE_DIR}/include/ui/components/input_info.h
+    ${CMAKE_SOURCE_DIR}/include/ui/components/benchmark_info.h
     ${CMAKE_SOURCE_DIR}/include/ui/app_ui.h
     ${CMAKE_SOURCE_DIR}/include/ui/component.h
     ${CMAKE_SOURCE_DIR}/include/ui/element.h
@@ -45,6 +47,8 @@ set(raster_includes
     
     ${CMAKE_SOURCE_DIR}/src/ui/components/scene_info.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/components/camera_info.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/components/input_info.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/components/benchmark_info.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/app_ui.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/component.cpp
 

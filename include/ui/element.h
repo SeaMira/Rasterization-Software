@@ -3,6 +3,7 @@
 #include <imgui.h>
 #include <glm/glm.hpp>
 #include <string>
+#include <functional> 
 
 class Element {
 public:
@@ -18,17 +19,57 @@ class SliderElement: public Element
 public:
     // Constructor que recibe los parámetros del slider
     SliderElement(std::string label, float& value, float minValue, float maxValue)
-        : label(label), value(value), minValue(minValue), maxValue(maxValue) {}
+        : label(label), value(&value), minValue(minValue), maxValue(maxValue) {}
 
     // Implementación del método render
     void render() override 
     {
-    ImGui::SliderFloat(label.c_str(), &value, minValue, maxValue);
+    ImGui::SliderFloat(label.c_str(), value, minValue, maxValue);
     }
 private:
     std::string label;
-    float value;
+    float* value;
     float minValue;
+    float maxValue;
+};
+
+class SliderElementTopBounded: public Element
+{
+    
+public:
+    // Constructor que recibe los parámetros del slider
+    SliderElementTopBounded(std::string label, float& value, float minValue, float& maxValue)
+        : label(label), value(&value), minValue(minValue), maxValue(&maxValue) {}
+
+    // Implementación del método render
+    void render() override 
+    {
+    ImGui::SliderFloat(label.c_str(), value, minValue, *maxValue);
+    }
+private:
+    std::string label;
+    float* value;
+    float minValue;
+    float* maxValue;
+};
+
+class SliderElementLowBounded: public Element
+{
+    
+public:
+    // Constructor que recibe los parámetros del slider
+    SliderElementLowBounded(std::string label, float& value, float& minValue, float maxValue)
+        : label(label), value(&value), minValue(&minValue), maxValue(maxValue) {}
+
+    // Implementación del método render
+    void render() override 
+    {
+    ImGui::SliderFloat(label.c_str(), value, *minValue, maxValue);
+    }
+private:
+    std::string label;
+    float* value;
+    float* minValue;
     float maxValue;
 };
 
@@ -38,6 +79,9 @@ public:
     // Constructor que recibe el valor del checkbox
     CheckboxElement(std::string label, bool& value)
         : label(label), value(&value) {}
+    
+    CheckboxElement(std::string label, bool* value)
+        : label(label), value(value) {}
 
     // Implementación del método render
     void render() override 
@@ -54,19 +98,19 @@ class ButtonElement: public Element
 {
 public:
     // Constructor that recieves button label and associated action
-    ButtonElement(std::string label, void (*action)())
-        : label(label), action(action) {}
+    ButtonElement(std::string label, std::function<void()> action)
+        : label(label), m_action(action) {}
 
     // Render method implementation
     void render() override 
     {
         if (ImGui::Button(label.c_str())) {
-            action();  // Execute action when pressed
+            m_action();  // Execute action when pressed
         }
     }
 private:
     std::string label;
-    void (*action)();  // Función a ejecutar cuando se hace clic en el botón
+    std::function<void()> m_action;  // Función a ejecutar cuando se hace clic en el botón
 };
 
 class TextElementi : public Element 
@@ -90,6 +134,23 @@ public:
     }
 };
 
+
+class TextElement : public Element 
+{
+private:
+    std::string label;  // Etiqueta del texto
+
+public:
+    // Constructor que recibe el label y una referencia al valor entero
+    TextElement(std::string label)
+        : label(label) {}
+
+    // Implementación del método render
+    void render() override 
+    {
+        ImGui::Text("%s", label.c_str());
+    }
+};
 
 class TextElementf : public Element 
 {
@@ -145,6 +206,24 @@ public:
     void render() override 
     {
         ImGui::Text("%s: (%.2f, %.2f, %.2f)", label.c_str(), value->x, value->y, value->z);
+    }
+};
+
+class SameLineElement: public Element
+{
+    void render() override
+    {
+        ImGui::SameLine();
+        ImGui::Text(" ");
+        ImGui::SameLine();
+    }
+};
+
+class NewLineElement: public Element
+{
+    void render() override
+    {
+        ImGui::NewLine();
     }
 };
 

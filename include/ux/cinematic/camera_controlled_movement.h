@@ -33,6 +33,7 @@ public:
     float getSpeed() const;
 
     int getCurrentIndex() const;
+    int* getCurrentIndexData() {return &m_currentIndex; }
 
 private:
     Camera* m_camera;

@@ -10,10 +10,21 @@ void AppUI::addCameraInfoComponent(std::string name, Camera* camera)
     components.push_back(std::make_unique<CameraInfoComponent>(name, camera));
 }
 
+void AppUI::addInputInfoComponent(std::string name, Input* input)
+{
+    components.push_back(std::make_unique<InputInfoComponent>(name, input));
+}
+
+void AppUI::addBenchmarkInfoComponent(std::string name, Benchmark* benchmark)
+{
+    components.push_back(std::make_unique<BenchmarkInfoComponent>(name, benchmark));
+}
+
 void AppUI::render()
 {
     for (auto& component : components)
     {
-        component->render();
+        if (ImGui::CollapsingHeader(component->getName().c_str())) 
+            component->render();
     }
 }
