@@ -6,16 +6,18 @@
 #include <SDL3/SDL.h>
 #include <vector>
 
-
-#include <backends/imgui_impl_opengl3.h>
+#include "appSDLGL.h"
 
 #include <filesystem>
 #include "molecule_loader/basic_loader.h"
 
+#include "utils/benchmark_resources.h"
+
 #include "ux/input.h"
 #include "ux/camera_controller.h"
+#include "ux/cinematic/benchmark.h"
+#include "ux/profiler/profiler.h"
 
-#include "appSDLGL.h"
 #include "vis/gl/frame_buffer.h"
 #include "vis/gl/storage_buffer.h"
 #include "vis/gl/texture.h"
@@ -25,10 +27,9 @@
 using uint = unsigned int;
 
 // Settings
-const int SCR_WIDTH = 800;
-const int SCR_HEIGHT = 600;
-
-const int sphere_count = 256;
+int SCR_WIDTH = 800;
+int SCR_HEIGHT = 600;
+int sphere_count = 256;
 
 std::string title = "First Parallel Version"; 
 
@@ -40,14 +41,21 @@ GLuint workGroupSizeY = 16;  // Deifining threads-per-group (Y)
 
 int main(int argc, char* argv[]) 
 {
+
+    std::unordered_map<std::string, int*> scene_data = {
+        {"Screen width", &SCR_WIDTH},
+        {"Screen height", &SCR_HEIGHT},
+        {"Sphere count", &sphere_count}
+    };
+
     AppOpenGL window { title, SCR_WIDTH, SCR_HEIGHT, shown };
 
     Camera camera(SCR_WIDTH, SCR_HEIGHT);
     camera.SetPosition(.0f, .0f, .0f);
     CameraController camera_controller(window, camera);
     
-    ComputeShader computeShader("assets/shaders/fst_parallel.compute");
-    ComputeShader cleaningComputeShader("assets/shaders/set_to_black.compute");
+    ComputeShader computeShader("assets/shaders/fst_parallel_attempt/fst_parallel.compute");
+    ComputeShader cleaningComputeShader("assets/shaders/fst_parallel_attempt/set_to_black.compute");
 
     Canvas canvas(GL_TEXTURE_2D, GL_RGBA8, SCR_WIDTH, SCR_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE);
     canvas.setFBO(GL_COLOR_ATTACHMENT0);
@@ -73,6 +81,16 @@ int main(int argc, char* argv[])
     std::vector<float> depth_b(SCR_WIDTH * SCR_HEIGHT, FLT_MAX);
     StorageBuffer depthBuffer(GL_SHADER_STORAGE_BUFFER);
     depthBuffer.generateBufferData(SCR_WIDTH * SCR_HEIGHT * sizeof(float), 2, depth_b.data(), GL_DYNAMIC_COPY);
+    
+    std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints = benchmark2_loaded_molecules(spheres, interleaveAngle, interleaveZ, interleaveY);
+    Benchmark benchmark(camera_controller, chkPoints);
+    Profiler profiler(window, "media/off/fst_parallel/frame_times.off", "media/off/fst_parallel/process_times.off");
+    
+    window.setupSceneInfoGui("Scene Info", scene_data);
+    window.setupCameraGui("Camera Info", &camera);
+    window.setupInputInfoGui("General Input Info");
+    window.setupBenchmarkInfoGui("Benchmark", &benchmark);
+    
     // Calculating number of work groups (based on the number of threads and spheres)
     GLuint numGroupsX = (sphere_count + workGroupSizeX - 1) / workGroupSizeX;
     GLuint numGroupsY = 1;
@@ -82,15 +100,18 @@ int main(int argc, char* argv[])
     canvas.bindFBO();
 
     glm::ivec2 screenResolution(SCR_WIDTH, SCR_HEIGHT);
-    float aspectRatio = ((float)SCR_WIDTH/(float)SCR_HEIGHT);
     try
     {
         bool isRunning = true;
         while ( isRunning )
         {
             camera_controller.cameraUpdate();
+            benchmark.update();
+
+            profiler.updateProfiler();
 
             cleaningComputeShader.use();
+            cleaningComputeShader.setFloat("far", camera.getFar());
             cleaningComputeShader.setVec2I("screenResolution", screenResolution);
             glDispatchCompute((SCR_WIDTH + workGroupSizeX - 1) / 16, (SCR_HEIGHT + workGroupSizeY - 1) / 16, 1);
             glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
@@ -102,8 +123,6 @@ int main(int argc, char* argv[])
             computeShader.setVec3("up", camera.getUp());
             computeShader.setVec3("front", camera.getFront());
             computeShader.setVec3("cameraPos", camera.getPosition());
-            computeShader.setFloat("aspectRatio", aspectRatio);
-            computeShader.setFloat("fov", camera.getFov());
 
             glDispatchCompute(numGroupsX, numGroupsY, 1);
             glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);

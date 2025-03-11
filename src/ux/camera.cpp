@@ -64,6 +64,16 @@ float Camera::getYaw() {
     return yaw;
 }
 
+float Camera::getFar()
+{
+    return mFar;
+}
+
+float Camera::getNear()
+{
+    return mNear;
+}
+
 void Camera::SetPosition(float x, float y, float z) {
     cameraPos = glm::vec3(x,y,z);
 }

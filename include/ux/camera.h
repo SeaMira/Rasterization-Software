@@ -46,6 +46,8 @@ public:
     float getFov();
     float getYaw();
     float getPitch();
+    float getFar();
+    float getNear();
 
     void update();
     void showInfo();

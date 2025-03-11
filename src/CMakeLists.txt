@@ -16,6 +16,7 @@ set(raster_includes
     ${CMAKE_SOURCE_DIR}/include/ui/element.h
 
     ${CMAKE_SOURCE_DIR}/include/utils/math_defines.h
+    ${CMAKE_SOURCE_DIR}/include/utils/benchmark_resources.h
     ${CMAKE_SOURCE_DIR}/include/utils/scene_descriptor.h
 
     ${CMAKE_SOURCE_DIR}/include/ux/camera_controller.h
@@ -52,6 +53,7 @@ set(raster_includes
     ${CMAKE_SOURCE_DIR}/src/ui/app_ui.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/component.cpp
 
+    ${CMAKE_SOURCE_DIR}/src/utils/benchmark_resources.cpp
     ${CMAKE_SOURCE_DIR}/src/utils/scene_descriptor.cpp
     
     ${CMAKE_SOURCE_DIR}/src/ux/camera_controller.cpp

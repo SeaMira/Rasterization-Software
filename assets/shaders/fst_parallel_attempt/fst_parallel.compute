@@ -28,8 +28,6 @@ uniform vec3 cameraPos;
 
 uniform ivec2 screenResolution;
 
-uniform float fov;
-uniform float aspectRatio;
 uniform int sphereCount;
 
 vec3 lightColor = vec3(0.01, 1.0, 0.05);
@@ -87,10 +85,10 @@ bboxCorners getSphereBbox(const vec3 cameraSpaceSphere, const vec3 camImposPos,
     const vec4 downRight = proj * vec4(downRightCorner, 1.0f);
     const vec4 downLeft = proj * vec4(downLeftCorner, 1.0f);
     
-    const vec3 ndcUpRight = vec3(upRightCorner) / upRight.w;
-    const vec3 ndcUpLeft = vec3(upLeftCorner) / upLeft.w;
-    const vec3 ndcDownRight = vec3(downRightCorner) / downRight.w;
-    const vec3 ndcDownLeft = vec3(downLeftCorner) / downLeft.w;
+    const vec3 ndcUpRight = vec3(upRight.x / upRight.w, upRight.y / upRight.w, upRight.z / upRight.w);
+    const vec3 ndcUpLeft = vec3(upLeft.x / upLeft.w, upLeft.y / upLeft.w, upLeft.z / upLeft.w);
+    const vec3 ndcDownRight = vec3(downRight.x / downRight.w, downRight.y / downRight.w, downRight.z / downRight.w);
+    const vec3 ndcDownLeft = vec3(downLeft.x / downLeft.w, downLeft.y / downLeft.w, downLeft.z / downLeft.w);
 
     vec2 minCorner = min(min(ndcUpRight.xy, ndcUpLeft.xy), min(ndcDownRight.xy, ndcDownLeft.xy));
     vec2 maxCorner = max(max(ndcUpRight.xy, ndcUpLeft.xy), max(ndcDownRight.xy, ndcDownLeft.xy));
@@ -110,9 +108,9 @@ void drawSphere(Sphere sphere)
     
     ivec2 screenMin, screenMax;
 
-    screenMin.x = int( ((sphereBbox.minCorner.x/aspectRatio) * 0.5f + 0.5f) * float(screenResolution.x));
+    screenMin.x = int( ((sphereBbox.minCorner.x) * 0.5f + 0.5f) * float(screenResolution.x));
     screenMin.y = int((sphereBbox.minCorner.y * 0.5f + 0.5f) * float(screenResolution.y));
-    screenMax.x = int(((sphereBbox.maxCorner.x/aspectRatio) * 0.5f + 0.5f) * float(screenResolution.x));
+    screenMax.x = int(((sphereBbox.maxCorner.x) * 0.5f + 0.5f) * float(screenResolution.x));
     screenMax.y = int((sphereBbox.maxCorner.y * 0.5f + 0.5f) * float(screenResolution.y));
 
     if (dot(sphere.positionr.xyz - cameraPos, front) > 0.5f && 
