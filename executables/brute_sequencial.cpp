@@ -10,10 +10,6 @@
 
 #include "appSDLRenderer.h"
 
-#include <filesystem>
-#include "molecule_loader/basic_loader.h"
-
-#include "utils/math_defines.h"
 #include "utils/benchmark_resources.h"
 #include "utils/sequential/aux_functions.h"
 
@@ -69,26 +65,13 @@ int main(int argc, char* argv[])
     Camera camera(SCR_WIDTH, SCR_HEIGHT);
     camera.SetPosition(.0f, .0f, .0f);
     CameraController camera_controller(window, camera);
-
-    // benchmark settings
-    // std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints = benchmark1_structured_grid(spheresGridWidth, interleaveW, interleaveH, interleaveZ);
-    
-    // Benchmark benchmark(camera_controller, chkPoints);
-    // std::vector<glm::vec4> spheres;
-    // for (int i = 0; i < sphere_count; i++)
-    // {
-        //     spheres.push_back({(float)(i%spheresGridWidth)*2.0f, (float)(i/spheresGridWidth) * 2.0f, (float)(i%spheresGridWidth)*2.0f, 1.0f});
-    // }
     
     std::vector<uint32_t> framebuffer(SCR_WIDTH * SCR_HEIGHT);
     std::vector<float> depthBuffer(SCR_WIDTH * SCR_HEIGHT, FLT_MAX);
     
    
-    std::filesystem::path path = "assets/molecules/1AGA.mmtf";
-    ChemFilesLoader loader(path);
-    std::vector<glm::vec4> positions = loader.getSphereInfo();
-    std::vector<glm::vec4> spheres(positions.begin(), positions.begin() + std::min(positions.size(), static_cast<size_t>(sphere_count)));
-    std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints = benchmark2_loaded_molecules(spheres, interleaveAngle, interleaveZ, interleaveY);
+    std::vector<glm::vec4> spheres = getScene(sphere_count);
+    std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints = getCheckpoints(sphere_count, spheres);
     
     Benchmark benchmark(camera_controller, chkPoints);
     Profiler profiler(window, "media/off/seq/frame_times.off", "media/off/seq/process_times.off");

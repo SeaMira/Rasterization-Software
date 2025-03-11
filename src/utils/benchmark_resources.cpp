@@ -1,5 +1,9 @@
 #include <iostream>
 #include "utils/benchmark_resources.h"
+#include "molecule_loader/basic_loader.h"
+
+SceneType currentScene = SceneType::LOADED_SCENE;
+std::filesystem::path scene_path = "assets/molecules/1AGA.mmtf";
 
 int spheresGridWidth = 100;
 int interleaveW = 5;
@@ -8,6 +12,25 @@ int interleaveH = 5;
 int interleaveAngle = 10;
 int interleaveZ = 10;
 int interleaveY = 10;
+
+
+std::vector<glm::vec4> loaded_scene(std::filesystem::path& path, int sphere_count)
+{
+    ChemFilesLoader loader(path);
+    std::vector<glm::vec4> positions = loader.getSphereInfo();
+    std::vector<glm::vec4> spheres(positions.begin(), positions.begin() + std::min(positions.size(), static_cast<size_t>(sphere_count)));
+    return spheres;
+}
+
+std::vector<glm::vec4> grid_scene(int spheresGridWidth, int sphere_count)
+{
+    std::vector<glm::vec4> spheres;
+    for (int i = 0; i < sphere_count; i++)
+    {
+        spheres.push_back({(float)(i%spheresGridWidth)*2.0f, (float)(i/spheresGridWidth) * 2.0f, (float)(i%spheresGridWidth)*2.0f, 1.0f});
+    }
+    return spheres;
+}
 
 std::vector<std::pair<glm::vec3, glm::vec3>> benchmark1_structured_grid(int& sphere_count, int spheresGridWidth, int interleaveW, int interleaveH, int interleaveZ)
 {
@@ -89,6 +112,39 @@ std::vector<std::pair<glm::vec3, glm::vec3>> benchmark2_loaded_molecules(std::ve
     }
 
     return chkPoints;
+}
+
+
+std::vector<glm::vec4> getScene(int sphere_count)
+{
+    switch (currentScene)
+    {
+    case SceneType::LOADED_SCENE:
+        return loaded_scene(scene_path, sphere_count);
+        break;
+    case SceneType::GRID_SCENE:
+        return grid_scene(spheresGridWidth, sphere_count);
+        break;
+    default:
+        return grid_scene(spheresGridWidth, sphere_count);
+        break;
+    }
+}
+
+std::vector<std::pair<glm::vec3, glm::vec3>> getCheckpoints(int& sphere_count, std::vector<glm::vec4>& spheres)
+{
+    switch (currentScene)
+    {
+    case SceneType::LOADED_SCENE:
+        return benchmark2_loaded_molecules(spheres, interleaveAngle, interleaveZ, interleaveY);
+        break;
+    case SceneType::GRID_SCENE:
+        return benchmark1_structured_grid(sphere_count, spheresGridWidth, interleaveW, interleaveH, interleaveZ);
+        break;
+    default:
+        return benchmark1_structured_grid(sphere_count, spheresGridWidth, interleaveW, interleaveH, interleaveZ);
+        break;
+    }
 }
 
 void takeScreenshot(SDL_Renderer* renderer, std::string& sshot_name)

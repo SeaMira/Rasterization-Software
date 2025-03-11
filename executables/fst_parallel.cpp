@@ -8,9 +8,6 @@
 
 #include "appSDLGL.h"
 
-#include <filesystem>
-#include "molecule_loader/basic_loader.h"
-
 #include "utils/benchmark_resources.h"
 
 #include "ux/input.h"
@@ -64,15 +61,8 @@ int main(int argc, char* argv[])
         throw std::runtime_error("Error: Incomplete Framebuffer.");
     }
     
-    std::filesystem::path path = "assets/molecules/1AGA.mmtf";
-    ChemFilesLoader loader(path);
-    std::vector<glm::vec4> positions = loader.getSphereInfo();
-    std::vector<glm::vec4> spheres(positions.begin(), positions.begin() + std::min(positions.size(), static_cast<size_t>(sphere_count)));
-    // std::vector<glm::vec4> spheres;
-    // for (int i = 0; i < sphere_count; i++)
-    // {
-    //     spheres.push_back({(float)(i%100)*2.0f, (float)(i/100) * 2.0f, (float)(i%100)*2.0f, 1.0f});
-    // }
+    std::vector<glm::vec4> spheres = getScene(sphere_count);
+    std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints = getCheckpoints(sphere_count, spheres);
     StorageBuffer sphereBuffer(GL_SHADER_STORAGE_BUFFER);
     sphereBuffer.generateBufferData(spheres.size() * sizeof(glm::vec4), 1, 
         spheres.data(), GL_STATIC_DRAW);
@@ -82,7 +72,6 @@ int main(int argc, char* argv[])
     StorageBuffer depthBuffer(GL_SHADER_STORAGE_BUFFER);
     depthBuffer.generateBufferData(SCR_WIDTH * SCR_HEIGHT * sizeof(float), 2, depth_b.data(), GL_DYNAMIC_COPY);
     
-    std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints = benchmark2_loaded_molecules(spheres, interleaveAngle, interleaveZ, interleaveY);
     Benchmark benchmark(camera_controller, chkPoints);
     Profiler profiler(window, "media/off/fst_parallel/frame_times.off", "media/off/fst_parallel/process_times.off");
     
@@ -109,6 +98,7 @@ int main(int argc, char* argv[])
             benchmark.update();
 
             profiler.updateProfiler();
+            if (window.getInput().isKeyDown(Key::T)) profiler.startSavingNextFrames(benchmark.getCheckpointID());
 
             cleaningComputeShader.use();
             cleaningComputeShader.setFloat("far", camera.getFar());
@@ -134,7 +124,10 @@ int main(int argc, char* argv[])
             isRunning = window.update();
             
             if (window.getInput().isKeyDown(Key::F10)) 
-                canvas.takeScreenshot("off/fst_parallel/test.bmp");
+            {
+                std::string sshot_name  = "media/img/fst_parallel/frame_" + std::to_string(benchmark.getCheckpointID()) + ".bmp";
+                canvas.takeScreenshot(sshot_name);
+            }
 
         }
     }
