@@ -7,12 +7,24 @@ set(raster_includes
     
     ${CMAKE_SOURCE_DIR}/include/molecule_loader/basic_loader.h
     
+    ${CMAKE_SOURCE_DIR}/include/ui/components/scene_info.h
+    ${CMAKE_SOURCE_DIR}/include/ui/components/camera_info.h
+    ${CMAKE_SOURCE_DIR}/include/ui/components/input_info.h
+    ${CMAKE_SOURCE_DIR}/include/ui/components/benchmark_info.h
+    ${CMAKE_SOURCE_DIR}/include/ui/app_ui.h
+    ${CMAKE_SOURCE_DIR}/include/ui/component.h
+    ${CMAKE_SOURCE_DIR}/include/ui/element.h
+
     ${CMAKE_SOURCE_DIR}/include/utils/math_defines.h
+    ${CMAKE_SOURCE_DIR}/include/utils/benchmark_resources.h
     ${CMAKE_SOURCE_DIR}/include/utils/scene_descriptor.h
 
     ${CMAKE_SOURCE_DIR}/include/ux/camera_controller.h
     ${CMAKE_SOURCE_DIR}/include/ux/camera.h
     ${CMAKE_SOURCE_DIR}/include/ux/input.h
+    ${CMAKE_SOURCE_DIR}/include/ux/cinematic/camera_controlled_movement.h
+    ${CMAKE_SOURCE_DIR}/include/ux/cinematic/benchmark.h
+    ${CMAKE_SOURCE_DIR}/include/ux/profiler/profiler.h
     
     ${CMAKE_SOURCE_DIR}/include/vis/compute_shader_program.h
     ${CMAKE_SOURCE_DIR}/include/vis/window.h
@@ -20,9 +32,12 @@ set(raster_includes
     ${CMAKE_SOURCE_DIR}/include/vis/gl/frame_buffer.h
     ${CMAKE_SOURCE_DIR}/include/vis/gl/texture.h
     ${CMAKE_SOURCE_DIR}/include/vis/gl/storage_buffer.h
-    )
 
-set(raster_source
+    ${CMAKE_SOURCE_DIR}/include/appSDLGL.h
+    ${CMAKE_SOURCE_DIR}/include/appSDLRenderer.h
+    )
+    
+    set(raster_source
     ${CMAKE_SOURCE_DIR}/src/algorithms/frustum_cull.cpp
     ${CMAKE_SOURCE_DIR}/src/algorithms/occlusion_cull.cpp
     
@@ -30,24 +45,38 @@ set(raster_source
     ${CMAKE_SOURCE_DIR}/src/geometry/sphere/sphere.cpp
     
     ${CMAKE_SOURCE_DIR}/src/molecule_loader/basic_loader.cpp
+    
+    ${CMAKE_SOURCE_DIR}/src/ui/components/scene_info.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/components/camera_info.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/components/input_info.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/components/benchmark_info.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/app_ui.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/component.cpp
 
+    ${CMAKE_SOURCE_DIR}/src/utils/benchmark_resources.cpp
     ${CMAKE_SOURCE_DIR}/src/utils/scene_descriptor.cpp
-
+    
     ${CMAKE_SOURCE_DIR}/src/ux/camera_controller.cpp
     ${CMAKE_SOURCE_DIR}/src/ux/camera.cpp
     ${CMAKE_SOURCE_DIR}/src/ux/input.cpp
-
+    ${CMAKE_SOURCE_DIR}/src/ux/cinematic/camera_controlled_movement.cpp
+    ${CMAKE_SOURCE_DIR}/src/ux/cinematic/benchmark.cpp
+    ${CMAKE_SOURCE_DIR}/src/ux/profiler/profiler.cpp
+    
     ${CMAKE_SOURCE_DIR}/src/vis/compute_shader_program.cpp
     ${CMAKE_SOURCE_DIR}/src/vis/window.cpp
     ${CMAKE_SOURCE_DIR}/src/vis/canvas.cpp
     ${CMAKE_SOURCE_DIR}/src/vis/gl/frame_buffer.cpp
     ${CMAKE_SOURCE_DIR}/src/vis/gl/texture.cpp
     ${CMAKE_SOURCE_DIR}/src/vis/gl/storage_buffer.cpp
+    
+    ${CMAKE_SOURCE_DIR}/src/appSDLGL.cpp
+    ${CMAKE_SOURCE_DIR}/src/appSDLRenderer.cpp
 )
 
 
 add_library(raster_dependencies STATIC
-${raster_includes} ${raster_source} ${raster_extern_includes}
+${raster_includes} ${raster_source} ${raster_extern_includes} 
 )
 
 set_property(TARGET raster_dependencies PROPERTY CXX_STANDARD 20)
@@ -64,6 +93,7 @@ ${SDL3_LIBRARIES}
 glad 
 glm 
 chemfiles
+imgui
 )
     
 ## Sequential Version Dependencies

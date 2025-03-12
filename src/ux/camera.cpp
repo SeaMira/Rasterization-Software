@@ -1,4 +1,5 @@
 #include "ux/camera.h"
+#include <cmath>
 
 Camera::Camera(int SCR_WIDTH, int SCR_HEIGHT) {
     this->SCR_WIDTH = (float)SCR_WIDTH;
@@ -35,7 +36,7 @@ glm::vec3 Camera::getRight() {
 }
 
 glm::mat4 Camera::getProjection() {
-    return glm::perspective(glm::radians(fov), SCR_WIDTH/SCR_HEIGHT, 0.1f, 10000.0f);
+    return glm::perspective(glm::radians(fov), SCR_WIDTH/SCR_HEIGHT, mNear, mFar);
 }
 
 glm::mat4 Camera::getView() {
@@ -61,6 +62,16 @@ float Camera::getPitch() {
 
 float Camera::getYaw() {
     return yaw;
+}
+
+float Camera::getFar()
+{
+    return mFar;
+}
+
+float Camera::getNear()
+{
+    return mNear;
 }
 
 void Camera::SetPosition(float x, float y, float z) {
@@ -97,6 +108,16 @@ void Camera::SetEdgeStep(float newEdgeStep) {
 
 void Camera::SetScrSize(int width, int height) {
     SCR_WIDTH = (float)width; SCR_HEIGHT = (float)height;
+}
+
+void Camera::lookAtTarget(const glm::vec3& target) {
+    cameraFront = glm::normalize(target - cameraPos);
+
+    yaw = glm::degrees(atan2(cameraFront.z, cameraFront.x)); 
+    pitch = glm::degrees(asin(cameraFront.y));
+    update();
+    // glm::vec3 right = glm::normalize(glm::cross(cameraFront, glm::vec3(0.0f, 1.0f, 0.0f)));
+    // cameraUp = glm::normalize(glm::cross(right, cameraFront));
 }
 
 void Camera::OnKeyboard(int key, float dt) {
@@ -210,16 +231,7 @@ void Camera::OnMouse(float x, float y) {
         OnLowerEdge = false;
     }
 
-    glm::vec3 front;
-    front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-    // front.y = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
-    // front.z = sin(glm::radians(pitch));
-    front.y = sin(glm::radians(pitch));
-    front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
-    cameraFront = glm::normalize(front);
-
-    glm::vec3 right = glm::normalize(glm::cross(cameraFront, glm::vec3(0.0f, 1.0f, 0.0f))); // Right vector
-    cameraUp = glm::normalize(glm::cross(right, cameraFront));
+    update();
 }
 
 void Camera::OnRender(float dt) {
@@ -252,16 +264,7 @@ void Camera::OnRender(float dt) {
         pitch = 89.0f;
         if (pitch < -89.0f)
             pitch = -89.0f;
-        glm::vec3 front;
-        // front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-        // front.y = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
-        // front.z = sin(glm::radians(pitch));
-        front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-        front.y = sin(glm::radians(pitch));
-        front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
-        cameraFront = glm::normalize(front);
-        glm::vec3 right = glm::normalize(glm::cross(cameraFront, glm::vec3(0.0f, 1.0f, 0.0f))); // Right vector
-        cameraUp = glm::normalize(glm::cross(right, cameraFront));
+        update();
     }
     
 }
@@ -270,8 +273,21 @@ void Camera::OnScroll(float yoffset) {
     fov -= yoffset;
     if (fov < 1.0f)
         fov = 1.0f;
-    if (fov > 45.0f)
-        fov = 45.0f;
+    if (fov > 180.0f)
+        fov = 180.0f;
+}
+
+void Camera::update()
+{
+    glm::vec3 front;
+    front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
+    
+    front.y = sin(glm::radians(pitch));
+    front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+    cameraFront = glm::normalize(front);
+
+    glm::vec3 right = glm::normalize(glm::cross(cameraFront, glm::vec3(0.0f, 1.0f, 0.0f))); // Right vector
+    cameraUp = glm::normalize(glm::cross(right, cameraFront));
 }
 
 

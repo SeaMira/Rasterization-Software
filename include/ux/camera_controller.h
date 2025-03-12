@@ -10,14 +10,24 @@ class CameraController
         CameraController(Window& window, Camera& camera);
         ~CameraController() = default;
 
-        void keyBoardAction() const;
         void mouseAction() const;
-        void cameraUpdate() const;
+        void keyBoardAction() const;
+        void cameraUpdate();
+
+        void setBenchmark(bool benchmark);
+        bool onBenchmark();
+        bool* onBenchmarkData() { return &m_onBenchmark; };
+
+        inline const Input* inputHandle() { return m_input; }
+        inline Camera* cameraHandle() { return m_camera; }
     
     private:
         Window* m_window;
         Camera* m_camera;
         const Input* m_input;
+        bool m_hasBenchmark = false;
+        bool m_onBenchmark = false;
+
 
 };
 

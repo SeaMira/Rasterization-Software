@@ -9,43 +9,26 @@ CameraController::CameraController(Window& window, Camera& camera) :
 
 void CameraController::keyBoardAction() const
 {
-    if (m_input->isKeyPressed(Key::W)) 
-    {
-        m_camera->OnKeyboard('w', m_input->deltaTime);  // Movimiento hacia adelante
-    }
-    if (m_input->isKeyPressed(Key::S)) 
-    {
-        m_camera->OnKeyboard('s', m_input->deltaTime);  // Movimiento hacia atrás
-    }
-    if (m_input->isKeyPressed(Key::A)) 
-    {
-        m_camera->OnKeyboard('a', m_input->deltaTime);  // Movimiento hacia la izquierda
-    }
-    if (m_input->isKeyPressed(Key::D)) 
-    {
-        m_camera->OnKeyboard('d', m_input->deltaTime);  // Movimiento hacia la derecha
-    }
-    if (m_input->isKeyPressed(Key::E)) 
-    {
-        m_camera->OnKeyboard('e', m_input->deltaTime);  
-    }
-    if (m_input->isKeyPressed(Key::Q)) 
-    {
-        m_camera->OnKeyboard('q', m_input->deltaTime);  
-    }
-    if (m_input->isKeyPressed(Key::Space)) 
-    {
-        m_camera->OnKeyboard(' ', m_input->deltaTime);  
-    }
-    if (m_input->isKeyPressed(Key::LShift)) 
-    {
-        m_camera->OnKeyboard('l', m_input->deltaTime);  
-    }
-    if (m_input->isKeyPressed(Key::C)) 
-    {
-        m_camera->showInfo();
-    }
+    if (m_input->isKeyPressed(Key::W)) m_camera->OnKeyboard('w', m_input->deltaTime);  // Movimiento hacia adelante
+    
+    if (m_input->isKeyPressed(Key::S)) m_camera->OnKeyboard('s', m_input->deltaTime);  // Movimiento hacia atrás
+    
+    if (m_input->isKeyPressed(Key::A)) m_camera->OnKeyboard('a', m_input->deltaTime);  // Movimiento hacia la izquierda
+    
+    if (m_input->isKeyPressed(Key::D)) m_camera->OnKeyboard('d', m_input->deltaTime);  // Movimiento hacia la derecha
+    
+    if (m_input->isKeyPressed(Key::E)) m_camera->OnKeyboard('e', m_input->deltaTime);  
+    
+    if (m_input->isKeyPressed(Key::Q)) m_camera->OnKeyboard('q', m_input->deltaTime);  
+    
+    if (m_input->isKeyPressed(Key::Space)) m_camera->OnKeyboard(' ', m_input->deltaTime);  
+    
+    if (m_input->isKeyPressed(Key::LShift)) m_camera->OnKeyboard('l', m_input->deltaTime);  
+    
+    if (m_input->isKeyPressed(Key::C)) m_camera->showInfo();
+    
 }
+
 
 void CameraController::mouseAction() const
 {
@@ -57,7 +40,30 @@ void CameraController::mouseAction() const
     }    
 }
 
-void CameraController::cameraUpdate() const
+void CameraController::cameraUpdate()
 {
+    if (m_hasBenchmark && m_input->isKeyDown(Key::B)) m_onBenchmark = !m_onBenchmark;
+    if (!m_onBenchmark)
+    {
+        keyBoardAction();
+        mouseAction();
+    }
+}
 
+void CameraController::setBenchmark(bool benchmark)
+{
+    if (benchmark)
+    {
+        m_hasBenchmark = benchmark;
+        m_onBenchmark = true;
+    } else
+    {
+        m_hasBenchmark = benchmark;
+        m_onBenchmark = false;
+    }
+}
+
+bool CameraController::onBenchmark()
+{
+    return m_onBenchmark;
 }

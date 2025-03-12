@@ -29,7 +29,7 @@ uniform mat4 proj;
 uniform vec3 cameraPos;
 uniform ivec2 screenResolution;
 uniform int sphereCount;
-uniform float MAX_DEPTH = 1000.0f;
+uniform float far;
 
 vec3 lightColor = vec3(0.05, 1.0, 0.01);
 float diffuseI = 0.9;
@@ -55,7 +55,7 @@ void main()
     const int lastBatchAmount = sphereCount - (batches-1) * threadsPerWorkGroup;
     int count = threadsPerWorkGroup;
 
-    float minDepth = MAX_DEPTH;
+    float minDepth = far;
     bool colorChanged = false;
     vec4 color = vec4(0.0);
 
@@ -98,7 +98,7 @@ void main()
             if (h > 0.0f) 
             {
                 const vec3 hit = viewImpPos * h;
-                const float depth = hit.z < 0.0f ? (hit.z * proj[2].z + proj[3].z) / -hit.z : 1000.0f;
+                const float depth = hit.z < 0.0f ? (hit.z * proj[2].z + proj[3].z) / -hit.z : far;
                 if (minDepth > depth) 
                 {
                     const vec3 normal = normalize( hit - sphereBillboard.cameraSpaceSphPosR.xyz );

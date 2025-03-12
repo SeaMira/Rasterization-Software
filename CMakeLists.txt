@@ -19,16 +19,16 @@ add_subdirectory(extern)
 set(SDL_SHARED OFF CACHE BOOL "" FORCE)   # Deactivates dynamic version
 set(SDL_STATIC ON CACHE BOOL "" FORCE)    # Activates static version
 
-add_dependency_folder(data_folder_bin "${CMAKE_CURRENT_SOURCE_DIR}/assets" "${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}")
-add_dependency_folder(data_folder "${CMAKE_CURRENT_SOURCE_DIR}/assets" "${CMAKE_BINARY_DIR}")
+# add_dependency_folder(data_folder_bin "${CMAKE_CURRENT_SOURCE_DIR}/assets" "${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}/assets")
+add_dependency_folder(data_folder "${CMAKE_CURRENT_SOURCE_DIR}/assets" "${CMAKE_BINARY_DIR}/assets")
 
 target_link_libraries(raster_dependencies PUBLIC  glad glm chemfiles)
 target_link_libraries(sequential_dependencies PUBLIC glm)
 
 function(add_subproject project_name executable)
 	add_executable(${project_name} ${executable})
-	target_link_libraries(${project_name} PUBLIC raster_dependencies SDL3-static glad)
-	target_include_directories(${project_name} PUBLIC ${OPENGL_INCLUDE_DIRS} extern/SDL/include)
+	target_link_libraries(${project_name} PUBLIC raster_dependencies SDL3-static glad imgui)
+	target_include_directories(${project_name} PUBLIC ${OPENGL_INCLUDE_DIRS} extern/SDL/include extern/imgui)
 endfunction()
 
 add_subproject(controllers_example "${CMAKE_SOURCE_DIR}/executables/controllers_example.cpp")
@@ -49,7 +49,15 @@ add_subproject(snd_parallel_gl_testing "${CMAKE_SOURCE_DIR}/executables/snd_para
 target_link_libraries(brute_sequencial PUBLIC sequential_dependencies)
 
 
-add_dependencies(shaders_example data_folder_bin)
+# add_dependencies(shaders_example data_folder_bin)
 add_dependencies(shaders_example data_folder)
-add_dependencies(loader_example data_folder_bin)
+# add_dependencies(loader_example data_folder_bin)
 add_dependencies(loader_example data_folder)
+
+
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/off/seq)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/off/fst_parallel)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/off/scnd_parallel)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/img/seq)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/img/fst_parallel)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/img/scnd_parallel)

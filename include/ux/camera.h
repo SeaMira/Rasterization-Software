@@ -25,6 +25,8 @@ public:
     void SetMargin(float newMargin);
     void SetEdgeStep(float newEdgeStep);
     void SetScrSize(int width, int height);
+
+    void lookAtTarget(const glm::vec3& target);
     
     // void updateCameraVectors();
     void OnKeyboard(int key, float dt);
@@ -44,7 +46,10 @@ public:
     float getFov();
     float getYaw();
     float getPitch();
+    float getFar();
+    float getNear();
 
+    void update();
     void showInfo();
 
 
@@ -73,6 +78,10 @@ private:
     bool OnRightEdge;
 
     float mSpeed = 10.0f;
+    float mNear = 0.1f;
+    float mFar = 100.0f;
+
+    friend class CameraInfoComponent;
     
 };
 

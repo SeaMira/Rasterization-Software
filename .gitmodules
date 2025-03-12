@@ -7,3 +7,6 @@
 [submodule "extern/chemfiles"]
 	path = extern/chemfiles
 	url = https://github.com/chemfiles/chemfiles.git
+[submodule "extern/imgui"]
+	path = extern/imgui
+	url = https://github.com/ocornut/imgui.git

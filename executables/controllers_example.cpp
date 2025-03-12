@@ -31,8 +31,7 @@ int main(int argc, char* argv[]) {
                 camera.SetScrSize(inputs.windowSize.x, inputs.windowSize.y);
             }
 
-            camera_controller.keyBoardAction();
-            camera_controller.mouseAction();
+            camera_controller.cameraUpdate();
             isRunning = window.update();
         }
     }

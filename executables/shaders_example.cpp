@@ -76,8 +76,7 @@ int main(int argc, char* argv[]) {
                 camera.SetScrSize(inputs.windowSize.x, inputs.windowSize.y);
             }
 
-            camera_controller.keyBoardAction();
-            camera_controller.mouseAction();
+            camera_controller.cameraUpdate();
 
             glDispatchCompute((SCR_WIDTH + 15) / 16, (SCR_HEIGHT + 15) / 16, 1);
             glMemoryBarrier(GL_FRAMEBUFFER_BARRIER_BIT);
