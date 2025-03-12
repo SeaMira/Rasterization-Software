@@ -1,12 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
 
-function(add_dependency_folder folder_target input_folder output_folder)	
-	file(GLOB_RECURSE folder_content ${input_folder}/*.*)
-	add_custom_target(  ${folder_target} COMMAND ${CMAKE_COMMAND} -E copy_directory ${input_folder}/ ${output_folder}/)
-	set_property(TARGET ${folder_target} APPEND PROPERTY SOURCES ${folder_content}) 
-endfunction()
-
-
 project(compute_shaders_project LANGUAGES CXX C)
 set(CXX_STANDARD 20)
 
@@ -19,9 +12,6 @@ add_subdirectory(extern)
 set(SDL_SHARED OFF CACHE BOOL "" FORCE)   # Deactivates dynamic version
 set(SDL_STATIC ON CACHE BOOL "" FORCE)    # Activates static version
 
-# add_dependency_folder(data_folder_bin "${CMAKE_CURRENT_SOURCE_DIR}/assets" "${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}/assets")
-add_dependency_folder(data_folder "${CMAKE_CURRENT_SOURCE_DIR}/assets" "${CMAKE_BINARY_DIR}/assets")
-
 target_link_libraries(raster_dependencies PUBLIC  glad glm chemfiles)
 target_link_libraries(sequential_dependencies PUBLIC glm)
 target_link_libraries(parallel_dependencies PUBLIC glm)
@@ -32,31 +22,27 @@ function(add_subproject project_name executable)
 	target_include_directories(${project_name} PUBLIC ${OPENGL_INCLUDE_DIRS} extern/SDL/include extern/imgui)
 endfunction()
 
-add_subproject(controllers_example "${CMAKE_SOURCE_DIR}/executables/controllers_example.cpp")
-add_subproject(shaders_example "${CMAKE_SOURCE_DIR}/executables/shaders_example.cpp")
-add_subproject(loader_example "${CMAKE_SOURCE_DIR}/executables/loader_example.cpp")
-
 # Sequential attempt define
-add_subproject(brute_sequencial "${CMAKE_SOURCE_DIR}/executables/brute_sequencial.cpp")
+add_subproject(brute_sequencial "${CMAKE_SOURCE_DIR}/executables/seq_version/brute_sequencial.cpp")
 
 # First parallel attempt define
-add_subproject(fst_parallel "${CMAKE_SOURCE_DIR}/executables/fst_parallel.cpp")
-add_subproject(gltexstor_ex "${CMAKE_SOURCE_DIR}/executables/gltexstor_ex.cpp")
+add_subproject(fst_parallel "${CMAKE_SOURCE_DIR}/executables/fst_parallel_attempt/fst_parallel.cpp")
 
 # Second parallel attempt define
 add_subproject(snd_parallel "${CMAKE_SOURCE_DIR}/executables/snd_parallel_attempt/bbox_intersect.cpp")
-add_subproject(snd_parallel_gl_testing "${CMAKE_SOURCE_DIR}/executables/snd_parallel_attempt/gl_test.cpp")
 
 target_link_libraries(brute_sequencial PUBLIC sequential_dependencies)
 target_link_libraries(fst_parallel PUBLIC parallel_dependencies)
 target_link_libraries(snd_parallel PUBLIC parallel_dependencies)
 
 
-# add_dependencies(shaders_example data_folder_bin)
-add_dependencies(shaders_example data_folder)
-# add_dependencies(loader_example data_folder_bin)
-add_dependencies(loader_example data_folder)
+add_custom_command(
+    OUTPUT "${CMAKE_BINARY_DIR}/assets"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets ${CMAKE_BINARY_DIR}/assets
+    DEPENDS ${CMAKE_SOURCE_DIR}/assets
+)
 
+add_custom_target(copy_assets ALL DEPENDS "${CMAKE_BINARY_DIR}/assets")
 
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/off/seq)
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/off/fst_parallel)
