@@ -6,6 +6,7 @@ CameraInfoComponent::CameraInfoComponent(std::string name, Camera* camera) :
     addElement(std::make_unique<Vec3TextElement>("Position", camera->cameraPos));
     addElement(std::make_unique<Vec3TextElement>("Up", camera->cameraUp));
     addElement(std::make_unique<Vec3TextElement>("Front", camera->cameraFront));
+    addElement(std::make_unique<Vec3TextElement>("Right", camera->cameraRight));
     
     // Yaw and Pitch
     addElement(std::make_unique<TextElementf>("Yaw (°)", camera->yaw));

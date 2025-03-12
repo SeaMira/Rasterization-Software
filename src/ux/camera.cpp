@@ -9,8 +9,8 @@ Camera::Camera(int SCR_WIDTH, int SCR_HEIGHT) {
 }
 
 Camera::Camera(int SCR_WIDTH, int SCR_HEIGHT, const glm::vec3 Pos, const glm::vec3 Front, const glm::vec3 Up) {
-    this->SCR_WIDTH = SCR_WIDTH;
-    this->SCR_HEIGHT = SCR_HEIGHT;
+    this->SCR_WIDTH = (float)SCR_WIDTH;
+    this->SCR_HEIGHT = (float)SCR_HEIGHT;
     this->lastX = (float)SCR_WIDTH/2.0f;
     this->lastY = (float)SCR_HEIGHT/2.0f;
 
@@ -32,7 +32,7 @@ glm::vec3 Camera::getUp() {
 }
 
 glm::vec3 Camera::getRight() {
-    return glm::normalize(glm::cross(cameraFront, cameraUp));
+    return cameraRight;
 }
 
 glm::mat4 Camera::getProjection() {
@@ -138,13 +138,13 @@ void Camera::OnKeyboard(int key, float dt) {
         // A
         case 'a':
         {
-            cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+            cameraPos -= cameraRight * cameraSpeed;
         }
         break;
         // D
         case 'd':
         {
-            cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+            cameraPos += cameraRight * cameraSpeed;
         }
         break;
         // SPACE
@@ -231,7 +231,7 @@ void Camera::OnMouse(float x, float y) {
         OnLowerEdge = false;
     }
 
-    update();
+    // update();
 }
 
 void Camera::OnRender(float dt) {
@@ -264,8 +264,8 @@ void Camera::OnRender(float dt) {
         pitch = 89.0f;
         if (pitch < -89.0f)
             pitch = -89.0f;
-        update();
     }
+    update();
     
 }
 
@@ -286,8 +286,8 @@ void Camera::update()
     front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
     cameraFront = glm::normalize(front);
 
-    glm::vec3 right = glm::normalize(glm::cross(cameraFront, glm::vec3(0.0f, 1.0f, 0.0f))); // Right vector
-    cameraUp = glm::normalize(glm::cross(right, cameraFront));
+    cameraRight = glm::normalize(glm::cross(cameraFront, initCameraUp)); // Right vector
+    cameraUp = glm::normalize(glm::cross(cameraRight, cameraFront));
 }
 
 

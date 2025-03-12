@@ -10,6 +10,8 @@
 
 #include "appSDLRenderer.h"
 
+#include "algorithms/frustum_cull.h"
+
 #include "utils/benchmark_resources.h"
 #include "utils/sequential/aux_functions.h"
 
@@ -42,14 +44,15 @@ void renderFrame(std::vector<uint32_t>& framebuffer,
     const glm::mat4& proj = cam.getProjection();
     const glm::mat4& view = cam.getView();
     const glm::vec3& up = cam.getUp();
-    // const glm::vec3& right = cam.getRight();
+    
     const glm::vec3& front = cam.getFront();
     const glm::vec3& camPos = cam.getPosition();
-    // const glm::vec2 resol = glm::vec2(SCR_WIDTH, SCR_HEIGHT);
+    const Frustum frustum(cam);
     
-    for (const auto& sphere : spheres) 
-        drawSphere(proj, view, up, front, camPos, SCR_WIDTH, SCR_HEIGHT, sphere, 
-            framebuffer, depthBuffer);
+    for (auto& sphere : spheres)
+        if (frustum.isSphereInside(sphere))
+            drawSphere(proj, view, up, front, camPos, SCR_WIDTH, SCR_HEIGHT, sphere, 
+                framebuffer, depthBuffer);
     
 }
 
