@@ -2,7 +2,8 @@
 #include "utils/benchmark_resources.h"
 #include "molecule_loader/basic_loader.h"
 
-SceneType currentScene = SceneType::LOADED_SCENE;
+// LOADED_SCENE or GRID_SCENE
+SceneType currentScene = SceneType::GRID_SCENE;
 std::filesystem::path scene_path = "assets/molecules/1AGA.mmtf";
 
 int spheresGridWidth = 100;

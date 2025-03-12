@@ -125,3 +125,29 @@ if(OpenMP_CXX_FOUND)
     message(STATUS "OpenMP found: ${OpenMP_CXX_VERSION}")
     target_link_libraries(sequential_dependencies PRIVATE OpenMP::OpenMP_CXX)
 endif()
+
+
+## Parallel Version Dependencies
+set(parallel_sources
+    ${CMAKE_SOURCE_DIR}/src/utils/parallel/aux_functions.cpp
+)
+
+set(parallel_includes
+    ${CMAKE_SOURCE_DIR}/include/utils/parallel/aux_functions.h
+)
+
+add_library(parallel_dependencies STATIC
+${parallel_sources}
+${parallel_includes}
+${CMAKE_SOURCE_DIR}/extern/glm
+)
+
+set_property(TARGET parallel_dependencies PROPERTY CXX_STANDARD 20)
+
+target_include_directories(parallel_dependencies PUBLIC
+"${CMAKE_SOURCE_DIR}/include" 
+)
+
+target_link_libraries(parallel_dependencies PUBLIC 
+glm 
+)

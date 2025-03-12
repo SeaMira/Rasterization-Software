@@ -8,6 +8,7 @@
 
 #include "appSDLGL.h"
 
+#include "utils/parallel/aux_functions.h"
 #include "utils/benchmark_resources.h"
 
 #include "ux/input.h"
@@ -26,7 +27,7 @@ using uint = unsigned int;
 // Settings
 int SCR_WIDTH = 800;
 int SCR_HEIGHT = 600;
-int sphere_count = 256;
+int sphere_count = 1024;
 
 std::string title = "First Parallel Version"; 
 
@@ -63,6 +64,12 @@ int main(int argc, char* argv[])
     
     std::vector<glm::vec4> spheres = getScene(sphere_count);
     std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints = getCheckpoints(sphere_count, spheres);
+    
+    #if CPU_FRUSTUM_CULLING
+        int visibleSpheresCount = 0;
+        std::vector<glm::vec4> visibleSpheres(spheres.size());
+    #endif
+    
     StorageBuffer sphereBuffer(GL_SHADER_STORAGE_BUFFER);
     sphereBuffer.generateBufferData(spheres.size() * sizeof(glm::vec4), 1, 
         spheres.data(), GL_STATIC_DRAW);
@@ -96,8 +103,17 @@ int main(int argc, char* argv[])
         {
             camera_controller.cameraUpdate();
             benchmark.update();
-
             profiler.updateProfiler();
+
+            #if CPU_FRUSTUM_CULLING
+                Frustum frustum(camera);
+                cullSpheres(spheres, visibleSpheres, frustum, visibleSpheresCount);
+                sphereBuffer.bind();
+                glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, visibleSpheresCount * sizeof(glm::vec4), visibleSpheres.data());
+                sphereBuffer.unbind();
+                numGroupsX = (visibleSpheresCount + workGroupSizeX - 1) / workGroupSizeX;
+            #endif
+
             if (window.getInput().isKeyDown(Key::T)) profiler.startSavingNextFrames(benchmark.getCheckpointID());
 
             cleaningComputeShader.use();
@@ -106,7 +122,11 @@ int main(int argc, char* argv[])
             glDispatchCompute((SCR_WIDTH + workGroupSizeX - 1) / 16, (SCR_HEIGHT + workGroupSizeY - 1) / 16, 1);
             glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
             computeShader.use();
-            computeShader.setInt("sphereCount", sphere_count);
+            #if CPU_FRUSTUM_CULLING
+                computeShader.setInt("sphereCount", visibleSpheresCount); // visible sphere count given
+            #else
+                computeShader.setInt("sphereCount", sphere_count);
+            #endif
             computeShader.setVec2I("screenResolution", screenResolution);
             computeShader.setMat4("proj", camera.getProjection());
             computeShader.setMat4("view", camera.getView());

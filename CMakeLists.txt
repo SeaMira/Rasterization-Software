@@ -24,6 +24,7 @@ add_dependency_folder(data_folder "${CMAKE_CURRENT_SOURCE_DIR}/assets" "${CMAKE_
 
 target_link_libraries(raster_dependencies PUBLIC  glad glm chemfiles)
 target_link_libraries(sequential_dependencies PUBLIC glm)
+target_link_libraries(parallel_dependencies PUBLIC glm)
 
 function(add_subproject project_name executable)
 	add_executable(${project_name} ${executable})
@@ -47,6 +48,8 @@ add_subproject(snd_parallel "${CMAKE_SOURCE_DIR}/executables/snd_parallel_attemp
 add_subproject(snd_parallel_gl_testing "${CMAKE_SOURCE_DIR}/executables/snd_parallel_attempt/gl_test.cpp")
 
 target_link_libraries(brute_sequencial PUBLIC sequential_dependencies)
+target_link_libraries(fst_parallel PUBLIC parallel_dependencies)
+target_link_libraries(snd_parallel PUBLIC parallel_dependencies)
 
 
 # add_dependencies(shaders_example data_folder_bin)

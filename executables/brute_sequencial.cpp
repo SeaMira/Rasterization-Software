@@ -31,7 +31,7 @@
 int SCR_WIDTH = 800;
 int SCR_HEIGHT = 600;
 
-int sphere_count = 126;
+int sphere_count = 1024*1024;
 
 std::string title = "Brute Sequential Method"; 
 
