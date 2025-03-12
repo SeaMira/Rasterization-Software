@@ -74,8 +74,10 @@ int main(int argc, char* argv[])
     std::vector<glm::vec4> spheres = getScene(sphere_count);
     std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints = getCheckpoints(sphere_count, spheres);
     
-    int visibleSpheresCount = 0;
-    std::vector<glm::vec4> visibleSpheres(spheres.size());
+    #if CPU_FRUSTUM_CULLING
+        int visibleSpheresCount = 0;
+        std::vector<glm::vec4> visibleSpheres(spheres.size());
+    #endif
 
     StorageBuffer sphereBuffer(GL_SHADER_STORAGE_BUFFER);
     sphereBuffer.generateBufferData(spheres.size() * sizeof(glm::vec4), 1, 
@@ -117,13 +119,14 @@ int main(int argc, char* argv[])
             benchmark.update();
             profiler.updateProfiler();
             
-            // frustum culling con CPU
-            Frustum frustum(camera);
-            cullSpheres(spheres, visibleSpheres, frustum, visibleSpheresCount);
-            sphereBuffer.bind();
-            glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, visibleSpheresCount * sizeof(glm::vec4), visibleSpheres.data());
-            sphereBuffer.unbind();
-            numGroupsX = (visibleSpheresCount + workGroupSizeX - 1) / workGroupSizeX;
+            #if CPU_FRUSTUM_CULLING
+                Frustum frustum(camera);
+                cullSpheres(spheres, visibleSpheres, frustum, visibleSpheresCount);
+                sphereBuffer.bind();
+                glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, visibleSpheresCount * sizeof(glm::vec4), visibleSpheres.data());
+                sphereBuffer.unbind();
+                numGroupsX = (visibleSpheresCount + workGroupSizeX - 1) / workGroupSizeX;
+            #endif
 
             if (window.getInput().isKeyDown(Key::T)) profiler.startSavingNextFrames(benchmark.getCheckpointID());
 
@@ -135,7 +138,11 @@ int main(int argc, char* argv[])
             
             // bbox extraction shader
             bboxExtractionShader.use();
-            bboxExtractionShader.setInt("sphereCount", visibleSpheresCount); // visible sphere count given
+            #if CPU_FRUSTUM_CULLING
+                bboxExtractionShader.setInt("sphereCount", visibleSpheresCount); // visible sphere count given
+            #else
+                bboxExtractionShader.setInt("sphereCount", sphere_count);
+            #endif
             bboxExtractionShader.setVec2I("screenResolution", screenResolution);
             bboxExtractionShader.setMat4("proj", camera.getProjection());
             bboxExtractionShader.setMat4("view", camera.getView());
@@ -147,7 +154,11 @@ int main(int argc, char* argv[])
             
             // bbox intersection shader
             bboxIntersectionShader.use();
-            bboxIntersectionShader.setInt("sphereCount", visibleSpheresCount); // visible sphere count given
+            #if CPU_FRUSTUM_CULLING
+                bboxIntersectionShader.setInt("sphereCount", visibleSpheresCount); // visible sphere count given
+            #else
+                bboxIntersectionShader.setInt("sphereCount", sphere_count);
+            #endif
             bboxIntersectionShader.setFloat("far", camera.getFar());
             bboxIntersectionShader.setVec2I("screenResolution", screenResolution);
             bboxIntersectionShader.setMat4("proj", camera.getProjection());

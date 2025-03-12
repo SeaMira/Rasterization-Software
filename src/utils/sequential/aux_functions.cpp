@@ -76,40 +76,35 @@ void drawSphere(const glm::mat4& proj, const glm::mat4& view,
     screenMin.y = (sphereBbox.minCorner.y * 0.5f + 0.5f) * SCR_HEIGHT;
     screenMax.x = ((sphereBbox.maxCorner.x) * 0.5f + 0.5f) * SCR_WIDTH;
     screenMax.y = (sphereBbox.maxCorner.y * 0.5f + 0.5f) * SCR_HEIGHT;
-    // std::cout << screenMin.x << ", " << screenMin.y << std::endl;
-    // std::cout << screenMax.x << ", " << screenMax.y << std::endl;   
 
-    if (glm::dot(glm::vec3(sphere[0], sphere[1], sphere[2]) - camPos, front) > 0.5f && !((screenMin.x < 0 && screenMax.x > SCR_WIDTH) || (screenMin.y < 0 && screenMax.y > SCR_HEIGHT))) 
+    const float difx = screenMax.x - screenMin.x;
+    const float dify = screenMax.y - screenMin.y;
+    
+    #pragma omp parallel for collapse(2)
+    for (int px = std::max(0, screenMin.x); px < std::min(screenMax.x, SCR_WIDTH); px++)
     {
-        const float difx = screenMax.x - screenMin.x;
-        const float dify = screenMax.y - screenMin.y;
-        
-        #pragma omp parallel for collapse(2)
-        for (int px = std::max(0, screenMin.x); px < std::min(screenMax.x, SCR_WIDTH); px++)
+        for (int py = std::max(0, screenMin.y); py < std::min(SCR_HEIGHT, screenMax.y); py++)
         {
-            for (int py = std::max(0, screenMin.y); py < std::min(SCR_HEIGHT, screenMax.y); py++)
+
+            const float u = (float)(px - screenMin.x)/ difx;
+            const float v = (float)(py - screenMin.y)/ dify;
+            const glm::vec3 A = glm::mix(sphereBbox.upLeftCorner, sphereBbox.upRightCorner, u);
+            const glm::vec3 B = glm::mix(sphereBbox.downLeftCorner, sphereBbox.downRightCorner, u);
+            const glm::vec3 viewImpPos = glm::mix(A, B, v);
+            const float h = iSphere(camPos, viewImpPos, cameraSpaceSphere, sphere.w);
+
+            // const bool showBbox = (px == screenMin.x || py == screenMin.y || px == screenMax.x - 1 || py == screenMax.y - 1);
+            if ((h > 0.0f)) 
             {
-
-                const float u = (float)(px - screenMin.x)/ difx;
-                const float v = (float)(py - screenMin.y)/ dify;
-                const glm::vec3 A = glm::mix(sphereBbox.upLeftCorner, sphereBbox.upRightCorner, u);
-                const glm::vec3 B = glm::mix(sphereBbox.downLeftCorner, sphereBbox.downRightCorner, u);
-                const glm::vec3 viewImpPos = glm::mix(A, B, v);
-                const float h = iSphere(camPos, viewImpPos, cameraSpaceSphere, sphere.w);
-
-                // const bool showBbox = (px == screenMin.x || py == screenMin.y || px == screenMax.x - 1 || py == screenMax.y - 1);
-                if ((h > 0.0f)) 
+                const int index = (SCR_HEIGHT - py - 1) * SCR_WIDTH + px;
+                const glm::vec3 hit = viewImpPos * h;
+                const float depth = hit.z < 0.0f ? (hit.z * proj[2].z + proj[3].z) / -hit.z : FLT_MAX;
+                if (depth < depthBuffer[index]) 
                 {
-                    const int index = (SCR_HEIGHT - py - 1) * SCR_WIDTH + px;
-                    const glm::vec3 hit = viewImpPos * h;
-                    const float depth = hit.z < 0.0f ? (hit.z * proj[2].z + proj[3].z) / -hit.z : FLT_MAX;
-                    if (depth < depthBuffer[index]) 
-                    {
-                        const glm::vec3 normal = glm::normalize( hit - cameraSpaceSphere );
-                        const float lambertCos = glm::dot(normal, -glm::normalize(hit));
-                        depthBuffer[index] = depth;
-                        framebuffer[index] = vecToColor(255 * lambertCos * lightColor * diffuseI);
-                    }
+                    const glm::vec3 normal = glm::normalize( hit - cameraSpaceSphere );
+                    const float lambertCos = glm::dot(normal, -glm::normalize(hit));
+                    depthBuffer[index] = depth;
+                    framebuffer[index] = vecToColor(255 * lambertCos * lightColor * diffuseI);
                 }
             }
         }
