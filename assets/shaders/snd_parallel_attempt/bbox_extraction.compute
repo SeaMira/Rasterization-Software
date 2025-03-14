@@ -120,23 +120,14 @@ void storeSphereBBox(Sphere sphere)
     screenMax.x = int(((sphereBbox.maxCorner.x) * 0.5f + 0.5f) * float(screenResolution.x));
     screenMax.y = int((sphereBbox.maxCorner.y * 0.5f + 0.5f) * float(screenResolution.y));
 
-    if (dot(sphere.positionr.xyz - cameraPos, front) > 0.5f && 
-        !((screenMin.x < 0 && screenMax.x > screenResolution.x) || 
-        (screenMin.y < 0 && screenMax.y > screenResolution.y)) &&
-        !((screenMin.x > screenResolution.x || screenMax.x < 0) || 
-        (screenMin.y > screenResolution.y || screenMax.y < 0))) 
-    {
-        sphereBillboardData[gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_WorkGroupSize.x] =
-            SphereBillboard(vec4(cameraSpaceSphere, sphere.positionr.w), 
-                vec4(sphereBbox.upRightCorner, screenMax.x), 
-                vec4(sphereBbox.upLeftCorner, screenMax.y), 
-                vec4(sphereBbox.downRightCorner, screenMin.x), 
-                vec4(sphereBbox.downLeftCorner, screenMin.y));
-    } else 
-    {
-        sphereBillboardData[gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_WorkGroupSize.x] =
-            SphereBillboard(vec4(0.0), vec4(0.0), vec4(0.0), vec4(0.0), vec4(0.0));
-    }
+    
+    sphereBillboardData[gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_WorkGroupSize.x] =
+        SphereBillboard(vec4(cameraSpaceSphere, sphere.positionr.w), 
+            vec4(sphereBbox.upRightCorner, screenMax.x), 
+            vec4(sphereBbox.upLeftCorner, screenMax.y), 
+            vec4(sphereBbox.downRightCorner, screenMin.x), 
+            vec4(sphereBbox.downLeftCorner, screenMin.y));
+    
 }
 
 

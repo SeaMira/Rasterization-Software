@@ -23,12 +23,15 @@ layout(std430, binding = 2) buffer SphereBillboardDataBuffer
     SphereBillboard sphereBillboardData[];
 };
 
+layout(std430, binding = 3) buffer CounterBuffer {
+    uint sphereCount;
+};
+
 shared SphereBillboard sharedSphereBillboards[1+ int(gl_WorkGroupSize.x * gl_WorkGroupSize.y * gl_WorkGroupSize.z)];
 
 uniform mat4 proj;
 uniform vec3 cameraPos;
 uniform ivec2 screenResolution;
-uniform int sphereCount;
 uniform float far;
 
 vec3 lightColor = vec3(0.05, 1.0, 0.01);
@@ -51,8 +54,8 @@ void main()
 
     const int localID = int(gl_LocalInvocationIndex);
     const int threadsPerWorkGroup = int(gl_WorkGroupSize.x * gl_WorkGroupSize.y * gl_WorkGroupSize.z);
-    const int batches = int((sphereCount-1) / threadsPerWorkGroup) + 1;
-    const int lastBatchAmount = sphereCount - (batches-1) * threadsPerWorkGroup;
+    const int batches = int((int(sphereCount)-1) / threadsPerWorkGroup) + 1;
+    const int lastBatchAmount = int(sphereCount) - (batches-1) * threadsPerWorkGroup;
     int count = threadsPerWorkGroup;
 
     float minDepth = far;
@@ -62,7 +65,7 @@ void main()
     for (int batch = 0; batch < batches; batch++)
     {
         int batchIndex = localID + batch * threadsPerWorkGroup;
-        if (batchIndex < sphereCount)
+        if (batchIndex < int(sphereCount))
         {
             sharedSphereBillboards[localID] = sphereBillboardData[batchIndex];
         }

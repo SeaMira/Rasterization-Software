@@ -31,9 +31,13 @@ add_subproject(fst_parallel "${CMAKE_SOURCE_DIR}/executables/fst_parallel_attemp
 # Second parallel attempt define
 add_subproject(snd_parallel "${CMAKE_SOURCE_DIR}/executables/snd_parallel_attempt/bbox_intersect.cpp")
 
+# Third parallel attempt define (same as second with parallel FC but without atomics)
+add_subproject(thrd_parallel "${CMAKE_SOURCE_DIR}/executables/thrd_parallel_attempt/thrd_parallel_attempt.cpp")
+
 target_link_libraries(brute_sequencial PUBLIC sequential_dependencies)
 target_link_libraries(fst_parallel PUBLIC parallel_dependencies)
 target_link_libraries(snd_parallel PUBLIC parallel_dependencies)
+target_link_libraries(thrd_parallel PUBLIC parallel_dependencies)
 
 
 add_custom_command(

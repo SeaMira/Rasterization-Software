@@ -75,6 +75,9 @@ void main()
         {
             SphereBillboard sphereBillboard = sharedSphereBillboards[index];
 
+            // bounding box not on screen
+            if (sphereBillboard.cameraSpaceSphPosR.w <= 0.0) continue;
+
             const ivec2 screenMin = ivec2(int(sphereBillboard.downRightCornerMinX.w), int(sphereBillboard.downLeftCornerMinY.w));
             const ivec2 screenMax = ivec2(int(sphereBillboard.upRightCornerMaxX.w), int(sphereBillboard.upLeftCornerMaxY.w));
             // pixel not in the bounding box
@@ -111,5 +114,5 @@ void main()
         barrier();
     }
     if (colorChanged) imageStore(outputImage, coords, color);
-    // else imageStore(outputImage, coords, vec4(1.0, 0.0, 0.0, 1.0));
+    else imageStore(outputImage, coords, vec4(1.0, 0.0, 0.0, 1.0));
 }

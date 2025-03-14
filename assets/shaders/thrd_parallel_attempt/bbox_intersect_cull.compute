@@ -28,8 +28,9 @@ shared SphereBillboard sharedSphereBillboards[1+ int(gl_WorkGroupSize.x * gl_Wor
 uniform mat4 proj;
 uniform vec3 cameraPos;
 uniform ivec2 screenResolution;
-uniform int sphereCount;
 uniform float far;
+
+uniform int sphereCount;
 
 vec3 lightColor = vec3(0.05, 1.0, 0.01);
 float diffuseI = 0.9;
@@ -57,7 +58,7 @@ void main()
 
     float minDepth = far;
     bool colorChanged = false;
-    vec4 color = vec4(0.0);
+    vec4 color = vec4(1.0);
 
     for (int batch = 0; batch < batches; batch++)
     {
@@ -74,6 +75,7 @@ void main()
         for (int index = 0; index < count; index++)
         {
             SphereBillboard sphereBillboard = sharedSphereBillboards[index];
+            if (sphereBillboard.cameraSpaceSphPosR.w <= 0.0) continue;
 
             const ivec2 screenMin = ivec2(int(sphereBillboard.downRightCornerMinX.w), int(sphereBillboard.downLeftCornerMinY.w));
             const ivec2 screenMax = ivec2(int(sphereBillboard.upRightCornerMaxX.w), int(sphereBillboard.upLeftCornerMaxY.w));

@@ -32,6 +32,7 @@ int SCR_WIDTH = 800;
 int SCR_HEIGHT = 600;
 
 int sphere_count = 1024*1024;
+int visibleSpheres = 0;
 
 std::string title = "Brute Sequential Method"; 
 
@@ -48,11 +49,17 @@ void renderFrame(std::vector<uint32_t>& framebuffer,
     const glm::vec3& front = cam.getFront();
     const glm::vec3& camPos = cam.getPosition();
     const Frustum frustum(cam);
-    
+    int visibleSpheresCount = 0;
     for (auto& sphere : spheres)
+    {
         if (frustum.isSphereInside(sphere))
+        {
             drawSphere(proj, view, up, front, camPos, SCR_WIDTH, SCR_HEIGHT, sphere, 
                 framebuffer, depthBuffer);
+            visibleSpheresCount++;
+        }
+    }
+    visibleSpheres = visibleSpheresCount;
     
 }
 
@@ -61,7 +68,8 @@ int main(int argc, char* argv[])
     std::unordered_map<std::string, int*> scene_data = {
         {"Screen width", &SCR_WIDTH},
         {"Screen height", &SCR_HEIGHT},
-        {"Sphere count", &sphere_count}
+        {"Sphere count", &sphere_count},
+        {"Spheres On Frustum", &visibleSpheres}
     };
 
     AppRenderer window { title, SCR_WIDTH, SCR_HEIGHT, shown };

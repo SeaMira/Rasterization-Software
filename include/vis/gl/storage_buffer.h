@@ -11,6 +11,8 @@ public:
     ~StorageBuffer();
     void generateBufferData(int size, GLuint index,
         const void * data = nullptr, GLenum usage = GL_DYNAMIC_DRAW) const;
+    // void generateBufferStorage(int size, GLuint index,
+    //     const void * data = nullptr, GLbitfield flags = GL_DYNAMIC_STORAGE_BIT) const;
     void bind() const;
     void unbind() const;
     bool isComplete() const;

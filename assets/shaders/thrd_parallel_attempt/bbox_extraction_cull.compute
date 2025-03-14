@@ -1,4 +1,4 @@
-#version 460
+#version 430
 
 layout(local_size_x = 16, local_size_y = 16) in;
 layout(rgba8, binding = 0) uniform image2D outputImage;
@@ -13,13 +13,32 @@ layout(std430, binding = 1) buffer SphereBuffer
     Sphere spheres[];
 };
 
-layout(std430, binding = 2) buffer DepthBuffer 
+
+
+struct SphereBillboard 
 {
-    float depthData[];
+    vec4 cameraSpaceSphPosR;    // 16b - camera space position of the sphere and radius
+    vec4 upRightCornerMaxX;     // 16b - up right corner of the billboard in camera space and the max X coordinate in screen space 
+    vec4 upLeftCornerMaxY;      // 16b - up left corner of the billboard in camera space and the max Y coordinate in screen space
+    vec4 downRightCornerMinX;   // 16b - down right corner of the billboard in camera space and the min X coordinate in screen space
+    vec4 downLeftCornerMinY;    // 16b - down left corner of the billboard in camera space and the min Y coordinate in screen space
+    // 64b
+}; 
+
+layout(std430, binding = 2) buffer SphereBillboardDataBuffer
+{
+    SphereBillboard sphereBillboardData[];
 };
 
 uniform mat4 view;
 uniform mat4 proj;
+
+uniform vec4 frustumTopFace;
+uniform vec4 frustumBottomFace;
+uniform vec4 frustumRightFace;
+uniform vec4 frustumLeftFace;
+uniform vec4 frustumFarFace;
+uniform vec4 frustumNearFace;
 
 uniform vec3 front;
 uniform vec3 up;
@@ -47,22 +66,26 @@ struct bboxCorners
     
 };
 
-uint vecToColor(vec3 lambertCos) {
-    uint R = uint(lambertCos.r * 255.0);
-    uint G = uint(lambertCos.g * 255.0);
-    uint B = uint(lambertCos.b * 255.0);
-    return (R << 0) | (G << 8) | (B << 16) | (0xFF << 24);
+// frustum culling
+
+bool isOnOrForwardOfPlane(vec4 plane, vec4 sphere)
+{
+    return dot(vec3(plane), vec3(sphere)) - plane.w >= -sphere.w;
 }
 
-float iSphere(vec3 ro, vec3 rd, vec3 sph, float radius )
+bool isSphereInside(Sphere sph)
 {
-    float a = dot(rd, rd);
-    float b = dot( rd, sph );
-    float c = dot( sph, sph ) - radius*radius;
-    float h = b*b - a * c;
-    if( h < 0.0f) return -1.0f;
-    return (b - sqrt( h ))/a;
+    return isOnOrForwardOfPlane(frustumLeftFace, sph.positionr) &&
+           isOnOrForwardOfPlane(frustumRightFace, sph.positionr) &&
+           isOnOrForwardOfPlane(frustumFarFace, sph.positionr) &&
+           isOnOrForwardOfPlane(frustumNearFace, sph.positionr) &&
+           isOnOrForwardOfPlane(frustumTopFace, sph.positionr) &&
+           isOnOrForwardOfPlane(frustumBottomFace, sph.positionr);
 }
+
+// frustum culling
+
+
 
 bboxCorners getSphereBbox(const vec3 cameraSpaceSphere, const vec3 camImposPos, 
     const vec3 normCamSpaceSphere, const float sphRadius)
@@ -97,7 +120,7 @@ bboxCorners getSphereBbox(const vec3 cameraSpaceSphere, const vec3 camImposPos,
     return bboxCorners(upRightCorner, upLeftCorner, downRightCorner, downLeftCorner, minCorner, maxCorner); 
 }
 
-void drawSphere(Sphere sphere)
+void storeSphereBBox(Sphere sphere)
 {
     vec3 cameraSpaceSphere = vec3(view * vec4(sphere.positionr.xyz, 1.0f));
     vec3 normCamSpaceSphere = normalize(cameraSpaceSphere);
@@ -108,47 +131,18 @@ void drawSphere(Sphere sphere)
     
     ivec2 screenMin, screenMax;
 
-    screenMin.x = int( ((sphereBbox.minCorner.x) * 0.5f + 0.5f) * float(screenResolution.x));
+    screenMin.x = int(((sphereBbox.minCorner.x) * 0.5f + 0.5f) * float(screenResolution.x));
     screenMin.y = int((sphereBbox.minCorner.y * 0.5f + 0.5f) * float(screenResolution.y));
     screenMax.x = int(((sphereBbox.maxCorner.x) * 0.5f + 0.5f) * float(screenResolution.x));
     screenMax.y = int((sphereBbox.maxCorner.y * 0.5f + 0.5f) * float(screenResolution.y));
 
+    sphereBillboardData[int(gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_WorkGroupSize.x)] =
+        SphereBillboard(vec4(cameraSpaceSphere, sphere.positionr.w), 
+            vec4(sphereBbox.upRightCorner, screenMax.x), 
+            vec4(sphereBbox.upLeftCorner, screenMax.y), 
+            vec4(sphereBbox.downRightCorner, screenMin.x), 
+            vec4(sphereBbox.downLeftCorner, screenMin.y));
     
-    const float difx = screenMax.x - screenMin.x;
-    const float dify = screenMax.y - screenMin.y;
-    
-    for (int px = max(0, screenMin.x); px < min(screenMax.x, screenResolution.x); px++)
-    {
-        for (int py = max(0, screenMin.y); py < min(screenResolution.y, screenMax.y); py++)
-        {
-
-            const float u = float(px - screenMin.x)/ difx;
-            const float v = float(py - screenMin.y)/ dify;
-            const vec3 A = mix(sphereBbox.upLeftCorner, sphereBbox.upRightCorner, u);
-            const vec3 B = mix(sphereBbox.downLeftCorner, sphereBbox.downRightCorner, u);
-            const vec3 viewImpPos = mix(A, B, v);
-            const float h = iSphere(cameraPos, viewImpPos, cameraSpaceSphere, sphere.positionr.w);
-
-            // imageStore(outputImage, ivec2(px, py), vec4(1.0, 1.0, 1.0, 1.0));
-            // const bool showBbox = (px == screenMin.x || py == screenMin.y || px == screenMax.x - 1 || py == screenMax.y - 1);
-            if (h > 0.0f) 
-            {
-                // imageStore(outputImage, ivec2(px, py), vec4(1.0, 0.0, 0.0, 1.0));
-                const int index = (screenResolution.y - py - 1) * screenResolution.x + px;
-                const vec3 hit = viewImpPos * h;
-                const float depth = hit.z < 0.0f ? (hit.z * proj[2].z + proj[3].z) / -hit.z : 1000.0f;
-                const vec3 normal = normalize( hit - cameraSpaceSphere );
-                const float lambertCos = dot(normal, -normalize(hit));
-                // const float old = atomicMin(depthData[index], depth);
-                if (depthData[index] > depth) 
-                {
-                    depthData[index] = depth;
-                    imageStore(outputImage, ivec2(px, py), vec4(lambertCos * lightColor * diffuseI, 1.0));
-                }
-                
-            }
-        }
-    }
 }
 
 
@@ -161,8 +155,16 @@ void main()
         return;  // If index is greater that the amount of spheres, return
     }
 
-    // Get sphere
+    // Get sphere bbox
     Sphere s = spheres[index];
+    if (isSphereInside(s))
+    {
+        storeSphereBBox(s);  
+    } 
+    else
+    {
+        sphereBillboardData[int(index)] =
+            SphereBillboard(vec4(0.0f), vec4(0.0f), vec4(0.0f), vec4(0.0f), vec4(0.0f));
+    }
 
-    drawSphere(s);
 }

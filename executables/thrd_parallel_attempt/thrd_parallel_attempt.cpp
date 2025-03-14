@@ -8,7 +8,6 @@
 
 #include "appSDLGL.h"
 
-#include "utils/parallel/aux_functions.h"
 #include "utils/benchmark_resources.h"
 
 #include "ux/input.h"
@@ -29,7 +28,7 @@ int SCR_WIDTH = 1000;
 int SCR_HEIGHT = 1000;
 int sphere_count = 1024 * 1024;
 
-std::string title = "Second Parallel Version"; 
+std::string title = "Third Parallel Version"; 
 
 bool shown = true;
 
@@ -59,14 +58,10 @@ int main(int argc, char* argv[])
     camera.SetPosition(.0f, .0f, .0f);
     CameraController camera_controller(window, camera);
     
-    ComputeShader cleaningComputeShader("assets/shaders/snd_parallel_attempt/set_to_black.compute");
-    #if CPU_FRUSTUM_CULLING
-        ComputeShader bboxExtractionShader("assets/shaders/snd_parallel_attempt/bbox_extraction.compute");
-        ComputeShader bboxIntersectionShader("assets/shaders/snd_parallel_attempt/bbox_intersect.compute");
-    #else
-        ComputeShader bboxExtractionShader("assets/shaders/snd_parallel_attempt/bbox_extraction_cull.compute");
-        ComputeShader bboxIntersectionShader("assets/shaders/snd_parallel_attempt/bbox_intersect_cull.compute");
-    #endif
+    ComputeShader cleaningComputeShader("assets/shaders/thrd_parallel_attempt/set_to_black.compute");
+    ComputeShader bboxExtractionShader("assets/shaders/thrd_parallel_attempt/bbox_extraction.compute");
+    ComputeShader bboxIntersectionShader("assets/shaders/thrd_parallel_attempt/bbox_intersect.compute");
+    
 
     Canvas canvas(GL_TEXTURE_2D, GL_RGBA8, SCR_WIDTH, SCR_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE);
     canvas.setFBO(GL_COLOR_ATTACHMENT0);
@@ -78,11 +73,11 @@ int main(int argc, char* argv[])
         
     std::vector<glm::vec4> spheres = getScene(sphere_count);
     std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints = getCheckpoints(sphere_count, spheres);
-    
-    
+    std::cout << "Number of spheres: " << sphere_count << std::endl;
+    std::cout << "Number of checkpoints: " << chkPoints.size() << std::endl;
     StorageBuffer sphereBuffer(GL_SHADER_STORAGE_BUFFER);
     sphereBuffer.generateBufferData(spheres.size() * sizeof(glm::vec4), 1, 
-    spheres.data(), GL_STATIC_DRAW);
+        spheres.data(), GL_STATIC_DRAW);
     sphereBuffer.unbind();
     
     // std::vector<float> depth_b(SCR_WIDTH * SCR_HEIGHT, FLT_MAX);
@@ -94,17 +89,6 @@ int main(int argc, char* argv[])
     StorageBuffer sphereBillboardBuffer(GL_SHADER_STORAGE_BUFFER);
     sphereBillboardBuffer.generateBufferData(spheres.size() * sizeof(SphereBillboard), 2, billboards.data(), GL_DYNAMIC_COPY);
     sphereBillboardBuffer.unbind();
-    
-    #if CPU_FRUSTUM_CULLING
-        int visibleSpheresCount = 0;
-        std::vector<glm::vec4> visibleSpheres(spheres.size());
-    #else
-        GLuint zero = 0;
-        GLuint resetValue = 0;
-        StorageBuffer visibleSpheresAtomicCounter(GL_SHADER_STORAGE_BUFFER);
-        visibleSpheresAtomicCounter.generateBufferData(sizeof(GLuint), 3, &zero, GL_DYNAMIC_COPY);
-        visibleSpheresAtomicCounter.unbind();
-    #endif
     
     Benchmark benchmark(camera_controller, chkPoints);
     Profiler profiler(window, "media/off/fst_parallel/frame_times.off", "media/off/fst_parallel/process_times.off");
@@ -129,8 +113,8 @@ int main(int argc, char* argv[])
         {
             camera_controller.cameraUpdate();
             benchmark.update();
+
             profiler.updateProfiler();
-            
             if (window.getInput().isKeyDown(Key::T)) profiler.startSavingNextFrames(benchmark.getCheckpointID());
 
             // cleaning shader
@@ -138,32 +122,10 @@ int main(int argc, char* argv[])
             cleaningComputeShader.setVec2I("screenResolution", screenResolution);
             glDispatchCompute((SCR_WIDTH + workGroupSizeX - 1) / 16, (SCR_HEIGHT + workGroupSizeY - 1) / 16, 1);
             glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-
+            
             // bbox extraction shader
             bboxExtractionShader.use();
-            Frustum frustum(camera);
-            #if CPU_FRUSTUM_CULLING
-                cullSpheres(spheres, visibleSpheres, frustum, visibleSpheresCount);
-                sphereBuffer.bind();
-                glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, visibleSpheresCount * sizeof(glm::vec4), visibleSpheres.data());
-                sphereBuffer.unbind();
-                numGroupsX = (visibleSpheresCount + workGroupSizeX - 1) / workGroupSizeX;
-                
-                bboxExtractionShader.setInt("sphereCount", visibleSpheresCount); // visible sphere count given
-            #else
-                visibleSpheresAtomicCounter.bind();
-                glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &resetValue);
-                visibleSpheresAtomicCounter.unbind();
-                
-                bboxExtractionShader.setInt("sphereCount", sphere_count);
-                bboxExtractionShader.setVec4("frustumTopFace", glm::vec4(frustum.topFace.normal, frustum.topFace.distance));
-                bboxExtractionShader.setVec4("frustumBottomFace", glm::vec4(frustum.bottomFace.normal, frustum.bottomFace.distance));
-                bboxExtractionShader.setVec4("frustumRightFace", glm::vec4(frustum.rightFace.normal, frustum.rightFace.distance));
-                bboxExtractionShader.setVec4("frustumLeftFace", glm::vec4(frustum.leftFace.normal, frustum.leftFace.distance));
-                bboxExtractionShader.setVec4("frustumFarFace", glm::vec4(frustum.farFace.normal, frustum.farFace.distance));
-                bboxExtractionShader.setVec4("frustumNearFace", glm::vec4(frustum.nearFace.normal, frustum.nearFace.distance));
-            #endif
-
+            bboxExtractionShader.setInt("sphereCount", sphere_count);
             bboxExtractionShader.setVec2I("screenResolution", screenResolution);
             bboxExtractionShader.setMat4("proj", camera.getProjection());
             bboxExtractionShader.setMat4("view", camera.getView());
@@ -172,12 +134,10 @@ int main(int argc, char* argv[])
             bboxExtractionShader.setVec3("cameraPos", camera.getPosition());
             glDispatchCompute(numGroupsX, numGroupsY, 1);
             glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-            
+
             // bbox intersection shader
             bboxIntersectionShader.use();
-            #if CPU_FRUSTUM_CULLING
-                bboxIntersectionShader.setInt("sphereCount", visibleSpheresCount); // visible sphere count given
-            #endif
+            bboxIntersectionShader.setInt("sphereCount", sphere_count);
             bboxIntersectionShader.setFloat("far", camera.getFar());
             bboxIntersectionShader.setVec2I("screenResolution", screenResolution);
             bboxIntersectionShader.setMat4("proj", camera.getProjection());

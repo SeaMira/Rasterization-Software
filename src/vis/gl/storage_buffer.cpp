@@ -23,6 +23,18 @@ void StorageBuffer::generateBufferData(int size, GLuint index,
     }
 }
 
+// void StorageBuffer::generateBufferStorage(int size, GLuint index,
+//     const void * data = nullptr, GLbitfield flags) const
+// {
+//     glBindBuffer(m_target, m_id);
+//     glBufferStorage(m_target, size, data, flags);
+//     glBindBufferBase(m_target, index, m_id);
+//     GLenum error = glGetError();
+//     if (error != GL_NO_ERROR) {
+//         std::cerr << "OpenGL Error: " << error << std::endl;
+//     }
+// }
+
 void StorageBuffer::bind() const
 {
     glBindBuffer(m_target, m_id);

@@ -140,46 +140,42 @@ void drawSphere(Sphere sphere)
     screenMax.x = int(((sphereBbox.maxCorner.x) * 0.5f + 0.5f) * float(screenResolution.x));
     screenMax.y = int((sphereBbox.maxCorner.y * 0.5f + 0.5f) * float(screenResolution.y));
 
-    if (dot(sphere.positionr.xyz - cameraPos, front) > 0.5f && 
-        !((screenMin.x < 0 && screenMax.x > screenResolution.x) || 
-        (screenMin.y < 0 && screenMax.y > screenResolution.y))) 
+    const float difx = screenMax.x - screenMin.x;
+    const float dify = screenMax.y - screenMin.y;
+    
+    for (int px = max(0, screenMin.x); px < min(screenMax.x, screenResolution.x); px++)
     {
-        const float difx = screenMax.x - screenMin.x;
-        const float dify = screenMax.y - screenMin.y;
-        
-        for (int px = max(0, screenMin.x); px < min(screenMax.x, screenResolution.x); px++)
+        for (int py = max(0, screenMin.y); py < min(screenResolution.y, screenMax.y); py++)
         {
-            for (int py = max(0, screenMin.y); py < min(screenResolution.y, screenMax.y); py++)
+
+            const float u = float(px - screenMin.x)/ difx;
+            const float v = float(py - screenMin.y)/ dify;
+            const vec3 A = mix(sphereBbox.upLeftCorner, sphereBbox.upRightCorner, u);
+            const vec3 B = mix(sphereBbox.downLeftCorner, sphereBbox.downRightCorner, u);
+            const vec3 viewImpPos = mix(A, B, v);
+            const float h = iSphere(cameraPos, viewImpPos, cameraSpaceSphere, sphere.positionr.w);
+
+            // imageStore(outputImage, ivec2(px, py), vec4(1.0, 1.0, 1.0, 1.0));
+            // const bool showBbox = (px == screenMin.x || py == screenMin.y || px == screenMax.x - 1 || py == screenMax.y - 1);
+            if (h > 0.0f) 
             {
-
-                const float u = float(px - screenMin.x)/ difx;
-                const float v = float(py - screenMin.y)/ dify;
-                const vec3 A = mix(sphereBbox.upLeftCorner, sphereBbox.upRightCorner, u);
-                const vec3 B = mix(sphereBbox.downLeftCorner, sphereBbox.downRightCorner, u);
-                const vec3 viewImpPos = mix(A, B, v);
-                const float h = iSphere(cameraPos, viewImpPos, cameraSpaceSphere, sphere.positionr.w);
-
-                // imageStore(outputImage, ivec2(px, py), vec4(1.0, 1.0, 1.0, 1.0));
-                // const bool showBbox = (px == screenMin.x || py == screenMin.y || px == screenMax.x - 1 || py == screenMax.y - 1);
-                if (h > 0.0f) 
+                // imageStore(outputImage, ivec2(px, py), vec4(1.0, 0.0, 0.0, 1.0));
+                const int index = (screenResolution.y - py - 1) * screenResolution.x + px;
+                const vec3 hit = viewImpPos * h;
+                const float depth = hit.z < 0.0f ? (hit.z * proj[2].z + proj[3].z) / -hit.z : 1000.0f;
+                const vec3 normal = normalize( hit - cameraSpaceSphere );
+                const float lambertCos = dot(normal, -normalize(hit));
+                // const float old = atomicMin(depthData[index], depth);
+                if (depthData[index] > depth) 
                 {
-                    // imageStore(outputImage, ivec2(px, py), vec4(1.0, 0.0, 0.0, 1.0));
-                    const int index = (screenResolution.y - py - 1) * screenResolution.x + px;
-                    const vec3 hit = viewImpPos * h;
-                    const float depth = hit.z < 0.0f ? (hit.z * proj[2].z + proj[3].z) / -hit.z : 1000.0f;
-                    const vec3 normal = normalize( hit - cameraSpaceSphere );
-                    const float lambertCos = dot(normal, -normalize(hit));
-                    // const float old = atomicMin(depthData[index], depth);
-                    if (depthData[index] > depth) 
-                    {
-                        depthData[index] = depth;
-                        imageStore(outputImage, ivec2(px, py), vec4(lambertCos * lightColor * diffuseI, 1.0));
-                    }
-                    
+                    depthData[index] = depth;
+                    imageStore(outputImage, ivec2(px, py), vec4(lambertCos * lightColor * diffuseI, 1.0));
                 }
+                
             }
         }
     }
+    
 }
 
 
