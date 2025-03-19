@@ -3,10 +3,12 @@
 #include "molecule_loader/basic_loader.h"
 
 // LOADED_SCENE or GRID_SCENE
-SceneType currentScene = SceneType::GRID_SCENE;
+SceneType currentScene = SceneType::PACKAGE_SCENE;
 std::filesystem::path scene_path = "assets/molecules/1AGA.mmtf";
 
-int spheresGridWidth = 100;
+int spheresGridWidth = 10;
+int spheresGridHeight = 10;
+int spheresGridDepth = 10;
 int interleaveW = 5;
 int interleaveH = 5;
 
@@ -29,6 +31,25 @@ std::vector<glm::vec4> grid_scene(int spheresGridWidth, int sphere_count)
     for (int i = 0; i < sphere_count; i++)
     {
         spheres.push_back({(float)(i%spheresGridWidth)*2.0f, (float)(i/spheresGridWidth) * 2.0f, (float)(i%spheresGridWidth)*2.0f, 1.0f});
+    }
+    return spheres;
+}
+
+std::vector<glm::vec4> package_scene(int spheresGridWidth, int spheresGridHeight, int spheresGridDepth, int sphere_count)
+{
+    std::vector<glm::vec4> spheres;
+    int count = 0;
+    for (int i = 0; i < spheresGridWidth; i++)
+    {
+        for (int j = 0; j < spheresGridHeight; j++)
+        {
+            for (int k = 0; k < spheresGridDepth; k++)
+            {
+                if (count >= sphere_count) break;
+                spheres.push_back({(float)i*2.0f, (float)j*2.0f, (float)k*2.0f, 1.0f});
+                count++;
+            }
+        }
     }
     return spheres;
 }
@@ -91,7 +112,7 @@ std::vector<std::pair<glm::vec3, glm::vec3>> benchmark2_loaded_molecules(std::ve
     float d_height = (y_max - y_min) / (float) interleaveY;
 
     std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints;
-
+    
     for (int i = 0; i < interleaveAngle; i++)
     {
         for (int j = 1; j < interleaveZ; j++)
@@ -115,6 +136,69 @@ std::vector<std::pair<glm::vec3, glm::vec3>> benchmark2_loaded_molecules(std::ve
     return chkPoints;
 }
 
+std::vector<std::pair<glm::vec3, glm::vec3>> benchmark3_package(int& sphere_count, int spheresGridWidth, int spheresGridHeight, int spheresGridDepth, int interleaveW, int interleaveH, int interleaveZ)
+{
+    float w_delta = (float)spheresGridWidth / interleaveW;
+    float h_delta = (float)spheresGridHeight / interleaveH;
+    float d_delta = (float)spheresGridDepth / interleaveZ;
+    
+    std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints;
+
+    for (int i = 0; i < interleaveW; i++)
+    {
+        for (int j = 0; j < interleaveH; j++)
+        {
+            for (int k = 0; k <= interleaveZ; k++)
+            {
+                float x = (float)i * w_delta;
+                float y = (float)j * h_delta;
+                float z = (float)k * d_delta;
+                chkPoints.push_back(
+                    {
+                        glm::vec3(x, y, z),
+                        glm::vec3(x, y, z + 1.0f) 
+                    }
+                );
+
+            }
+        }
+    }
+
+    for (int i = 0; i < interleaveW; i++)
+    {
+        for (int j = 0; j < interleaveH; j++)
+        {
+            for (int k = 0; k <= interleaveZ; k++)
+            {
+                if (i == j && j == k)
+                {
+                    chkPoints.push_back(
+                        {
+                            glm::vec3((float)i*2.0f - 10.0f, (float)j*2.0f - 10.0f, (float)k*2.0f - 10.0f),
+                            glm::vec3((float)i*2.0f + 1.0f, (float)j*2.0f + 1.0f, (float)k*2.0f + 1.0f) 
+                        }
+                    );
+                }
+            }
+        }
+    }
+
+    for (int k = 0; k <= interleaveZ; k++)
+    {
+        
+        chkPoints.push_back(
+            {
+                glm::vec3((float)spheresGridWidth, (float)spheresGridHeight, -(float)k*2.0f),
+                glm::vec3((float)spheresGridWidth, (float)spheresGridHeight, 1.0f) 
+            }
+        );
+        
+    }
+    
+    return chkPoints;
+
+}
+
 
 std::vector<glm::vec4> getScene(int sphere_count)
 {
@@ -125,6 +209,9 @@ std::vector<glm::vec4> getScene(int sphere_count)
         break;
     case SceneType::GRID_SCENE:
         return grid_scene(spheresGridWidth, sphere_count);
+        break;
+    case SceneType::PACKAGE_SCENE:
+        return package_scene(spheresGridWidth, spheresGridHeight, spheresGridDepth, sphere_count);
         break;
     default:
         return grid_scene(spheresGridWidth, sphere_count);
@@ -141,6 +228,9 @@ std::vector<std::pair<glm::vec3, glm::vec3>> getCheckpoints(int& sphere_count, s
         break;
     case SceneType::GRID_SCENE:
         return benchmark1_structured_grid(sphere_count, spheresGridWidth, interleaveW, interleaveH, interleaveZ);
+        break;
+    case SceneType::PACKAGE_SCENE:
+        return benchmark3_package(sphere_count, spheresGridWidth, spheresGridHeight, spheresGridDepth, interleaveW, interleaveH, interleaveZ);
         break;
     default:
         return benchmark1_structured_grid(sphere_count, spheresGridWidth, interleaveW, interleaveH, interleaveZ);

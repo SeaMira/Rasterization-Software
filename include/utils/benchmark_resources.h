@@ -10,7 +10,8 @@
 
 enum class SceneType {
     LOADED_SCENE,
-    GRID_SCENE
+    GRID_SCENE,
+    PACKAGE_SCENE
 };
 
 extern SceneType currentScene;
@@ -18,6 +19,8 @@ extern std::filesystem::path scene_path;
 
 // benchmark settings
 extern int spheresGridWidth;
+extern int spheresGridHeight;
+extern int spheresGridDepth;
 extern int interleaveW;
 extern int interleaveH;
 
@@ -27,8 +30,10 @@ extern int interleaveY;
 
 std::vector<glm::vec4> loaded_scene(std::filesystem::path& path, int sphere_count);
 std::vector<glm::vec4> grid_scene(int spheresGridWidth, int sphere_count);
+std::vector<glm::vec4> package_scene(int spheresGridWidth, int spheresGridHeight, int spheresGridDepth, int sphere_count);
 std::vector<std::pair<glm::vec3, glm::vec3>> benchmark1_structured_grid(int& sphere_count, int spheresGridWidth, int interleaveW, int interleaveH, int interleaveZ);
 std::vector<std::pair<glm::vec3, glm::vec3>> benchmark2_loaded_molecules(std::vector<glm::vec4>& spheres, int interleaveAngle, int interleaveZ, int interleaveY);
+std::vector<std::pair<glm::vec3, glm::vec3>> benchmark3_package(int& sphere_count, int spheresGridWidth, int spheresGridHeight, int spheresGridDepth, int interleaveW, int interleaveH, int interleaveZ);
 
 std::vector<glm::vec4> getScene(int sphere_count);
 std::vector<std::pair<glm::vec3, glm::vec3>> getCheckpoints(int& sphere_count, std::vector<glm::vec4>& spheres);
