@@ -83,7 +83,6 @@ bool drawSphere(const glm::mat4& proj, const glm::mat4& view,
     
     if (difx*dify <= 2) return false;
     auto computeViewImpPos = [&](int px, int py) -> glm::vec3 {
-        // std::cout << "px: " << px << " py: " << py << std::endl;
         const float u = (float)(px - screenMin.x) / difx;
         const float v = (float)(py - screenMin.y) / dify;
         const glm::vec3 A = glm::mix(sphereBbox.upLeftCorner, sphereBbox.upRightCorner, u);
@@ -95,7 +94,6 @@ bool drawSphere(const glm::mat4& proj, const glm::mat4& view,
         const float h = iSphere(camPos, viewImpPos, cameraSpaceSphere, sphere.w);
         const glm::vec3 hit = viewImpPos * h;
         const float depth = hit.z < 0.0f ? (hit.z * proj[2].z + proj[3].z) / -hit.z : FLT_MAX;
-        // if (depth == FLT_MAX) std::cout << "no en esfera" << std::endl; 
         return depth;
     };
     
