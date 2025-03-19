@@ -31,12 +31,15 @@
 int SCR_WIDTH = 800;
 int SCR_HEIGHT = 600;
 
-int sphere_count = 1024*1024;
+int sphere_count = 1024;
+int frustumSpheres = 0;
 int visibleSpheres = 0;
 
 std::string title = "Brute Sequential Method"; 
 
 bool shown = true;
+
+HierarchicalZBuffer hizPyramid;
 
 void renderFrame(std::vector<uint32_t>& framebuffer, 
     std::vector<float>& depthBuffer, std::vector<glm::vec4>& spheres,
@@ -49,16 +52,19 @@ void renderFrame(std::vector<uint32_t>& framebuffer,
     const glm::vec3& front = cam.getFront();
     const glm::vec3& camPos = cam.getPosition();
     const Frustum frustum(cam);
+    int frustumSpheresCount = 0;
     int visibleSpheresCount = 0;
     for (auto& sphere : spheres)
     {
         if (frustum.isSphereInside(sphere))
         {
-            drawSphere(proj, view, up, front, camPos, SCR_WIDTH, SCR_HEIGHT, sphere, 
-                framebuffer, depthBuffer);
-            visibleSpheresCount++;
+            bool wasDrawn = drawSphere(proj, view, up, front, camPos, SCR_WIDTH, SCR_HEIGHT, sphere, 
+                framebuffer, depthBuffer, hizPyramid);
+            frustumSpheresCount++;
+            if (wasDrawn) visibleSpheresCount++;
         }
     }
+    frustumSpheres = frustumSpheresCount;
     visibleSpheres = visibleSpheresCount;
     
 }
@@ -69,7 +75,8 @@ int main(int argc, char* argv[])
         {"Screen width", &SCR_WIDTH},
         {"Screen height", &SCR_HEIGHT},
         {"Sphere count", &sphere_count},
-        {"Spheres On Frustum", &visibleSpheres}
+        {"Spheres On Frustum", &frustumSpheres},
+        {"Visible Spheres", &visibleSpheres}
     };
 
     AppRenderer window { title, SCR_WIDTH, SCR_HEIGHT, shown };
@@ -91,6 +98,9 @@ int main(int argc, char* argv[])
     window.setupCameraGui("Camera Info", &camera);
     window.setupInputInfoGui("General Input Info");
     window.setupBenchmarkInfoGui("Benchmark", &benchmark);
+
+    std::fill(depthBuffer.begin(), depthBuffer.end(), FLT_MAX);
+    hizPyramid = generateHiZPyramid(DepthBuffer{SCR_WIDTH, SCR_HEIGHT, camera.getFar(), depthBuffer}, 3);
     try
     {
         bool isRunning = true;
@@ -104,10 +114,12 @@ int main(int argc, char* argv[])
             if (window.getInput().isKeyDown(Key::T)) profiler.startSavingNextFrames(benchmark.getCheckpointID());
 
             std::fill(framebuffer.begin(), framebuffer.end(), 0xFFFFFF00);
-            std::fill(depthBuffer.begin(), depthBuffer.end(), FLT_MAX);
             
             renderFrame(framebuffer, depthBuffer, spheres, camera);
-            
+
+            hizPyramid = generateHiZPyramid(DepthBuffer{SCR_WIDTH, SCR_HEIGHT, camera.getFar(), depthBuffer}, 3);
+            std::fill(depthBuffer.begin(), depthBuffer.end(), FLT_MAX);
+
             window.updateTexture(framebuffer);
 
             isRunning = window.update();
