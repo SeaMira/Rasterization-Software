@@ -25,8 +25,8 @@ public:
      * 
      * @see Window::Window For the base constructor.
      */
-    AppOpenGL(std::string& windowTitle, int width, int height, bool shown = true)
-        : Window(windowTitle, width, height, shown), m_glContext(nullptr) 
+    AppOpenGL(std::string& title, int width, int height, bool shown = true)
+        : Window(title, width, height, shown), m_glContext(nullptr) 
     {
         ////
         createGraphicsContext();

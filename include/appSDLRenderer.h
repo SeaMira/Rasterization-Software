@@ -26,8 +26,8 @@ public:
      * 
      * @see Window::Window For the base constructor.
      */
-    AppRenderer(std::string& windowTitle, int width, int height, bool shown = true)
-        : Window(windowTitle, width, height, shown), m_renderer(nullptr), m_texture(nullptr) 
+    AppRenderer(std::string& title, int width, int height, bool shown = true)
+        : Window(title, width, height, shown), m_renderer(nullptr), m_texture(nullptr) 
     {
         ////
         createGraphicsContext();

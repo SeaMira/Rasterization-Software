@@ -200,10 +200,10 @@ public:
 
 
 private:
-    Texture m_canvas;
-    Framebuffer m_fbo;
-    GLsizei m_width;
-    GLsizei m_height;
+    Texture m_canvas; ///< texture used as a canvas to draw pixels.
+    Framebuffer m_fbo; ///< framebuffer object associated to texture.
+    GLsizei m_width; ///< width of the canvas.
+    GLsizei m_height; ///< height of the canvas.
 };
 
 #endif

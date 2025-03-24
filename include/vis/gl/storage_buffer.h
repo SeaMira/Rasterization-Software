@@ -73,7 +73,7 @@ public:
 
 private:
     GLuint m_id; ///< id of the buffer
-    GLenum m_target; //< buffer's target
+    GLenum m_target; ///< buffer's target
 };
 
 #endif

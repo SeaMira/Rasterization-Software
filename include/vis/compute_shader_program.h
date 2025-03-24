@@ -172,7 +172,7 @@ class ComputeShader
          * @brief Loads a uniform 2x2 matrix on the shader.
          * 
          * @param name Uniform 2x2 matrix name in shader.
-         * @param value Uniform 2x2 matrix value.
+         * @param mat Uniform 2x2 matrix value.
          */
         void setMat2(const std::string &name, const glm::mat2 &mat) const;
 
@@ -180,7 +180,7 @@ class ComputeShader
          * @brief Loads a uniform 3x3 matrix on the shader.
          * 
          * @param name Uniform 3x3 matrix name in shader.
-         * @param value Uniform 3x3 matrix value.
+         * @param mat Uniform 3x3 matrix value.
          */
         void setMat3(const std::string &name, const glm::mat3 &mat) const;
 
@@ -188,7 +188,7 @@ class ComputeShader
          * @brief Loads a uniform 4x4 matrix on the shader.
          * 
          * @param name Uniform 4x4 matrix name in shader.
-         * @param value Uniform 4x4 matrix value.
+         * @param mat Uniform 4x4 matrix value.
          */
         void setMat4(const std::string &name, const glm::mat4 &mat) const;
 

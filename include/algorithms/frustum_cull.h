@@ -14,8 +14,8 @@ class Camera;
  */
 struct Plane
 {
-    glm::vec3 normal;
-    float distance;
+    glm::vec3 normal; ///< normal vector of the plane
+    float distance; ///< closest distance from the origin to the plane.
 
     Plane() = default;
 

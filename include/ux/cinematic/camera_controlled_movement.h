@@ -26,6 +26,11 @@ public:
         glm::vec3 position; ///< the position of the checkpoint.
         glm::vec3 target; ///< the target to look at of the checkpoint.
 
+        /**
+         * @brief Struct constructor.
+         * 
+         * Creates a Checkpoint with given a position and a target to look at.
+         */
         Checkpoint(glm::vec3 pos, glm::vec3 tgt) : position(pos), target(tgt) {}
     };
 
