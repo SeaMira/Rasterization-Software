@@ -15,7 +15,7 @@ float iSphere(glm::vec3 ro, glm::vec3 rd, glm::vec3 sph, float radius )
 
 bboxCorners getSphereBbox(const glm::vec3& cameraSpaceSphere, const glm::vec3& camImposPos, 
     const glm::vec3& normCamSpaceSphere, const glm::mat4& proj, const glm::vec3& camPos, 
-    const glm::vec3& front, const glm::vec3& up,const float sphRadius, HierarchicalZBuffer& hizPyramid)
+    const glm::vec3& front, const glm::vec3& up,const float sphRadius)
 {
     const float sinAngle = sphRadius / (glm::length(cameraSpaceSphere) + 1e-6f);
     const float tanAngle = std::tan(std::asin(sinAngle));
@@ -69,7 +69,7 @@ bool drawSphere(const glm::mat4& proj, const glm::mat4& view,
     glm::vec3 camImposPos = cameraSpaceSphere - normCamSpaceSphere * sphere.w;
 
     bboxCorners sphereBbox = getSphereBbox(cameraSpaceSphere, camImposPos,
-        normCamSpaceSphere, proj, camPos, front, up, sphere.w, hizPyramid);
+        normCamSpaceSphere, proj, camPos, front, up, sphere.w);
     
     glm::ivec2 screenMin, screenMax;
 
@@ -158,7 +158,7 @@ bool drawBillboard(const glm::mat4& proj, const glm::mat4& view,
     glm::vec3 camImposPos = cameraSpaceSphere - normCamSpaceSphere * sphere.w;
 
     bboxCorners sphereBbox = getSphereBbox(cameraSpaceSphere, camImposPos,
-        normCamSpaceSphere, proj, camPos, front, up, sphere.w, hizPyramid);
+        normCamSpaceSphere, proj, camPos, front, up, sphere.w);
     
     glm::ivec2 screenMin, screenMax;
 

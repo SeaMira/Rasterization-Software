@@ -5,6 +5,16 @@
 
 #include "algorithms/frustum_cull.h"
 
+/**
+ * @brief Filters spheres that are actually on the camera frustum.
+ * 
+ * Takes a list of spheres and filters the ones that are actually on the camera frustum, storing them in another sphere vector. It also stores how many spheres are in this second vector.
+ * 
+ * @param spheres The list of spheres to be filtered.
+ * @param visibleSpheres The list of spheres that are actually on the camera frustum.
+ * @param frustum The camera frustum.
+ * @param visibleSpheresCount The number of spheres that are on the camera frustum.
+ */
 void cullSpheres(std::vector<glm::vec4>& spheres, std::vector<glm::vec4>& visibleSpheres, Frustum& frustum, int& visibleSpheresCount);
 
 
