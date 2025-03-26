@@ -71,6 +71,7 @@ void renderFrame(std::vector<uint32_t>& framebuffer,
             if (wasDrawn)
             {
                 visibleSpheresCount++;
+                // TODO: for flickering can predict sphere's next frame visibility.
                 if (lastCheck <= spheresVisibilityFrameCache[i]) spheresVisibilityFrameCache[i] = 10;
             } 
         } else spheresVisibilityFrameCache[i] = 0;
