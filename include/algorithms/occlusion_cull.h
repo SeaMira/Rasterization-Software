@@ -63,6 +63,34 @@ struct DepthBuffer
         }
         return data[(m_height - y - 1) * m_width + x];
     }
+
+    float getMaxDepthStored()
+    {
+        float max = 0.0f;
+        for (float& depth: data)
+        {
+            if (depth < 1.0f)
+            {
+                if (depth > max || max > 1.0f) max = depth;
+            }
+        }
+        if (max == 0.0f) return 0.001f;
+        return max;
+    }
+    
+    float getMinDepthStored()
+    {
+        float min = 1.0f;
+        for (float& depth: data)
+        {
+            if (depth < 1.0f)
+            {
+                if (depth < min) min = depth;
+            }
+        }
+        if (min == 0.0f) return 0.001f;
+        return min;
+    }
 };
 
 /**

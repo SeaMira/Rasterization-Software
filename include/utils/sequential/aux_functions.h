@@ -110,7 +110,7 @@ bool drawSphere(const glm::mat4& proj, const glm::mat4& view,
     const glm::vec3& up, const glm::vec3& front, const glm::vec3& camPos, 
     const int SCR_WIDTH, const int SCR_HEIGHT, 
     const glm::vec4& sphere,
-    std::vector<uint32_t>& framebuffer, std::vector<float>& depthBuffer, HierarchicalZBuffer& hizPyramid);
+    std::vector<uint32_t>& framebuffer, std::vector<float>& depthBuffer, HierarchicalZBuffer& hizPyramid, uint8_t& sphereVisibilityFrameCache);
 
 /**
  * @brief Projects and draws a sphere billboard onto the viewport.abort
@@ -138,4 +138,9 @@ bool drawBillboard(const glm::mat4& proj, const glm::mat4& view,
     const glm::vec4& sphere,
     std::vector<uint32_t>& framebuffer, std::vector<float>& depthBuffer, HierarchicalZBuffer& hizPyramid);
 
+
+
+void drawMipmaps(HierarchicalZBuffer& hizPyramid, int level,
+    std::vector<uint32_t>& framebuffer,
+    int SCR_WIDTH, int SCR_HEIGHT);
 #endif // _AUX_SEQUENTIAL_H_

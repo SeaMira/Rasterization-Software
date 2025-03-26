@@ -87,9 +87,9 @@ bool isSphereBillboardVisible(std::vector<PixelZ>& spherePixels, const Hierarchi
                 depths.push_back(currentDepth);
         }
     }
-
-    for (const PixelZ& pixel : spherePixels)
-        for (const float& depth : depths)
+    for (const float& depth : depths)
+        for (const PixelZ& pixel : spherePixels)
+            // TODO: check delta depth depending on camera speed/framerate? 
             if (pixel.z <= depth)
                 return true;
         

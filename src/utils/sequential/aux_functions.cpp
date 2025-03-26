@@ -62,7 +62,8 @@ bool drawSphere(const glm::mat4& proj, const glm::mat4& view,
     const int SCR_WIDTH, const int SCR_HEIGHT, 
     const glm::vec4& sphere,
     std::vector<uint32_t>& framebuffer, std::vector<float>& depthBuffer, 
-    HierarchicalZBuffer& hizPyramid)
+    HierarchicalZBuffer& hizPyramid, 
+    uint8_t& sphereVisibilityFrameCache)
 {
     glm::vec3 cameraSpaceSphere = glm::vec3(view * glm::vec4(sphere[0], sphere[1], sphere[2], 1.0f));
     glm::vec3 normCamSpaceSphere = glm::normalize(cameraSpaceSphere);
@@ -99,28 +100,47 @@ bool drawSphere(const glm::mat4& proj, const glm::mat4& view,
     
     float mid_x = glm::min(glm::max((screenMin.x + screenMax.x)/2, 0), SCR_WIDTH);
     float mid_y = glm::min(glm::max((screenMin.y + screenMax.y)/2, 0), SCR_HEIGHT);
-    glm::vec3 middleLeft = computeViewImpPos(mid_x-(int)(difx*0.45f), mid_y);
-    glm::vec3 middleRight = computeViewImpPos(mid_x+(int)(difx*0.45f), mid_y);
-    glm::vec3 middleBottom = computeViewImpPos(mid_x, mid_y-(int)(dify*0.45f));
-    glm::vec3 middleTop = computeViewImpPos(mid_x, mid_y+(int)(dify*0.45f));
+    glm::vec3 middleLeft = computeViewImpPos(mid_x-(int)(difx*0.49f), mid_y);
+    glm::vec3 middleRight = computeViewImpPos(mid_x+(int)(difx*0.49f), mid_y);
+    glm::vec3 middleBottom = computeViewImpPos(mid_x, mid_y-(int)(dify*0.49f));
+    glm::vec3 middleTop = computeViewImpPos(mid_x, mid_y+(int)(dify*0.49f));
     glm::vec3 middlePixelsVec = computeViewImpPos((screenMin.x + screenMax.x) / 2, (screenMin.y + screenMax.y) / 2);
     
     std::vector<PixelZ> spherePixels = {
-        PixelZ(mid_x-(int)(difx*0.45f), mid_y, onSphDepth(middleLeft)),
-        PixelZ(mid_x+(int)(difx*0.45f), mid_y, onSphDepth(middleRight)),
-        PixelZ(mid_x, mid_y-(int)(dify*0.45f), onSphDepth(middleBottom)),
-        PixelZ(mid_x, mid_y+(int)(dify*0.45f), onSphDepth(middleTop)),
+        PixelZ(mid_x-(int)(difx*0.49f), mid_y, onSphDepth(middleLeft)),
+        PixelZ(mid_x+(int)(difx*0.49f), mid_y, onSphDepth(middleRight)),
+        PixelZ(mid_x, mid_y-(int)(dify*0.49f), onSphDepth(middleBottom)),
+        PixelZ(mid_x, mid_y+(int)(dify*0.49f), onSphDepth(middleTop)),
         PixelZ((screenMin.x + screenMax.x) / 2, (screenMin.y + screenMax.y) / 2, onSphDepth(middlePixelsVec))
     };
+    // if (mid_x-(int)(difx*0.48f) >= 0 && mid_x-(int)(difx*0.48f) < SCR_WIDTH &&
+    //     mid_y >= 0 && mid_y < SCR_HEIGHT)
+    //     framebuffer[(SCR_HEIGHT - mid_y - 1) * SCR_WIDTH + (mid_x-(int)(difx*0.48f))] = 0xFFFFFFFF;
+    // if (mid_x+(int)(difx*0.48f) >= 0 && mid_x+(int)(difx*0.48f) < SCR_WIDTH &&
+    //     mid_y >= 0 && mid_y < SCR_HEIGHT)
+    //     framebuffer[(SCR_HEIGHT - mid_y - 1) * SCR_WIDTH + (mid_x+(int)(difx*0.48f))] = 0xFFFFFFFF;
+    // if (mid_x >= 0 && mid_x < SCR_WIDTH &&
+    //     mid_y-(int)(dify*0.48f) >= 0 && mid_y-(int)(dify*0.48f) < SCR_HEIGHT)
+    //     framebuffer[(SCR_HEIGHT - (mid_y-(int)(dify*0.48f)) - 1) * SCR_WIDTH + mid_x] = 0xFFFFFFFF;
     
+    // if (mid_x >= 0 && mid_x < SCR_WIDTH &&
+    //     mid_y+(int)(dify*0.48f) >= 0 && mid_y+(int)(dify*0.48f) < SCR_HEIGHT)
+    //     framebuffer[(SCR_HEIGHT - (mid_y+(int)(dify*0.48f)) - 1) * SCR_WIDTH + mid_x] = 0xFFFFFFFF;
     
     if (!isSphereBillboardVisible(spherePixels, hizPyramid))
-        return false;
+    {
+        if (sphereVisibilityFrameCache == 0)
+        {
+            return false;
+        }
+        else sphereVisibilityFrameCache--;
+    }     
     
 
     #pragma omp parallel for collapse(2)
     for (int px = std::max(0, screenMin.x); px < std::min(screenMax.x, SCR_WIDTH); px++)
     {
+        bool finishedLine = false;
         for (int py = std::max(0, screenMin.y); py < std::min(SCR_HEIGHT, screenMax.y); py++)
         {
 
@@ -131,6 +151,7 @@ bool drawSphere(const glm::mat4& proj, const glm::mat4& view,
             // if (showBbox) framebuffer[index] = vecToColor(glm::vec3(0));
             if ((h > 0.0f)) 
             {
+                if (!finishedLine) finishedLine = true;
                 const glm::vec3 hit = viewImpPos * h;
                 const float depth = hit.z < 0.0f ? (hit.z * proj[2].z + proj[3].z) / -hit.z : FLT_MAX;
                 if (depth < depthBuffer[index]) 
@@ -140,6 +161,9 @@ bool drawSphere(const glm::mat4& proj, const glm::mat4& view,
                     depthBuffer[index] = depth;
                     framebuffer[index] = vecToColor(255 * lambertCos * lightColor * diffuseI);
                 }
+            } else if (finishedLine)
+            {
+                break;
             }
         }
     }
@@ -200,4 +224,30 @@ bool drawBillboard(const glm::mat4& proj, const glm::mat4& view,
     }
     return true;
     
+}
+
+
+void drawMipmaps(HierarchicalZBuffer& hiZPyramid, int level,
+    std::vector<uint32_t>& framebuffer,
+    int SCR_WIDTH, int SCR_HEIGHT)
+{
+    float maxColor = hiZPyramid[level].getMaxDepthStored();
+    float minColor = hiZPyramid[level].getMinDepthStored();
+    for (int px = 0; px < SCR_WIDTH; px++)
+    {
+        for (int py = 0; py < SCR_HEIGHT; py++)
+        {
+            const int index = (SCR_HEIGHT - py - 1) * SCR_WIDTH + px;
+
+            int mipWidth = hiZPyramid[level].m_width;
+            int mipHeight = hiZPyramid[level].m_height;
+
+            int mipX = static_cast<int>((float)(px * mipWidth) / (float)SCR_WIDTH);
+            int mipY = static_cast<int>((float)(py * mipHeight) / (float)SCR_HEIGHT);
+            float hizDepth = hiZPyramid[level].getDepth(mipX, mipY);
+            float dif = (maxColor - minColor) == 0.0f ? 0.001 : (maxColor - minColor);
+            float color = (hizDepth - minColor)/dif;
+            framebuffer[index] = vecToColor(255.0f * glm::vec3(color));
+        }
+    } 
 }
