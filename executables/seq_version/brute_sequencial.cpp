@@ -4,6 +4,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glad/glad.h>
 #include <SDL3/SDL.h>
+#include <unordered_map>
 #include <vector>
 #include <cmath>
 #include <string>
@@ -31,7 +32,7 @@
 int SCR_WIDTH = 800;
 int SCR_HEIGHT = 600;
 
-int sphere_count = 1024;
+int sphere_count = 1024*64;
 int frustumSpheres = 0;
 int visibleSpheres = 0;
 
@@ -44,7 +45,22 @@ int level = 3;
 bool showHiz = false;
 
 HierarchicalZBuffer hizPyramid;
-std::vector<uint8_t> spheresVisibilityFrameCache(sphere_count, 0);
+std::vector<uint8_t> spheresVisibilityLastFrameCache(sphere_count, 0);
+std::vector<uint8_t> spheresVisibilityFrameCache(sphere_count, 10);
+std::vector<int> pixelOwnership(SCR_WIDTH*SCR_HEIGHT, -1);
+
+std::unordered_map<int, int> buildSpherePixelCount(const std::vector<int>& pixelOwnership) 
+{
+    std::unordered_map<int, int> spherePixelCount;
+
+    for (int i = 0; i < pixelOwnership.size(); i++) 
+        if (pixelOwnership[i] != -1)
+            spherePixelCount[pixelOwnership[i]]++;
+
+    return spherePixelCount;
+}
+
+std::unordered_map<int, int> ownedPixelsMap = buildSpherePixelCount(pixelOwnership);
 
 void renderFrame(std::vector<uint32_t>& framebuffer, 
     std::vector<float>& depthBuffer, std::vector<glm::vec4>& spheres,
@@ -64,18 +80,29 @@ void renderFrame(std::vector<uint32_t>& framebuffer,
         // std::cout << static_cast<int>(spheresVisibilityFrameCache[i]) << std::endl;
         if (frustum.isSphereInside(spheres[i]))
         {
-            uint8_t lastCheck = spheresVisibilityFrameCache[i];
             bool wasDrawn = drawSphere(proj, view, up, front, camPos, SCR_WIDTH, SCR_HEIGHT, spheres[i], 
-                framebuffer, depthBuffer, hizPyramid, spheresVisibilityFrameCache[i]);
+                framebuffer, depthBuffer, hizPyramid, spheresVisibilityFrameCache[i], pixelOwnership, i, ownedPixelsMap[i]);
             frustumSpheresCount++;
             if (wasDrawn)
             {
                 visibleSpheresCount++;
-                // TODO: for flickering can predict sphere's next frame visibility.
-                if (lastCheck <= spheresVisibilityFrameCache[i]) spheresVisibilityFrameCache[i] = 10;
+                spheresVisibilityFrameCache[i] = spheresVisibilityFrameCache[i] | 0b10000000;
             } 
         } else spheresVisibilityFrameCache[i] = 0;
     }
+    ownedPixelsMap = buildSpherePixelCount(pixelOwnership);
+    for(int i = 0; i < spheres.size(); i++)
+    {
+        if (spheresVisibilityFrameCache[i] & 0b10000000)
+        {
+            if (spheresVisibilityLastFrameCache[i] <= (spheresVisibilityFrameCache[i] & 0b01111111) &&
+                ownedPixelsMap[i] > 0) 
+                spheresVisibilityFrameCache[i] = 10;
+        }
+        spheresVisibilityLastFrameCache[i] = spheresVisibilityFrameCache[i] & 0b01111111;
+    }
+    std::fill(pixelOwnership.begin(), pixelOwnership.end(), -1);
+
     if (showHiz) drawMipmaps(hizPyramid, level, framebuffer, SCR_WIDTH, SCR_HEIGHT);
     frustumSpheres = frustumSpheresCount;
     visibleSpheres = visibleSpheresCount;

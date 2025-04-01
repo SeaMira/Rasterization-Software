@@ -63,7 +63,7 @@ bool drawSphere(const glm::mat4& proj, const glm::mat4& view,
     const glm::vec4& sphere,
     std::vector<uint32_t>& framebuffer, std::vector<float>& depthBuffer, 
     HierarchicalZBuffer& hizPyramid, 
-    uint8_t& sphereVisibilityFrameCache)
+    uint8_t& sphereVisibilityFrameCache, std::vector<int>& pixelOwnership, int& sphereIndex, int pixelsOwned)
 {
     glm::vec3 cameraSpaceSphere = glm::vec3(view * glm::vec4(sphere[0], sphere[1], sphere[2], 1.0f));
     glm::vec3 normCamSpaceSphere = glm::normalize(cameraSpaceSphere);
@@ -129,11 +129,15 @@ bool drawSphere(const glm::mat4& proj, const glm::mat4& view,
     
     if (!isSphereBillboardVisible(spherePixels, hizPyramid))
     {
-        if (sphereVisibilityFrameCache == 0)
+        // std::cout << "pixels owned by: " << sphereIndex << " - " << pixelsOwned << " frames " << (int)(sphereVisibilityFrameCache & 0b01111111) << std::endl;
+        if ((sphereVisibilityFrameCache & 0b01111111) == 0 && pixelsOwned == 0)
         {
+            // std::cout << "no frames" << std::endl;
             return false;
         }
-        else sphereVisibilityFrameCache--;
+        else if ((sphereVisibilityFrameCache & 0b01111111) > 0 && pixelsOwned == 0)
+            // std::cout << "menos frames de gracia para " << sphereIndex << std::endl;
+            sphereVisibilityFrameCache = (sphereVisibilityFrameCache & 0b01111111) - 1;
     }     
     
 
@@ -160,6 +164,7 @@ bool drawSphere(const glm::mat4& proj, const glm::mat4& view,
                     const float lambertCos = glm::dot(normal, -glm::normalize(hit));
                     depthBuffer[index] = depth;
                     framebuffer[index] = vecToColor(255 * lambertCos * lightColor * diffuseI);
+                    pixelOwnership[index] = sphereIndex;
                 }
             } else if (finishedLine)
             {
