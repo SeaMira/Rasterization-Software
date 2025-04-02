@@ -3,11 +3,11 @@
 #include "molecule_loader/basic_loader.h"
 
 // LOADED_SCENE or GRID_SCENE
-SceneType currentScene = SceneType::LOADED_SCENE;
+SceneType currentScene = SceneType::PACKAGE_SCENE;
 std::filesystem::path scene_path = "assets/molecules/1AGA.mmtf";
 
 int spheresGridWidth = 100;
-int spheresGridHeight = 100;
+int spheresGridHeight = 200;
 int spheresGridDepth = 100;
 int interleaveW = 5;
 int interleaveH = 5;

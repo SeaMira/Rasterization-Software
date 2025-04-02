@@ -10,3 +10,9 @@ void cullSpheres(std::vector<glm::vec4>& spheres, std::vector<SphereContainer>& 
             visibleSpheresCount++;
         }
 }
+
+void fillSpheresData(std::vector<glm::vec4>& spheres, std::vector<SphereContainer>& visibleSpheres)
+{
+    for (int i = 0 ; i < spheres.size(); i++)
+        visibleSpheres[i] = {spheres[i], i, {0, 0, 0}};    
+}
