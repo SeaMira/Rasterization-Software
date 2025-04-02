@@ -26,14 +26,15 @@ public:
      * @param height height of the texture.
      * @param format format of the pixel data.
      * @param type data type of the pixel.
+     * @param unit index of image unit to which bind the texture.
      * @param data pointer to the image data in memory.
      * 
      * More info on
      * <a href="https://registry.khronos.org/OpenGL-Refpages/gl4/html/glTexImage2D.xhtml">glTexImage2D</a>
      */
     Texture(GLenum target, GLenum internalFormat, GLsizei width, GLsizei height, 
-        GLenum format, GLenum type, void* data = nullptr);
-
+        GLenum format, GLenum type, GLuint unit, void* data = nullptr);
+        
     /**
      * @brief Texture class constructor.
      * 
@@ -44,11 +45,38 @@ public:
      * @param internalFormat image format, specifies the number of color components.
      * @param width width of the texture.
      * @param height height of the texture.
+     * @param unit index of image unit to which bind the texture.
      * 
      * More info on
      * <a href="https://registry.khronos.org/OpenGL-Refpages/es3.0/html/glTexStorage2D.xhtml">glTexStorage2D</a>
      */
-    Texture(GLenum target, GLenum internalFormat, GLsizei width, GLsizei height);
+    Texture(GLenum target, GLenum internalFormat, GLsizei width, GLsizei height, GLuint unit);
+    
+    /**
+     * @brief Texture class constructor.
+     * 
+     * Similar to the other constructors but uses glTexImage2D. Can set the values
+     * for parameters.
+     * 
+     * @param target buffer target to set.
+     * @param internalFormat image format, specifies the number of color components.
+     * @param width width of the texture.
+     * @param height height of the texture.
+     * @param format format of the pixel data.
+     * @param type data type of the pixel.
+     * @param unit index of image unit to which bind the texture.
+     * @param data pointer to the image data in memory.
+     * @param min_filter_param parameter value for texture min filter.
+     * @param max_filter_param parameter value for texture max filter.
+     * @param wrap_s_param parameter value for texture wrap for coordinate s.
+     * @param wrap_t_param parameter value for texture wrap for coordinate t.
+     * 
+     * More info on
+     * <a href="https://registry.khronos.org/OpenGL-Refpages/es3.0/html/glTexStorage2D.xhtml">glTexStorage2D</a>
+     */
+    Texture(GLenum target, GLenum internalFormat, GLsizei width, GLsizei height, 
+        GLenum format, GLenum type, GLuint unit, void* data,
+        GLint min_filter_param, GLint mag_filter_param, GLint wrap_s_param, GLint wrap_t_param);
     
     /**
      * @brief Default constructor.
@@ -67,20 +95,26 @@ public:
     /**
      * @brief Binds textures.
      * 
-     * Binds and actives textures.
+     * Binds and actives textures with the binding point as texture unit.
      * 
-     * @param unit texture unit to make active.
      */
-    void bind(GLuint unit = 0) const;
+    void bind() const;
 
     /**
      * @brief Binds image textures.
      * 
-     * @param unit index of the image unit to which to bind the texture.
      * @param access access types to image from shaders: GL_READ_ONLY, GL_WRITE_ONLY, or GL_READ_WRITE.
      * @param format pixel format used for image formatted stores on shaders.
      */
-    void bindImage(GLuint unit, GLenum access, GLenum format) const;
+    void bindImage(GLenum access, GLenum format) const;
+    
+    /**
+     * @brief Unbinds image textures.
+     * 
+     * @param access access types to image from shaders: GL_READ_ONLY, GL_WRITE_ONLY, or GL_READ_WRITE.
+     * @param format pixel format used for image formatted stores on shaders.
+     */
+    void unbindImage(GLenum access, GLenum format) const;
 
     /**
      * @brief Unbind textures. 
@@ -96,6 +130,7 @@ public:
 
 private:
     GLuint m_id; ///< Id of the texture.
+    GLuint m_unit; ///< Id of the texture.
     GLenum m_target; ///< target texture to set.
     friend class Canvas; ///< Friend class Canvas so it can access private atributes.
 };

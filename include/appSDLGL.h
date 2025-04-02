@@ -82,6 +82,22 @@ public:
         return running;
     }
 
+    bool update(int width, int height)
+    {
+        bool running = true;
+        Window::updateTimes();
+        Window::checkInputs(running);
+        
+        // Actualizar pantalla
+        renderFrame(width, height);
+        startRenderImGui();
+        m_ui->render();
+        presentRenderImGui();
+        presentFrame();
+    
+        return running;
+    }
+
     /** 
      * @brief UI Scene Info module setup.
      * 
@@ -195,6 +211,12 @@ protected:
     {
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
         glBlitFramebuffer(0, 0, m_width, m_height, 0, 0, m_width, m_height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    }
+    
+    void renderFrame(int width, int height) 
+    {
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+        glBlitFramebuffer(0, 0, width, height, 0, 0, m_width, m_height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
     }
 
     /** 

@@ -1,12 +1,12 @@
 #include "utils/parallel/aux_functions.h"
 
-void cullSpheres(std::vector<glm::vec4>& spheres, std::vector<glm::vec4>& visibleSpheres, Frustum& frustum, int& visibleSpheresCount)
+void cullSpheres(std::vector<glm::vec4>& spheres, std::vector<SphereContainer>& visibleSpheres, Frustum& frustum, int& visibleSpheresCount)
 {
     visibleSpheresCount = 0;
-    for (auto& sphere : spheres)
-        if (frustum.isSphereInside(sphere))
+    for (int i = 0 ; i < spheres.size(); i++)
+        if (frustum.isSphereInside(spheres[i]))
         {
-            visibleSpheres[visibleSpheresCount] = sphere;    
+            visibleSpheres[visibleSpheresCount] = {spheres[i], i, {0, 0, 0}};    
             visibleSpheresCount++;
         }
 }

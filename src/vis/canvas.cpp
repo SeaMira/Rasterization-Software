@@ -5,13 +5,13 @@
 
 Canvas::Canvas(GLenum target, GLenum internalFormat, GLsizei width, 
     GLsizei height, GLenum format, GLenum type):
-    m_canvas(target, internalFormat, width, height, format, type, nullptr), m_fbo(),
+    m_canvas(target, internalFormat, width, height, format, type, 0, nullptr), m_fbo(),
     m_width(width), m_height(height)
 {}
 
 Canvas::Canvas(GLenum target, GLenum internalFormat, GLsizei width, 
     GLsizei height):
-    m_canvas(target, internalFormat, width, height), m_fbo(),
+    m_canvas(target, internalFormat, width, height, 0), m_fbo(),
     m_width(width), m_height(height)
 {}
 
@@ -37,13 +37,13 @@ Canvas & Canvas::operator=( Canvas && other ) noexcept
 void Canvas::setTexture(GLenum target, GLenum internalFormat, GLsizei width, 
     GLsizei height, GLenum format, GLenum type)
 {
-    m_canvas = Texture(target, internalFormat, width, height, format, type, nullptr);
+    m_canvas = Texture(target, internalFormat, width, height, format, type, 0, nullptr);
 }
 
 void Canvas::setTextureImage(GLenum target, GLenum internalFormat, GLsizei width, 
     GLsizei height)
 {
-    m_canvas = Texture(target, internalFormat, width, height);
+    m_canvas = Texture(target, internalFormat, width, height, 0);
 }
 
 void Canvas::setFBO(GLenum attachment)
@@ -51,14 +51,14 @@ void Canvas::setFBO(GLenum attachment)
     m_fbo.attachTexture(attachment, m_canvas, GL_FRAMEBUFFER);
 }
 
-void Canvas::bindTexture(GLuint unit) const
+void Canvas::bindTexture() const
 {
-    m_canvas.bind(unit);
+    m_canvas.bind();
 }
 
-void Canvas::bindTextureImage(GLuint unit, GLenum access, GLenum format) const
+void Canvas::bindTextureImage(GLenum access, GLenum format) const
 {
-    m_canvas.bindImage(unit, access, format);
+    m_canvas.bindImage(access, format);
 }
 
 void Canvas::bindFBO() const

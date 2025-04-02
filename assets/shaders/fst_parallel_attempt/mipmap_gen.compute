@@ -1,0 +1,55 @@
+#version 450
+
+layout (local_size_x = 4, local_size_y = 4) in;
+
+layout(binding = 2) uniform sampler2D depthTexture;  
+layout (binding = 3, r32f) writeonly uniform image2D downsampleDepthTexture;    
+
+// The dimension in normalized texture coordinate space of a single texel in
+// depthTexture.
+uniform vec2 utexelDimensions;
+
+// This is stored as uint because atomicMin only works on integer types. Luckily
+// (non-negative) floats maintain their order when their bits are interpreted as uint (using
+// floatBitsToUint).
+shared uint workgroupMaxDepthEncodedAsUint;
+
+void main() 
+{
+    if (gl_LocalInvocationIndex == 0) {
+        // Initialize to 1.0 (max depth) before performing atomicMin's.
+		workgroupMaxDepthEncodedAsUint = floatBitsToUint(0.0);
+	}
+
+	memoryBarrierShared();
+	barrier();
+    
+    uvec2 baseTexelCoords = 4 * gl_GlobalInvocationID.xy;
+	vec2 gatherCoords1 = (baseTexelCoords + uvec2(1, 1)) * utexelDimensions;
+    vec2 gatherCoords2 = (baseTexelCoords + uvec2(3, 1)) * utexelDimensions;
+	vec2 gatherCoords3 = (baseTexelCoords + uvec2(1, 3)) * utexelDimensions;
+	vec2 gatherCoords4 = (baseTexelCoords + uvec2(3, 3)) * utexelDimensions;
+
+    vec4 gatheredTexelValues1 = textureGather(depthTexture, gatherCoords1);
+    vec4 gatheredTexelValues2 = textureGather(depthTexture, gatherCoords2);
+	vec4 gatheredTexelValues3 = textureGather(depthTexture, gatherCoords3);
+	vec4 gatheredTexelValues4 = textureGather(depthTexture, gatherCoords4);
+
+    vec4 gatheredTexelMaxs = max(max(gatheredTexelValues1, gatheredTexelValues2),
+                                 max(gatheredTexelValues3, gatheredTexelValues4));
+	float finalMax = max(max(gatheredTexelMaxs.x, gatheredTexelMaxs.y),
+                         max(gatheredTexelMaxs.z, gatheredTexelMaxs.w));
+	atomicMax(workgroupMaxDepthEncodedAsUint, floatBitsToUint(finalMax));
+
+	memoryBarrierShared();
+	barrier();
+
+    if (gl_LocalInvocationIndex == 0) {
+		float workgroupMaxDepth = uintBitsToFloat(workgroupMaxDepthEncodedAsUint);
+
+		imageStore(downsampleDepthTexture,
+		           ivec2(gl_WorkGroupID.xy),
+                   // imageStore can only be passed vec4, but only a float is stored.
+				   vec4(workgroupMaxDepth));
+	}
+}

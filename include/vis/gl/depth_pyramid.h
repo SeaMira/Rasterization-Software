@@ -1,10 +1,9 @@
-#ifndef _FRAME_BUFFER_H
-#define _FRAME_BUFFER_H
+#ifndef _DEPTH_PYRAMID_
+#define _DEPTH_PYRAMID_
 
 #include <glad/glad.h>
 #include <iostream>
 #include <stdexcept>
-#include "vis/gl/texture.h"
 
 /**
  * @class DepthPyramid
@@ -44,16 +43,8 @@ public:
      * 
      * @param level mipmap level we are going to bind.
      */
-    void bindLevel(int level) const;
+    void bindLevel(int bindingPoint, int level, GLenum access) const;
     
-    /**
-     * @brief Uninds pyramid's texture buffer level in the context.
-     * 
-     * Unbinds the texture buffer for reading.
-     * 
-     * @param level mipmap level we are going to bind.
-     */
-    void unbindLevel(int level) const;
 
     /**
      * @brief Binds pyramid's texture buffer in the context. 
@@ -73,4 +64,4 @@ private:
     int m_height; ///< Pyramid texture height.
 };
 
-#endif // _FRAME_BUFFER_H
+#endif // _DEPTH_PYRAMID_

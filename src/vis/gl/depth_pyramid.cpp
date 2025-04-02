@@ -8,14 +8,9 @@ DepthPyramid::DepthPyramid(int maxLevels, int width, int height) :
     glTexStorage2D(GL_TEXTURE_2D, maxLevels, GL_R32F, width, height);
 }
 
-void DepthPyramid::bindLevel(int level) const
+void DepthPyramid::bindLevel(int bindingPoint, int level, GLenum access) const
 {
-    glBindImageTexture(1, m_hiZTexture, level, GL_FALSE, 0, GL_WRITE_ONLY, GL_R32F);
-}
-
-void DepthPyramid::unbindLevel(int level) const
-{
-    glBindImageTexture(0, m_hiZTexture, level, GL_FALSE, 0, GL_READ_ONLY, GL_R32F);
+    glBindImageTexture(bindingPoint, m_hiZTexture, level, GL_FALSE, 0, access, GL_R32F);
 }
 
 void DepthPyramid::bindTexture() const

@@ -167,22 +167,19 @@ public:
     /**
      * @brief Binds canvas texture.
      * 
-     * Binds canvas texture to specified unit.
-     * 
-     * @param unit index of the image unit to which to bind the texture.
+     * Binds canvas texture to its specified unit.
      */
-    void bindTexture(GLuint unit = 0) const;
+    void bindTexture() const;
 
     /**
      * @brief Binds canvas texture image.
      * 
      * Binds canvas texture image to specified unit.
      * 
-     * @param unit index of the image unit to which to bind the texture.
      * @param access access types to image from shaders: GL_READ_ONLY, GL_WRITE_ONLY, or GL_READ_WRITE.
      * @param format pixel format used for image formatted stores on shaders.
      */
-    void bindTextureImage(GLuint unit, GLenum access, GLenum format) const;
+    void bindTextureImage(GLenum access, GLenum format) const;
 
     /**
      * @brief Bind canvas framebuffer.

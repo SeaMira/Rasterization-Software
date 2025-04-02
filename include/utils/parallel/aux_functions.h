@@ -5,6 +5,13 @@
 
 #include "algorithms/frustum_cull.h"
 
+struct SphereContainer
+{
+    glm::vec4 positionr;
+    int index;
+    int wasDrawn[3];
+};
+
 /**
  * @brief Filters spheres that are actually on the camera frustum.
  * 
@@ -15,7 +22,7 @@
  * @param frustum The camera frustum.
  * @param visibleSpheresCount The number of spheres that are on the camera frustum.
  */
-void cullSpheres(std::vector<glm::vec4>& spheres, std::vector<glm::vec4>& visibleSpheres, Frustum& frustum, int& visibleSpheresCount);
+void cullSpheres(std::vector<glm::vec4>& spheres, std::vector<SphereContainer>& visibleSpheres, Frustum& frustum, int& visibleSpheresCount);
 
 
 #endif // _AUX_PARALLEL_H_

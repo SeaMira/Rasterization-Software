@@ -1,0 +1,36 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16) in;  
+
+struct FramePixelsCount
+{
+    uint frames;
+    uint pixels;
+    
+};
+
+layout(std430, binding = 4) buffer VisibilityFrameBuffer 
+{
+    FramePixelsCount visibilityFrameBuffer[];
+};
+
+layout(std430, binding = 5) buffer PixelOwnershipBuffer 
+{
+    uint pixelOwnershipBuffer[];
+};
+
+uniform ivec2 screenResolution;
+
+void main() {
+    // Obtener la posición del píxel en la matriz
+    uint x = gl_GlobalInvocationID.x;
+    uint y = gl_GlobalInvocationID.y;
+
+    // Verificar que esté dentro de los límites
+    if (x >= screenResolution.x || y >= screenResolution.y) return;
+
+    // Obtener el índice de la esfera desde la matriz
+    uint index = pixelOwnershipBuffer[y * screenResolution.x + x];
+
+    // Incrementar el contador correspondiente de forma segura
+    visibilityFrameBuffer[index].pixels += 1;
+}
