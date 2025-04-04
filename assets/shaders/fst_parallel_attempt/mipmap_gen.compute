@@ -17,7 +17,7 @@ shared uint workgroupMaxDepthEncodedAsUint;
 void main() 
 {
     if (gl_LocalInvocationIndex == 0) {
-        // Initialize to 1.0 (max depth) before performing atomicMin's.
+        // Initialize to 0.0 (min depth) before performing atomicMax's.
 		workgroupMaxDepthEncodedAsUint = floatBitsToUint(0.0);
 	}
 
