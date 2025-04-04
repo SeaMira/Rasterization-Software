@@ -78,6 +78,7 @@ int main(int argc, char* argv[])
     }
     
     std::vector<glm::vec4> spheres = getScene(sphere_count);
+    sphere_count = spheres.size(); 
     std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints = getCheckpoints(sphere_count, spheres);
     
     std::vector<SphereContainer> visibleSpheres(spheres.size());    
@@ -152,7 +153,7 @@ int main(int argc, char* argv[])
             cleaningComputeShader.setFloat("far", camera.getFar());
             cleaningComputeShader.setVec2I("screenResolution", screenResolution);
             glDispatchCompute((SCR_WIDTH + workGroupSizeX - 1) / 16, (SCR_HEIGHT + workGroupSizeY - 1) / 16, 1);
-            glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+            glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 
 
             downsampledDepthTexture.unbindImage(GL_READ_WRITE, GL_R32F);

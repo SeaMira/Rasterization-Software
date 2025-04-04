@@ -4,6 +4,11 @@ Texture::Texture(GLenum target, GLenum internalFormat, GLsizei width, GLsizei he
     : m_target(target), m_unit(unit) {
     glGenTextures(1, &m_id);
     glBindTexture(target, m_id);
+    if (m_id == 0) {
+        std::cerr << "Error:couldn't generate texture." << std::endl;
+    } else {
+        std::cout << "Texture correctly generated with ID: " << m_id << std::endl;
+    }
     glTexImage2D(target, 0, internalFormat, width, height, 0, format, type, data);
     glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);

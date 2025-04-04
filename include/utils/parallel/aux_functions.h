@@ -1,7 +1,7 @@
 #ifndef _AUX_PARALLEL_H_
 #define _AUX_PARALLEL_H_
 
-#define CPU_FRUSTUM_CULLING 0
+#define CPU_FRUSTUM_CULLING 1
 
 #include "algorithms/frustum_cull.h"
 

@@ -5,10 +5,7 @@ void cullSpheres(std::vector<glm::vec4>& spheres, std::vector<SphereContainer>& 
     visibleSpheresCount = 0;
     for (int i = 0 ; i < spheres.size(); i++)
         if (frustum.isSphereInside(spheres[i]))
-        {
-            visibleSpheres[visibleSpheresCount] = {spheres[i], i, {0, 0, 0}};    
-            visibleSpheresCount++;
-        }
+            visibleSpheres[visibleSpheresCount++] = {spheres[i], i, {0, 0, 0}};    
 }
 
 void fillSpheresData(std::vector<glm::vec4>& spheres, std::vector<SphereContainer>& visibleSpheres)
