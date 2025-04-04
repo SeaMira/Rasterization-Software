@@ -1,25 +1,18 @@
 #version 430
 
-layout(local_size_x = 16, local_size_y = 16) in;
-layout(rgba8, binding = 0) uniform image2D outputImage;
+layout(local_size_x = 256) in;
 
 struct Sphere 
 {
     vec4 positionr;  // (x, y, z, r)
+    uint index;
+    int wasDrawn[3];
 };
+
 
 layout(std430, binding = 1) buffer SphereBuffer 
 {
     Sphere spheres[];
-};
-
-// layout(std430, binding = 2) buffer DepthBuffer 
-// {
-//     float depthData[];
-// };
-
-layout(std430, binding = 3) buffer CounterBuffer {
-    uint counter;
 };
 
 struct SphereBillboard 
@@ -29,12 +22,34 @@ struct SphereBillboard
     vec4 upLeftCornerMaxY;      // 16b - up left corner of the billboard in camera space and the max Y coordinate in screen space
     vec4 downRightCornerMinX;   // 16b - down right corner of the billboard in camera space and the min X coordinate in screen space
     vec4 downLeftCornerMinY;    // 16b - down left corner of the billboard in camera space and the min Y coordinate in screen space
-    // 64b
+    uint index;
+    int padding1;
+    int padding2;
+    int padding3;
+    // 96b
 }; 
 
 layout(std430, binding = 2) buffer SphereBillboardDataBuffer
 {
     SphereBillboard sphereBillboardData[];
+};
+
+layout(binding = 3) buffer CounterBuffer {
+    uint counter;
+};
+
+layout(binding = 5) uniform sampler2D downsampledDepthTexture; 
+
+struct FramePixelsCount
+{
+    uint frames;
+    uint pixels;
+    
+};
+
+layout(std430, binding = 6) buffer VisibilityFrameBuffer 
+{
+    FramePixelsCount visibilityFrameBuffer[];
 };
 
 uniform mat4 view;
@@ -56,8 +71,7 @@ uniform ivec2 screenResolution;
 
 uniform int sphereCount;
 
-vec3 lightColor = vec3(0.01, 1.0, 0.05);
-float diffuseI = 0.9;
+const int pixelsToCheck = 5;
 
 struct bboxCorners
 {
@@ -77,7 +91,7 @@ struct bboxCorners
 
 bool isOnOrForwardOfPlane(vec4 plane, vec4 sphere)
 {
-    return dot(vec3(plane), vec3(sphere)) - plane.w >= -sphere.w;
+    return dot(vec3(plane.x, plane.y, plane.z), vec3(sphere.x, sphere.y, sphere.z)) - plane.w >= -sphere.w;
 }
 
 bool isSphereInside(Sphere sph)
@@ -127,6 +141,63 @@ bboxCorners getSphereBbox(const vec3 cameraSpaceSphere, const vec3 camImposPos,
     return bboxCorners(upRightCorner, upLeftCorner, downRightCorner, downLeftCorner, minCorner, maxCorner); 
 }
 
+
+float iSphere(vec3 ro, vec3 rd, vec3 sph, float radius )
+{
+    float a = dot(rd, rd);
+    float b = dot( rd, sph );
+    float c = dot( sph, sph ) - radius*radius;
+    float h = b*b - a * c;
+    if( h < 0.0f) return -1.0f;
+    return (b - sqrt( h ))/a;
+}
+
+vec3 computeViewImpPos(int px, int py, 
+                ivec2 screenMin, ivec2 screenMax,
+                bboxCorners sphereBbox)
+{
+    const float difx = screenMax.x - screenMin.x;
+    const float dify = screenMax.y - screenMin.y;
+
+    const float u = float(px - screenMin.x) / difx;
+    const float v = float(py - screenMin.y) / dify;
+    const vec3 A = mix(sphereBbox.upLeftCorner, sphereBbox.upRightCorner, u);
+    const vec3 B = mix(sphereBbox.downLeftCorner, sphereBbox.downRightCorner, u);
+    return mix(A, B, v);
+}
+
+float onSphDepth(vec3 viewImpPos, vec3 cameraSpaceSphere, float r)
+{
+    const float h = iSphere(cameraPos, viewImpPos, cameraSpaceSphere, r);
+    const vec3 hit = viewImpPos * h;
+    return hit.z < 0.0f ? (hit.z * proj[2].z + proj[3].z) / -hit.z : 1000.0f;;
+}
+
+bool isSphereBillboardVisible(int xcoords[pixelsToCheck], int ycoords[pixelsToCheck], float pixelDepths[pixelsToCheck])
+{
+    ivec2 downsampledTexSize = textureSize(downsampledDepthTexture, 0);
+    const int ds_x = downsampledTexSize.x;
+    const int ds_y = downsampledTexSize.y;
+
+    float pixel1 = texelFetch(downsampledDepthTexture, ivec2(int(float(xcoords[0]*ds_x)/float(screenResolution.x)), int(float(ycoords[0]*ds_y)/float(screenResolution.y))), 0).r;
+    float pixel2 = texelFetch(downsampledDepthTexture, ivec2(int(float(xcoords[1]*ds_x)/float(screenResolution.x)), int(float(ycoords[1]*ds_y)/float(screenResolution.y))), 0).r;
+    float pixel3 = texelFetch(downsampledDepthTexture, ivec2(int(float(xcoords[2]*ds_x)/float(screenResolution.x)), int(float(ycoords[2]*ds_y)/float(screenResolution.y))), 0).r;
+    float pixel4 = texelFetch(downsampledDepthTexture, ivec2(int(float(xcoords[3]*ds_x)/float(screenResolution.x)), int(float(ycoords[3]*ds_y)/float(screenResolution.y))), 0).r;
+    float pixel5 = texelFetch(downsampledDepthTexture, ivec2(int(float(xcoords[4]*ds_x)/float(screenResolution.x)), int(float(ycoords[4]*ds_y)/float(screenResolution.y))), 0).r;
+
+    for (int i = 0; i < pixelsToCheck; i++)
+    {
+        if (pixelDepths[i] <= pixel1 || 
+            pixelDepths[i] <= pixel2 || 
+            pixelDepths[i] <= pixel3 || 
+            pixelDepths[i] <= pixel4 || 
+            pixelDepths[i] <= pixel5)
+            return true;
+    }
+    return false;
+}
+
+
 void storeSphereBBox(Sphere sphere)
 {
     vec3 cameraSpaceSphere = vec3(view * vec4(sphere.positionr.xyz, 1.0f));
@@ -143,20 +214,83 @@ void storeSphereBBox(Sphere sphere)
     screenMax.x = int(((sphereBbox.maxCorner.x) * 0.5f + 0.5f) * float(screenResolution.x));
     screenMax.y = int((sphereBbox.maxCorner.y * 0.5f + 0.5f) * float(screenResolution.y));
 
-    uint currentCounter = atomicAdd(counter, 1);
-    sphereBillboardData[int(currentCounter)] =
-        SphereBillboard(vec4(cameraSpaceSphere, sphere.positionr.w), 
-            vec4(sphereBbox.upRightCorner, screenMax.x), 
-            vec4(sphereBbox.upLeftCorner, screenMax.y), 
-            vec4(sphereBbox.downRightCorner, screenMin.x), 
-            vec4(sphereBbox.downLeftCorner, screenMin.y));
+    const float difx = screenMax.x - screenMin.x;
+    const float dify = screenMax.y - screenMin.y;
+
+    if (difx * dify <= 2 || difx <= 1 || dify <= 1) 
+    {
+        spheres[gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_WorkGroupSize.x].wasDrawn[0] = 0;
+        return;
+    }
+
+    vec4 projClosestSpherePt = proj*vec4(camImposPos, 1.0);
+    float fSphereDepth = (projClosestSpherePt.z / projClosestSpherePt.w);
+
+    float mid_x = min(max((screenMin.x + screenMax.x)/2, 0), screenResolution.x);
+    float mid_y = min(max((screenMin.y + screenMax.y)/2, 0), screenResolution.y);
+    vec3 middleLeft = computeViewImpPos(int(mid_x-difx*0.49f), int(mid_y), screenMin, screenMax, sphereBbox);
+    vec3 middleRight = computeViewImpPos(int(mid_x+difx*0.49f), int(mid_y), screenMin, screenMax, sphereBbox);
+    vec3 middleBottom = computeViewImpPos(int(mid_x), int(mid_y-dify*0.49f), screenMin, screenMax, sphereBbox);
+    vec3 middleTop = computeViewImpPos(int(mid_x), int(mid_y+dify*0.49f), screenMin, screenMax, sphereBbox);
+    vec3 middlePixelsVec = computeViewImpPos((screenMin.x + screenMax.x) / 2, (screenMin.y + screenMax.y) / 2, screenMin, screenMax, sphereBbox);
     
+
+    int xcoords[pixelsToCheck] = {int(mid_x-difx*0.49f), int(mid_x+difx*0.49f), int(mid_x), int(mid_x), (screenMin.x + screenMax.x) / 2};
+    int ycoords[pixelsToCheck] = {int(mid_y), int(mid_y), int(mid_y-dify*0.49f), int(mid_y+dify*0.49f), (screenMin.y + screenMax.y) / 2};
+    float pixelDepths[pixelsToCheck] = {
+        onSphDepth(middleLeft, cameraSpaceSphere, sphere.positionr.w),
+        onSphDepth(middleRight, cameraSpaceSphere, sphere.positionr.w),
+        onSphDepth(middleBottom, cameraSpaceSphere, sphere.positionr.w),
+        onSphDepth(middleTop, cameraSpaceSphere, sphere.positionr.w),
+        onSphDepth(middlePixelsVec, cameraSpaceSphere, sphere.positionr.w)
+    };
+
+    if (!isSphereBillboardVisible(xcoords, ycoords, pixelDepths))
+    {
+        if (visibilityFrameBuffer[sphere.index].pixels > 5)
+        {
+            visibilityFrameBuffer[sphere.index].frames = 10;
+        }
+        else if (visibilityFrameBuffer[sphere.index].frames > 0) 
+        {
+            visibilityFrameBuffer[sphere.index].frames -= 1;
+        }
+        else 
+        {
+            spheres[gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_WorkGroupSize.x].wasDrawn[0] = 0;
+            return;
+        }
+        
+        uint currentCounter = atomicAdd(counter, 1);
+        sphereBillboardData[int(currentCounter)] =
+            SphereBillboard(vec4(cameraSpaceSphere, sphere.positionr.w), 
+                vec4(sphereBbox.upRightCorner, screenMax.x), 
+                vec4(sphereBbox.upLeftCorner, screenMax.y), 
+                vec4(sphereBbox.downRightCorner, screenMin.x), 
+                vec4(sphereBbox.downLeftCorner, screenMin.y),
+                sphere.index, 0, 0, 0
+                );
+    } else
+    {
+        visibilityFrameBuffer[sphere.index].frames = 10;
+
+        uint currentCounter = atomicAdd(counter, 1);
+        sphereBillboardData[int(currentCounter)] =
+            SphereBillboard(vec4(cameraSpaceSphere, sphere.positionr.w), 
+                vec4(sphereBbox.upRightCorner, screenMax.x), 
+                vec4(sphereBbox.upLeftCorner, screenMax.y), 
+                vec4(sphereBbox.downRightCorner, screenMin.x), 
+                vec4(sphereBbox.downLeftCorner, screenMin.y),
+                sphere.index, 0, 0, 0
+                );
+    }
+    spheres[gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_WorkGroupSize.x].wasDrawn[0] = 1;
 }
 
 
 void main() 
 {
-    uint index = gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_WorkGroupSize.x;
+    uint index = gl_GlobalInvocationID.x;
 
     // Check if the index is out of bounds
     if (index >= sphereCount) {
@@ -166,5 +300,12 @@ void main()
     // Get sphere bbox
     Sphere s = spheres[index];
     if (isSphereInside(s))
+    {
+        spheres[index].wasDrawn[1] = 1;
         storeSphereBBox(s);
+    } else 
+    {
+        spheres[index].wasDrawn[1] = 0;
+    }
+    visibilityFrameBuffer[s.index].pixels = 0;
 }

@@ -27,7 +27,7 @@ using uint = unsigned int;
 // Settings
 int SCR_WIDTH = 1024;
 int SCR_HEIGHT = 1024;
-int sphere_count = 1024 * 512;
+int sphere_count = 1024* 512;
 
 std::string title = "Second Parallel Version"; 
 
@@ -97,25 +97,26 @@ int main(int argc, char* argv[])
     std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints = getCheckpoints(sphere_count, spheres);
     
     std::vector<SphereContainer> visibleSpheres(sphere_count);
-    #if !CPU_FRUSTUM_CULLING
-        GLuint zero = 0;
-        GLuint resetValue = 0;
-        StorageBuffer visibleSpheresAtomicCounter(GL_SHADER_STORAGE_BUFFER);
-        visibleSpheresAtomicCounter.generateBufferData(sizeof(GLuint), 3, &zero, GL_DYNAMIC_COPY);
-        visibleSpheresAtomicCounter.unbind();
-    #endif
+    fillSpheresData(spheres, visibleSpheres);
     
     StorageBuffer sphereBuffer(GL_SHADER_STORAGE_BUFFER);
     sphereBuffer.generateBufferData(sphere_count * sizeof(SphereContainer), 1, 
-        visibleSpheres.data(), GL_STATIC_DRAW);
+    visibleSpheres.data(), GL_STATIC_DRAW);
     sphereBuffer.unbind();
     
     std::vector<SphereBillboard> billboards(sphere_count);
     StorageBuffer sphereBillboardBuffer(GL_SHADER_STORAGE_BUFFER);
     sphereBillboardBuffer.generateBufferData(sphere_count * sizeof(SphereBillboard), 2, 
-        billboards.data(), GL_STATIC_DRAW);
+    billboards.data(), GL_STATIC_DRAW);
     sphereBillboardBuffer.unbind();
     
+    #if !CPU_FRUSTUM_CULLING
+        GLuint zero = 0;
+        GLuint resetValue = 0;
+        StorageBuffer visibleSpheresAtomicCounter(GL_SHADER_STORAGE_BUFFER);
+        visibleSpheresAtomicCounter.generateBufferData(sizeof(GLuint), 3, &zero, GL_STATIC_DRAW);
+        visibleSpheresAtomicCounter.unbind();
+    #endif
 
     Texture depthTexture(GL_TEXTURE_2D, GL_R32F, SCR_WIDTH, SCR_HEIGHT, 4);
     Texture downsampledDepthTexture(GL_TEXTURE_2D, GL_R32F, SCR_WIDTH/(1 << downsampleLevel), SCR_HEIGHT/(1 << downsampleLevel), 5);
@@ -195,6 +196,13 @@ int main(int argc, char* argv[])
                 bboxExtractionShader.setInt("sphereCount", visibleSpheresCount); // visible sphere count given
             #else
                 visibleSpheresAtomicCounter.bind();
+                void* mappedAtomic = glMapBufferRange(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), GL_MAP_READ_BIT);
+                if (mappedAtomic != nullptr) 
+                {
+                    GLuint* atomicValue = reinterpret_cast<GLuint*>(mappedAtomic);
+                    notOccludedSpheresCount = *atomicValue;
+                    glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+                }
                 glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &resetValue);
                 visibleSpheresAtomicCounter.unbind();
                 
@@ -244,29 +252,31 @@ int main(int argc, char* argv[])
 
             ////// checking drawn spheres ///////
             
-            sphereBuffer.bind();  // Primero aseguramos que el buffer está vinculado
+            // sphereBuffer.bind();  // Primero aseguramos que el buffer está vinculado
 
-            // mapping buffer on reading mode
-            void* mappedData = glMapBufferRange(GL_SHADER_STORAGE_BUFFER, 
-                                                0, 
-                                                spheres.size() * sizeof(SphereContainer), 
-                                                GL_MAP_READ_BIT);
+            // // mapping buffer on reading mode
+            // void* mappedData = glMapBufferRange(GL_SHADER_STORAGE_BUFFER, 
+            //                                     0, 
+            //                                     spheres.size() * sizeof(SphereContainer), 
+            //                                     GL_MAP_READ_BIT);
 
-            // verifying correct mapping
-            if (mappedData != nullptr) {
-                // Accessing mapped buffer
-                SphereContainer* spheresData = reinterpret_cast<SphereContainer*>(mappedData);
-                notOccludedSpheresCount = 0;
-                // looping on elements checking if drawn or not
-                for (size_t i = 0; i < visibleSpheresCount; ++i)
-                    if (spheresData[i].wasDrawn[0] == 1) 
-                        notOccludedSpheresCount++;
+            // // verifying correct mapping
+            // if (mappedData != nullptr) {
+            //     // Accessing mapped buffer
+            //     SphereContainer* spheresData = reinterpret_cast<SphereContainer*>(mappedData);
+            //     visibleSpheresCount = 0;
+            //     // looping on elements checking if drawn or not
+            //     for (size_t i = 0; i < sphere_count; ++i)
+            //         if (spheresData[i].wasDrawn[1]) 
+            //             visibleSpheresCount++;
                 
-                // unmapping buffer once finished
-                glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
-            } else {
-                std::cerr << "Failed to map the buffer!" << std::endl;
-            }
+            //     // unmapping buffer once finished
+            //     glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+            // } else {
+            //     std::cerr << "Failed to map the buffer!" << std::endl;
+            // }
+
+            // sphereBuffer.unbind();
             
             ////// END:: checking drawn spheres ///////
         }
