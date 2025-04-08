@@ -8,7 +8,7 @@ std::filesystem::path scene_path = "assets/molecules/1AGA.mmtf";
 
 int spheresGridWidth = 100;
 int spheresGridHeight = 100;
-int spheresGridDepth = 50;
+int spheresGridDepth = 200;
 int interleaveW = 5;
 int interleaveH = 5;
 

@@ -33,9 +33,10 @@ std::string title = "Second Parallel Version";
 
 bool shown = true;
 
-GLuint workGroupSizeX = 16;  // Deifining threads-per-group (X)
-GLuint workGroupSizeY = 16;  // Deifining threads-per-group (Y)
+GLuint workGroupSizeXPerPixel = 16;  // Deifining threads-per-group (X)
+GLuint workGroupSizeYPerPixel = 16;  // Deifining threads-per-group (Y)
 
+GLuint workGroupSizeXPerSphere = 256;  // Deifining threads-per-sphere (X)
 
 int visibleSpheresCount = 0;
 int notOccludedSpheresCount = 0;
@@ -142,7 +143,7 @@ int main(int argc, char* argv[])
     window.setupBenchmarkInfoGui("Benchmark", &benchmark);
 
     // Calculating number of work groups (based on the number of threads and spheres)
-    GLuint numGroupsX = (sphere_count + workGroupSizeX - 1) / workGroupSizeX;
+    GLuint numGroupsX = (sphere_count + workGroupSizeXPerSphere - 1) / workGroupSizeXPerSphere;
     GLuint numGroupsY = 1;
 
     canvas.bindTexture();
@@ -177,7 +178,9 @@ int main(int argc, char* argv[])
             cleaningComputeShader.use();
             cleaningComputeShader.setFloat("far", camera.getFar());
             cleaningComputeShader.setVec2I("screenResolution", screenResolution);
-            glDispatchCompute((SCR_WIDTH + workGroupSizeX - 1) / 16, (SCR_HEIGHT + workGroupSizeY - 1) / 16, 1);
+            glDispatchCompute((SCR_WIDTH + workGroupSizeXPerPixel - 1) / workGroupSizeXPerPixel, 
+                (SCR_HEIGHT + workGroupSizeYPerPixel - 1) / workGroupSizeYPerPixel, 
+                1);
             glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 
             downsampledDepthTexture.unbindImage(GL_READ_WRITE, GL_R32F);
@@ -191,7 +194,7 @@ int main(int argc, char* argv[])
                 sphereBuffer.bind();
                 glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, visibleSpheresCount * sizeof(SphereContainer), visibleSpheres.data());
                 sphereBuffer.unbind();
-                numGroupsX = (visibleSpheresCount + workGroupSizeX - 1) / workGroupSizeX;
+                numGroupsX = (visibleSpheresCount + workGroupSizeXPerSphere - 1) / workGroupSizeXPerSphere;
                 
                 bboxExtractionShader.setInt("sphereCount", visibleSpheresCount); // visible sphere count given
             #else
@@ -233,12 +236,16 @@ int main(int argc, char* argv[])
             bboxIntersectionShader.setVec2I("screenResolution", screenResolution);
             bboxIntersectionShader.setMat4("proj", camera.getProjection());
             bboxIntersectionShader.setVec3("cameraPos", camera.getPosition());
-            glDispatchCompute((SCR_WIDTH + workGroupSizeX - 1) / 16, (SCR_HEIGHT + workGroupSizeY - 1) / 16, 1);
+            glDispatchCompute((SCR_WIDTH + workGroupSizeXPerPixel - 1) / workGroupSizeXPerPixel, 
+                (SCR_HEIGHT + workGroupSizeYPerPixel - 1) / workGroupSizeYPerPixel, 
+                1);
             glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 
             pixelCountComputeShader.use();
             pixelCountComputeShader.setVec2I("screenResolution", screenResolution);
-            glDispatchCompute((SCR_WIDTH + workGroupSizeX - 1) / 16, (SCR_HEIGHT + workGroupSizeY - 1) / 16, 1);
+            glDispatchCompute((SCR_WIDTH + workGroupSizeYPerPixel - 1) / workGroupSizeYPerPixel, 
+                (SCR_HEIGHT + workGroupSizeYPerPixel - 1) / workGroupSizeYPerPixel, 
+                1);
             glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
             
             glBindFramebuffer(GL_READ_FRAMEBUFFER, canvas.getFramebuffer().getId());

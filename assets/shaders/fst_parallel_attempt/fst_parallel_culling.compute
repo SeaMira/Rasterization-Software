@@ -1,6 +1,6 @@
 #version 460
 
-layout(local_size_x = 16, local_size_y = 16) in;
+layout(local_size_x = 256) in;
 layout(rgba8, binding = 0) uniform image2D outputImage;
 
 struct Sphere 
@@ -298,7 +298,7 @@ void drawSphere(Sphere sphere)
 
 void main() 
 {
-    uint index = gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_WorkGroupSize.x;
+    uint index = gl_GlobalInvocationID.x;
 
     // Check if the index is out of bounds
     if (index >= sphereCount) {

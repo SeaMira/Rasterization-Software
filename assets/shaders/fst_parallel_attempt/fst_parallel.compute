@@ -1,6 +1,6 @@
 #version 460
 
-layout(local_size_x = 16, local_size_y = 16) in;
+layout(local_size_x = 256) in;
 layout(rgba8, binding = 0) uniform image2D outputImage;
 
 struct Sphere 
@@ -209,15 +209,6 @@ void drawSphere(Sphere sphere)
     // imageStore(outputImage, ivec2(int(mid_x), int(mid_y-dify*0.49f)), vec4(0.0, 0.0, 0.0, 1.0));
     // imageStore(outputImage, ivec2(int(mid_x), int(mid_y+dify*0.49f)), vec4(0.0, 0.0, 0.0, 1.0));
 
-    // ivec2 downsampledTexSize = textureSize(downsampledDepthTexture, 0);
-    // const int ds_x = downsampledTexSize.x;
-    // const int ds_y = downsampledTexSize.y;
-
-    // float pixel1 = texelFetch(downsampledDepthTexture, ivec2(int(float(max(screenMin.x, 0)*ds_x)/float(screenResolution.x)), int(float(min(screenMax.y, screenResolution.y)*ds_y)/float(screenResolution.y))), 0).r;
-    // float pixel2 = texelFetch(downsampledDepthTexture, ivec2(int(float(max(screenMin.x, 0)*ds_x)/float(screenResolution.x)), int(float(max(screenMax.y, 0)*ds_y)/float(screenResolution.y))), 0).r;
-    // float pixel3 = texelFetch(downsampledDepthTexture, ivec2(int(float(min(screenMax.x, screenResolution.x)*ds_x)/float(screenResolution.x)), int(float(min(screenMax.y, screenResolution.y)*ds_y)/float(screenResolution.y))), 0).r;
-    // float pixel4 = texelFetch(downsampledDepthTexture, ivec2(int(float(min(screenMax.x, screenResolution.x)*ds_x)/float(screenResolution.x)), int(float(max(screenMax.y, 0)*ds_y)/float(screenResolution.y))), 0).r;
-    // float fMaxSampledDepth = max( max( pixel1, pixel2 ), max( pixel3, pixel4 ) );
 
     if (!isSphereBillboardVisible(xcoords, ycoords, pixelDepths))
     {
@@ -286,7 +277,7 @@ void drawSphere(Sphere sphere)
 
 void main() 
 {
-    uint index = gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_WorkGroupSize.x;
+    uint index = gl_GlobalInvocationID.x;
 
     // Check if the index is out of bounds
     if (index >= sphereCount) {
