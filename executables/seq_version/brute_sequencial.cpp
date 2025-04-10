@@ -29,10 +29,10 @@
 
 
 // Settings
-int SCR_WIDTH = 800;
-int SCR_HEIGHT = 600;
+int SCR_WIDTH = 1024;
+int SCR_HEIGHT = 1024;
 
-int sphere_count = 1024*64;
+int sphere_count = 1;
 int frustumSpheres = 0;
 int visibleSpheres = 0;
 

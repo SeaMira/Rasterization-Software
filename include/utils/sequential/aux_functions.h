@@ -57,8 +57,8 @@ float iSphere(glm::vec3 ro, glm::vec3 rd, glm::vec3 sph, float radius );
 /**
  * @brief Computes the billboard of a sphere in view and screen space.
  * 
- * Uses camera info. (such as caits position, projection matrix, orientation vectors, etc) 
- * to project the boundaries of a sphere in a billboard.abort
+ * Uses camera info. (such as camera position, projection matrix, orientation vectors, etc) 
+ * to project the boundaries of a sphere in a billboard.
  * 
  * @param cameraSpaceSphere Sphere center in camera space.
  * @param camImposPos Camera space position of the billboard center.
@@ -68,7 +68,6 @@ float iSphere(glm::vec3 ro, glm::vec3 rd, glm::vec3 sph, float radius );
  * @param front Front orientation camera vector.
  * @param up Up orientation camera vector
  * @param sphRadius Sphere radius.
- * @param hizPyramid Hierarchival Z buffer
  * 
  * @return bboxCorners struct: info on camera space and projection space boundaries. 
  */

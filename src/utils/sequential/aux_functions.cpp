@@ -157,7 +157,7 @@ bool drawSphere(const glm::mat4& proj, const glm::mat4& view,
             {
                 if (!finishedLine) finishedLine = true;
                 const glm::vec3 hit = viewImpPos * h;
-                const float depth = hit.z < 0.0f ? (hit.z * proj[2].z + proj[3].z) / -hit.z : FLT_MAX;
+                const float depth = (hit.z * proj[2].z + proj[3].z) / -hit.z;
                 if (depth < depthBuffer[index]) 
                 {
                     const glm::vec3 normal = glm::normalize( hit - cameraSpaceSphere );

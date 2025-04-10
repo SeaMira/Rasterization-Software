@@ -103,10 +103,12 @@ imgui
 ## Sequential Version Dependencies
 set(sequential_sources
     ${CMAKE_SOURCE_DIR}/src/utils/sequential/aux_functions.cpp
+    ${CMAKE_SOURCE_DIR}/src/utils/sequential/aux_functions_cylinder.cpp
 )
 
 set(sequential_includes
     ${CMAKE_SOURCE_DIR}/include/utils/sequential/aux_functions.h
+    ${CMAKE_SOURCE_DIR}/include/utils/sequential/aux_functions_cylinder.h
 )
 
 add_library(sequential_dependencies STATIC
