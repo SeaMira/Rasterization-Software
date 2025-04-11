@@ -1,8 +1,10 @@
 #ifndef _FRUSTUM_CULLING_H_
 #define _FRUSTUM_CULLING_H_
 #include <glm/glm.hpp>
+#include "utils/sequential/common.h"
 
 class Camera;
+
 
 /**
  * @struct Plane
@@ -32,7 +34,7 @@ struct Plane
         normal(glm::normalize(norm)), distance(glm::dot(normal, p1)) {}
 
     /**
-     * @brief Tells if a sphere is in front or on a the plane or not .
+     * @brief Tells if a sphere is in front or on the plane or not .
      * 
      * Uses the signed distance from a point (sphere center) to the plane  minus the radius
      * to determine if the sphere is on or in front of the plane.
@@ -42,6 +44,18 @@ struct Plane
      * @return true if the sphere is on or in front of the plane, false otherwise.
      */
     bool isOnOrForwardPlane(glm::vec4& sph) const;
+
+    /**
+     * @brief Tells if a BBox is in front or on the plane or not .
+     * 
+     * Uses the signed distance from a point (negative point of BBox) to the plane 
+     * to determine if the Box is on or in front of the plane.
+     * 
+     * @param bbox A AABB represented by its min and max corners.
+     * 
+     * @return true if the AABB is on or in front of the plane, false otherwise.
+     */
+    bool isOnOrForwardPlaneAABB(BBox3D& bbox) const;
 };
 
 /**
@@ -84,6 +98,18 @@ struct Frustum
      * @return true if the sphere is inside the frustum, false otherwise.
      */
     bool isSphereInside(glm::vec4& sph) const;
+    
+    /**
+     * @brief Tells if a cylinder is inside the frustum or not.
+     * 
+     * Uses the `isOnOrForwardPlane` method from the `Plane` structure to check if the bounding box of the cylinder is inside the frustum.
+     * If the bbox is on or in front of all the planes, it is considered inside the frustum.
+     * 
+     * @param cyl A cylinder represented by its extreme points and a radius.
+     * 
+     * @return true if the bbox of the cylinder is inside the frustum, false otherwise.
+     */
+    bool isCylinderInside(Cylinder& cyl) const;
 };
 
 

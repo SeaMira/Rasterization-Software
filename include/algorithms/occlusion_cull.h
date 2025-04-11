@@ -132,6 +132,21 @@ HierarchicalZBuffer generateHiZPyramid(const DepthBuffer& depthBuffer, int maxLe
 bool isPixelOccluded(float pixelDepth, const HierarchicalZBuffer& hizPyramid, int screenX, int screenY);
 
 /**
+ * @brief Tells if a pixel projection's depth is occluded by pixels on the Hierarchical Z Buffer pyramid.
+ * 
+ * Given the coordinates of a pixel and its depth, it tells if the pixel is occluded by other pixels on the Hierarchical Z Buffer pyramid in the same place.
+ * Checks last level of the pyramid to determine if the pixel is occluded.
+ * 
+ * @param pixelDepth A float representing the depth to be tested
+ * @param hizPyramid The HierarchicalZBuffer representing the different depth precision levels.
+ * @param screenX The x coordinate of the pixel on the screen.
+ * @param screenY The y coordinate of the pixel on the screen.
+ * 
+ * @return The Hierarchical Z Buffer pyramid.
+ */
+bool isPixelLastLevelOccluded(float pixelDepth, const HierarchicalZBuffer& hizPyramid, int screenX, int screenY);
+
+/**
  * @brief Tells if certain pixels of an sphere billboard are occluded by pixels on the Hierarchical Z Buffer pyramid.
  * 
  * Given the pixels projected from a sphere billboard and the Hierarchical Z Buffer pyramid, it tells if the pixels are occluded by other pixels on the Hierarchical Z Buffer pyramid.

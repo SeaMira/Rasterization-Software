@@ -1,17 +1,11 @@
-#ifndef _AUX_SEQUENTIAL_H_
-#define _AUX_SEQUENTIAL_H_
+#ifndef _AUX_SEQUENTIAL_SPHERE_H_
+#define _AUX_SEQUENTIAL_SPHERE_H_
 
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
-#include <vector>
-#include <cmath>
-#include <omp.h>
+#include "utils/sequential/common.h"
 
 #include "algorithms/occlusion_cull.h"
 
-const glm::vec3 lightColor(0.01f, 1.0f, 0.05f);
-const float diffuseI = 0.9f;
+
 
 /**
  * @struct bboxCorners
@@ -77,15 +71,6 @@ bboxCorners getSphereBbox(const glm::vec3& cameraSpaceSphere, const glm::vec3& c
 
 
 /**
- * @brief Takes a color represented in three integers and packages it in an unsigned int.
- * 
- * Thought for obtaining a basic shading color for evey sphere pixel.
- * 
- * @param lambertCos
- */
-uint32_t vecToColor(glm::vec3 lambertCos);
-
-/**
  * @brief Projects and draws a sphere onto the viewport.
  * 
  * Takes a sphere on world coordinates and projects it onto the viewport in the framebuffer 
@@ -95,19 +80,53 @@ uint32_t vecToColor(glm::vec3 lambertCos);
  * @param view View Matrix.
  * @param up Camera Up orientation vector.
  * @param front Camera Front orientation vector.
+ * @param right Camera Right orientation vector.
  * @param camPos Camera position.
+ * @param fov Field of view of the camera. 
  * @param SCR_WIDTH Viewport width. 
  * @param SCR_HEIGHT Viewport height. 
  * @param sphere Sphere represented as a position and radius. 
  * @param framebuffer Framebuffer containing color info of every pixel.
  * @param depthBuffer Depth buffer containing info of every pixel's projection depth. 
- * @param hizPyramid Hierarchical Z buffer with mipmaps for occlusion culling.
  * 
  * @return True if any pixels from the sphere was drawn, false otherwise.
  */
 bool drawSphere(const glm::mat4& proj, const glm::mat4& view, 
-    const glm::vec3& up, const glm::vec3& front, const glm::vec3& camPos, 
-    const int SCR_WIDTH, const int SCR_HEIGHT, 
+    const glm::vec3& up, const glm::vec3& front, const glm::vec3& right, const glm::vec3& camPos, 
+    const int SCR_WIDTH, const int SCR_HEIGHT, const float& fov, 
+    const glm::vec4& sphere,
+    std::vector<uint32_t>& framebuffer, std::vector<float>& depthBuffer);
+
+
+    /**
+ * @brief Projects and draws a sphere onto the viewport.
+ * 
+ * Takes a sphere on world coordinates and projects it onto the viewport in the framebuffer 
+ * and taking into account the values of the depth buffer for it. If not visible it gets culled.
+ * 
+ * @param proj Projection Matrix.
+ * @param view View Matrix.
+ * @param up Camera Up orientation vector.
+ * @param front Camera Front orientation vector.
+ * @param right Camera Right orientation vector.
+ * @param camPos Camera position.
+ * @param SCR_WIDTH Viewport width. 
+ * @param SCR_HEIGHT Viewport height. 
+ * @param fov Field of view of the camera. 
+ * @param sphere Sphere represented as a position and radius. 
+ * @param framebuffer Framebuffer containing color info of every pixel.
+ * @param depthBuffer Depth buffer containing info of every pixel's projection depth. 
+ * @param hizPyramid Hierarchical Z buffer with mipmaps for occlusion culling.
+ * @param sphereVisibilityFrameCache Counter with visibility grace frames.
+ * @param pixelOwnership Pixel's sphere ownership vector.
+ * @param sphereIndex Sphere index on sphere buffer.
+ * @param pixelsOwned Number of pixels owned by the sphere.
+ * 
+ * @return True if any pixels from the sphere was drawn, false otherwise.
+ */
+bool drawSphereWithOcclusionCulling(const glm::mat4& proj, const glm::mat4& view, 
+    const glm::vec3& up, const glm::vec3& front, const glm::vec3& right, const glm::vec3& camPos, 
+    const int SCR_WIDTH, const int SCR_HEIGHT, const float& fov, 
     const glm::vec4& sphere,
     std::vector<uint32_t>& framebuffer, std::vector<float>& depthBuffer, HierarchicalZBuffer& hizPyramid, 
     uint8_t& sphereVisibilityFrameCache, std::vector<int>& pixelOwnership, int& sphereIndex, int pixelsOwned);

@@ -14,7 +14,7 @@
 #include "algorithms/frustum_cull.h"
 
 #include "utils/benchmark_resources.h"
-#include "utils/sequential/aux_functions.h"
+#include "utils/sequential/aux_functions_sphere.h"
 
 #include "ux/input.h"
 #include "ux/camera_controller.h"
@@ -32,7 +32,7 @@
 int SCR_WIDTH = 1024;
 int SCR_HEIGHT = 1024;
 
-int sphere_count = 1;
+int sphere_count = 1024;
 int frustumSpheres = 0;
 int visibleSpheres = 0;
 
@@ -69,9 +69,10 @@ void renderFrame(std::vector<uint32_t>& framebuffer,
     const glm::mat4& proj = cam.getProjection();
     const glm::mat4& view = cam.getView();
     const glm::vec3& up = cam.getUp();
-    
+    const glm::vec3& right = cam.getRight();
     const glm::vec3& front = cam.getFront();
     const glm::vec3& camPos = cam.getPosition();
+    const float& fov = cam.getFov();
     const Frustum frustum(cam);
     int frustumSpheresCount = 0;
     int visibleSpheresCount = 0;
@@ -80,7 +81,7 @@ void renderFrame(std::vector<uint32_t>& framebuffer,
         // std::cout << static_cast<int>(spheresVisibilityFrameCache[i]) << std::endl;
         if (frustum.isSphereInside(spheres[i]))
         {
-            bool wasDrawn = drawSphere(proj, view, up, front, camPos, SCR_WIDTH, SCR_HEIGHT, spheres[i], 
+            bool wasDrawn = drawSphereWithOcclusionCulling(proj, view, up, front, right, camPos, SCR_WIDTH, SCR_HEIGHT, fov, spheres[i], 
                 framebuffer, depthBuffer, hizPyramid, spheresVisibilityFrameCache[i], pixelOwnership, i, ownedPixelsMap[i]);
             frustumSpheresCount++;
             if (wasDrawn)

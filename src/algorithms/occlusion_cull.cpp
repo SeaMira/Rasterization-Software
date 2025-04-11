@@ -66,6 +66,22 @@ bool isPixelOccluded(float pixelDepth, const HierarchicalZBuffer& hiZPyramid, in
     return false;  // Sphere not occluded
 }
 
+bool isPixelLastLevelOccluded(float pixelDepth, const HierarchicalZBuffer& hiZPyramid, int screenX, int screenY)
+{
+    int mipWidth = hiZPyramid[hiZPyramid.size() - 1].m_width;
+    int mipHeight = hiZPyramid[hiZPyramid.size() - 1].m_height;
+
+    int mipX = static_cast<int>((float)(screenX * mipWidth) / (float)hiZPyramid[0].m_width);
+    int mipY = static_cast<int>((float)(screenY * mipHeight) / (float)hiZPyramid[0].m_height);
+
+    float hizDepth = hiZPyramid[hiZPyramid.size() - 1].getDepth(mipX, mipY);
+
+    if (pixelDepth > hizDepth) 
+        return true;  // Sphere occluded
+
+    return false;  // Sphere not occluded
+}
+
 bool isSphereBillboardVisible(std::vector<PixelZ>& spherePixels, const HierarchicalZBuffer& hiZPyramid)
 {
     std::vector<float> depths;

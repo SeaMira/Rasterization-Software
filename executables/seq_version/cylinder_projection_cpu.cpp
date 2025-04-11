@@ -15,6 +15,7 @@
 
 #include "utils/benchmark_resources.h"
 #include "utils/sequential/aux_functions_cylinder.h"
+#include "utils/sequential/aux_functions_sphere.h"
 
 #include "ux/input.h"
 #include "ux/camera_controller.h"
@@ -36,6 +37,9 @@ int sphere_count = 1024*64;
 int frustumSpheres = 0;
 int visibleSpheres = 0;
 
+int frustumCylinders = 0;
+// int visibleCylinders = 0;
+
 std::string title = "Brute Sequential Method"; 
 
 bool shown = true;
@@ -44,15 +48,11 @@ int topLevel = 4;
 int level = 3;
 bool showHiz = false;
 
-struct Cylinder
-{
-    glm::vec3 pa; // extreme A
-    glm::vec3 pb; // extreme B
-    float radius;
-};
 
 void renderFrame(std::vector<uint32_t>& framebuffer, 
-    std::vector<float>& depthBuffer, std::vector<Cylinder>& cylinders,
+    std::vector<float>& depthBuffer, 
+    std::vector<Cylinder>& cylinders,
+    std::vector<Sphere>& spheres,
     Camera& cam) 
 {
     const glm::mat4& proj = cam.getProjection();
@@ -63,12 +63,22 @@ void renderFrame(std::vector<uint32_t>& framebuffer,
     const glm::vec3& camPos = cam.getPosition();
     const float& fov = cam.getFov();
     const Frustum frustum(cam);
-    
+
+    frustumCylinders = 0;
     for(int i = 0; i < cylinders.size(); i++)
     {
-       drawCylinder(proj, view, up, front, right, camPos, SCR_WIDTH, SCR_HEIGHT, 
-            glm::vec4(cylinders[i].pa, 1.0f), glm::vec4(cylinders[i].pb, 1.0f), cylinders[i].radius, 
-            fov, framebuffer, depthBuffer);
+        if (frustum.isCylinderInside(cylinders[i]))
+        {
+            frustumCylinders++;
+            drawCylinder2ndAttempt(proj, view, up, front, right, camPos, SCR_WIDTH, SCR_HEIGHT, 
+                 cylinders[i].pa, cylinders[i].pb, cylinders[i].radius, 
+                 fov, framebuffer, depthBuffer);
+        } 
+    }
+
+    for(int i = 0; i < spheres.size(); i++)
+    {
+        drawSphere(proj, view, up, front, right, camPos, SCR_WIDTH, SCR_HEIGHT, fov, spheres[i], framebuffer, depthBuffer);
     }
     
 }
@@ -80,7 +90,8 @@ int main(int argc, char* argv[])
         {"Screen height", &SCR_HEIGHT},
         {"Sphere count", &sphere_count},
         {"Spheres On Frustum", &frustumSpheres},
-        {"Visible Spheres", &visibleSpheres}
+        {"Visible Spheres", &visibleSpheres},
+        {"Cylinders On Frustum", &frustumCylinders},
     };
 
     AppRenderer window { title, SCR_WIDTH, SCR_HEIGHT, shown };
@@ -94,8 +105,15 @@ int main(int argc, char* argv[])
    
     std::vector<Cylinder> cylinders = {
         {{0.0f, 0.0f, 0.0f}, {4.0f, 0.0f, 0.0f}, 1.0f},
-        {{0.0f, 2.0f, 0.0f}, {4.0f, 2.0f, 0.0f}, 1.0f},
-        {{0.0f, 4.0f, 0.0f}, {4.0f, 4.0f, 0.0f}, 1.0f},
+        // {{0.0f, 2.0f, 0.0f}, {4.0f, 2.0f, 0.0f}, 1.0f},
+        // {{0.0f, 4.0f, 0.0f}, {4.0f, 4.0f, 0.0f}, 1.0f},
+    
+    };
+    
+    std::vector<Sphere> spheres = {
+        // {2.0f, 0.0f, 0.0f, 2.0f},
+        // {2.0f, 2.0f, 0.0f, 2.0f},
+        // {2.0f, 4.0f, 0.0f, 2.0f},
     
     };
     
@@ -115,7 +133,7 @@ int main(int argc, char* argv[])
 
             std::fill(framebuffer.begin(), framebuffer.end(), 0xFFFFFF00);
             
-            renderFrame(framebuffer, depthBuffer, cylinders, camera);
+            renderFrame(framebuffer, depthBuffer, cylinders, spheres, camera);
 
             std::fill(depthBuffer.begin(), depthBuffer.end(), FLT_MAX);
 
