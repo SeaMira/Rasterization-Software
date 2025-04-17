@@ -11,12 +11,18 @@ layout(std430, binding = 5) buffer PixelOwnershipBuffer
     uint pixelOwnershipBuffer[];
 };
 
+layout(std430, binding = 6) buffer DepthBuffer 
+{
+    uint depthBuffer[];
+};
+
 uniform float far;
 uniform ivec2 screenResolution;
 
 void main() {
     ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
     pixelOwnershipBuffer[coords.x + screenResolution.x * coords.y] = 0;
+    depthBuffer[coords.x + screenResolution.x * coords.y] = floatBitsToUint(far);
     imageStore(depthData, coords, vec4(far));
     imageStore(outputImage, coords, vec4(1.0, 1.0, 0.0, 1.0)); 
 }

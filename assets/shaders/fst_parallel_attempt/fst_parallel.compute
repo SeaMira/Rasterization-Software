@@ -36,15 +36,21 @@ layout(std430, binding = 5) buffer PixelOwnershipBuffer
     uint pixelOwnershipBuffer[];
 };
 
+layout(std430, binding = 6) buffer DepthBuffer 
+{
+    uint depthBuffer[];
+};
+
 uniform mat4 view;
 uniform mat4 proj;
 
 uniform vec3 front;
 uniform vec3 up;
-// uniform vec3 right;
+uniform vec3 right;
 uniform vec3 cameraPos;
 
 uniform ivec2 screenResolution;
+uniform float fov;
 
 uniform int sphereCount;
 
@@ -54,17 +60,44 @@ const int pixelsToCheck = 5;
 
 struct bboxCorners
 {
-    // view space
-    vec3 upRightCorner;
-    vec3 upLeftCorner;
-    vec3 downRightCorner;
-    vec3 downLeftCorner;
-
     // screen space
     vec2 minCorner;
     vec2 maxCorner;
     
 };
+
+
+struct ScreenRayCasting
+{
+    vec3 rayStart; ///< Starting caster ray in world coordinates.
+    vec3 dx; ///< Per pixel delta direction vector for the x-axis.
+    vec3 dy; ///< Per pixel delta direction vector for the y-axis.
+};
+
+ScreenRayCasting makeScreenRayCasting(float aspectRatio)
+{
+    float fovRad = radians(fov);
+    float fovTan = tan(fovRad * 0.5f);
+    float halfFovTan = fovTan * aspectRatio;
+
+    // View-space ray directions for screen corners
+    vec3 corner00 = normalize((-1.0f * halfFovTan) * right + (-1.0f * fovTan) * up + front); // bottom-left
+    vec3 corner10 = normalize(( 1.0f * halfFovTan) * right + (-1.0f * fovTan) * up + front); // bottom-right
+    vec3 corner01 = normalize((-1.0f * halfFovTan) * right + ( 1.0f * fovTan) * up + front); // top-left
+
+    // Transform to world space only once
+    vec3 wCorner00 = mat3(view) * corner00;
+    vec3 wCorner10 = mat3(view) * corner10;
+    vec3 wCorner01 = mat3(view) * corner01;
+
+    // Delta per pixel
+    vec3 dx = (wCorner10 - wCorner00) / float(screenResolution.x);
+    vec3 dy = (wCorner01 - wCorner00) / float(screenResolution.y);
+
+    vec3 rayStart = wCorner00;
+
+    return ScreenRayCasting(rayStart, dx, dy);
+}
 
 uint vecToColor(vec3 lambertCos) {
     uint R = uint(lambertCos.r * 255.0);
@@ -75,12 +108,12 @@ uint vecToColor(vec3 lambertCos) {
 
 float iSphere(vec3 ro, vec3 rd, vec3 sph, float radius )
 {
-    float a = dot(rd, rd);
-    float b = dot( rd, sph );
-    float c = dot( sph, sph ) - radius*radius;
-    float h = b*b - a * c;
-    if( h < 0.0f) return -1.0f;
-    return (b - sqrt( h ))/a;
+    vec3 oc = ro - sph;
+	float b = dot( oc, rd );
+	float c = dot( oc, oc ) - radius*radius;
+	float h = b*b - c;
+	if( h<0.0 ) return -1.0;
+	return -b - sqrt( h );
 }
 
 bboxCorners getSphereBbox(const vec3 cameraSpaceSphere, const vec3 camImposPos, 
@@ -113,28 +146,22 @@ bboxCorners getSphereBbox(const vec3 cameraSpaceSphere, const vec3 camImposPos,
     vec2 maxCorner = max(max(ndcUpRight.xy, ndcUpLeft.xy), max(ndcDownRight.xy, ndcDownLeft.xy));
 
 
-    return bboxCorners(upRightCorner, upLeftCorner, downRightCorner, downLeftCorner, minCorner, maxCorner); 
+    return bboxCorners(minCorner, maxCorner); 
 }
 
-vec3 computeViewImpPos(int px, int py, 
-                ivec2 screenMin, ivec2 screenMax,
-                bboxCorners sphereBbox)
+vec3 computeRd(int px, int py, 
+                float fovTan, float halfFovTan)
 {
-    const float difx = screenMax.x - screenMin.x;
-    const float dify = screenMax.y - screenMin.y;
-
-    const float u = float(px - screenMin.x) / difx;
-    const float v = float(py - screenMin.y) / dify;
-    const vec3 A = mix(sphereBbox.upLeftCorner, sphereBbox.upRightCorner, u);
-    const vec3 B = mix(sphereBbox.downLeftCorner, sphereBbox.downRightCorner, u);
-    return mix(A, B, v);
+    vec2 p = (-vec2(screenResolution.x, screenResolution.y) + 2.0f*vec2(px, py))/vec2(screenResolution.x, screenResolution.y);
+    return normalize( p.x*right* halfFovTan + p.y*up * fovTan + front );
 }
 
-float onSphDepth(vec3 viewImpPos, vec3 cameraSpaceSphere, float r)
+float onSphDepth(vec3 rd, int px, int py, vec3 spherePos, float r, vec3 rayStart, vec3 dx, vec3 dy)
 {
-    const float h = iSphere(cameraPos, viewImpPos, cameraSpaceSphere, r);
-    const vec3 hit = viewImpPos * h;
-    return hit.z < 0.0f ? (hit.z * proj[2].z + proj[3].z) / -hit.z : 1000.0f;;
+    const float h = iSphere(cameraPos, rd, spherePos, r);
+    const vec3 hit = (rayStart + float(px) * dx + float(py) * dy) * h;
+    const float depth = (hit.z * proj[2].z + proj[3].z) / -hit.z;
+    return depth;
 }
 
 bool isSphereBillboardVisible(int xcoords[pixelsToCheck], int ycoords[pixelsToCheck], float pixelDepths[pixelsToCheck])
@@ -171,6 +198,7 @@ void drawSphere(Sphere sphere)
     bboxCorners sphereBbox = getSphereBbox(cameraSpaceSphere, camImposPos,
         normCamSpaceSphere, sphere.positionr.w);
     
+    float aspectRatio = float(screenResolution.x) / float(screenResolution.y);
     ivec2 screenMin, screenMax;
 
     screenMin.x = int(((sphereBbox.minCorner.x) * 0.5f + 0.5f) * float(screenResolution.x));
@@ -183,31 +211,40 @@ void drawSphere(Sphere sphere)
 
     if (difx * dify <= 2) return;
 
-    vec4 projClosestSpherePt = proj*vec4(camImposPos, 1.0);
-    float fSphereDepth = (projClosestSpherePt.z / projClosestSpherePt.w);
+    float fovRad = radians(fov);
+    float fovTan = tan(fovRad * 0.5f);
+    float halfFovTan = fovTan * aspectRatio;
+
+    ScreenRayCasting screenRayCasting = makeScreenRayCasting(aspectRatio);
+
+    // Delta per pixel
+    vec3 dx = screenRayCasting.dx;
+    vec3 dy = screenRayCasting.dy;
+
+    // Start ray origin in world
+    vec3 rayStart = screenRayCasting.rayStart;
+
 
     float mid_x = min(max((screenMin.x + screenMax.x)/2, 0), screenResolution.x);
     float mid_y = min(max((screenMin.y + screenMax.y)/2, 0), screenResolution.y);
-    vec3 middleLeft = computeViewImpPos(int(mid_x-difx*0.49f), int(mid_y), screenMin, screenMax, sphereBbox);
-    vec3 middleRight = computeViewImpPos(int(mid_x+difx*0.49f), int(mid_y), screenMin, screenMax, sphereBbox);
-    vec3 middleBottom = computeViewImpPos(int(mid_x), int(mid_y-dify*0.49f), screenMin, screenMax, sphereBbox);
-    vec3 middleTop = computeViewImpPos(int(mid_x), int(mid_y+dify*0.49f), screenMin, screenMax, sphereBbox);
-    vec3 middlePixelsVec = computeViewImpPos((screenMin.x + screenMax.x) / 2, (screenMin.y + screenMax.y) / 2, screenMin, screenMax, sphereBbox);
+
+    vec3 middleLeft = computeRd(int(mid_x-difx*0.49f), int(mid_y), fovTan, halfFovTan);
+    vec3 middleRight = computeRd(int(mid_x+difx*0.49f), int(mid_y), fovTan, halfFovTan);
+    vec3 middleBottom = computeRd(int(mid_x), int(mid_y-dify*0.49f), fovTan, halfFovTan);
+    vec3 middleTop = computeRd(int(mid_x), int(mid_y+dify*0.49f), fovTan, halfFovTan);
+    vec3 middlePixelsVec = computeRd((screenMin.x + screenMax.x) / 2, (screenMin.y + screenMax.y) / 2, fovTan, halfFovTan);
     
 
     int xcoords[pixelsToCheck] = {int(mid_x-difx*0.49f), int(mid_x+difx*0.49f), int(mid_x), int(mid_x), (screenMin.x + screenMax.x) / 2};
     int ycoords[pixelsToCheck] = {int(mid_y), int(mid_y), int(mid_y-dify*0.49f), int(mid_y+dify*0.49f), (screenMin.y + screenMax.y) / 2};
     float pixelDepths[pixelsToCheck] = {
-        onSphDepth(middleLeft, cameraSpaceSphere, sphere.positionr.w),
-        onSphDepth(middleRight, cameraSpaceSphere, sphere.positionr.w),
-        onSphDepth(middleBottom, cameraSpaceSphere, sphere.positionr.w),
-        onSphDepth(middleTop, cameraSpaceSphere, sphere.positionr.w),
-        onSphDepth(middlePixelsVec, cameraSpaceSphere, sphere.positionr.w)
+        onSphDepth(middleLeft, int(mid_x-difx*0.49f), int(mid_y), sphere.positionr.xyz, sphere.positionr.w, rayStart, dx, dy),
+        onSphDepth(middleRight, int(mid_x+difx*0.49f), int(mid_y), sphere.positionr.xyz, sphere.positionr.w, rayStart, dx, dy),
+        onSphDepth(middleBottom, int(mid_x), int(mid_y-dify*0.49f), sphere.positionr.xyz, sphere.positionr.w, rayStart, dx, dy),
+        onSphDepth(middleTop, int(mid_x), int(mid_y+dify*0.49f), sphere.positionr.xyz, sphere.positionr.w, rayStart, dx, dy),
+        onSphDepth(middlePixelsVec, (screenMin.x + screenMax.x) / 2, (screenMin.y + screenMax.y) / 2, sphere.positionr.xyz, sphere.positionr.w, rayStart, dx, dy),
     };
-    // imageStore(outputImage, ivec2(int(mid_x-difx*0.49f), int(mid_y)), vec4(0.0, 0.0, 0.0, 1.0));
-    // imageStore(outputImage, ivec2(int(mid_x+difx*0.49f), int(mid_y)), vec4(0.0, 0.0, 0.0, 1.0));
-    // imageStore(outputImage, ivec2(int(mid_x), int(mid_y-dify*0.49f)), vec4(0.0, 0.0, 0.0, 1.0));
-    // imageStore(outputImage, ivec2(int(mid_x), int(mid_y+dify*0.49f)), vec4(0.0, 0.0, 0.0, 1.0));
+    
 
 
     if (!isSphereBillboardVisible(xcoords, ycoords, pixelDepths))
@@ -232,19 +269,15 @@ void drawSphere(Sphere sphere)
         visibilityFrameBuffer[sphere.index].frames = 10;
     }
     spheres[gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_WorkGroupSize.x].wasDrawn[0] = 1;
-    // if (fSphereDepth > fMaxSampledDepth) return;
     for (int px = max(0, screenMin.x); px < min(screenMax.x, screenResolution.x); px++)
     {
+        vec3 rayColStart = rayStart + float(px) * dx;
         bool finishedLine = false;
         for (int py = max(0, screenMin.y); py < min(screenResolution.y, screenMax.y); py++)
         {
 
-            const float u = float(px - screenMin.x)/ difx;
-            const float v = float(py - screenMin.y)/ dify;
-            const vec3 A = mix(sphereBbox.upLeftCorner, sphereBbox.upRightCorner, u);
-            const vec3 B = mix(sphereBbox.downLeftCorner, sphereBbox.downRightCorner, u);
-            const vec3 viewImpPos = mix(A, B, v);
-            const float h = iSphere(cameraPos, viewImpPos, cameraSpaceSphere, sphere.positionr.w);
+            const vec3 rd = computeRd(px, py, fovTan, halfFovTan);
+            const float h = iSphere(cameraPos, rd, sphere.positionr.xyz, sphere.positionr.w);
 
             // imageStore(outputImage, ivec2(px, py), vec4(1.0, 1.0, 1.0, 1.0));
             // const bool showBbox = (px == screenMin.x || py == screenMin.y || px == screenMax.x - 1 || py == screenMax.y - 1);
@@ -252,16 +285,17 @@ void drawSphere(Sphere sphere)
             {
                 if (!finishedLine) finishedLine = true;
                 // imageStore(outputImage, ivec2(px, py), vec4(1.0, 0.0, 0.0, 1.0));
-                const vec3 hit = viewImpPos * h;
-                const float depth = hit.z < 0.0f ? (hit.z * proj[2].z + proj[3].z) / -hit.z : 1000.0f;
-                const vec3 normal = normalize( hit - cameraSpaceSphere );
-                const float lambertCos = dot(normal, -normalize(hit));
-                // const float old = atomicMin(depthData[index], depth);
-                // if (depthData[index] > depth) 
-                if (imageLoad(depthData, ivec2(px, py)).r > depth) 
+                const vec3 hit = (rayColStart + float(py) * dy) * h;
+                const float depth = (hit.z * proj[2].z + proj[3].z) / -hit.z ;
+                const uint depthUint = floatBitsToUint(depth);
+                int index = px + screenResolution.x*py;
+                uint old = atomicMin(depthBuffer[index], depthUint);
+                if (uintBitsToFloat(old) > depth) 
                 {
-                    // depthData[index] = depth;
-                    pixelOwnershipBuffer[px + screenResolution.x*py] = sphere.index;
+                    const vec3 normal = normalize( cameraPos + rd*h - sphere.positionr.xyz );
+                    const float lambertCos = dot(normal, -normalize(rd*h));
+                    depthBuffer[index] = depthUint;
+                    pixelOwnershipBuffer[index] = sphere.index;
                     imageStore(depthData, ivec2(px, py), vec4(depth));
                     imageStore(outputImage, ivec2(px, py), vec4(lambertCos * lightColor * diffuseI, 1.0));
                 }

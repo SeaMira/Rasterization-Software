@@ -27,7 +27,7 @@ using uint = unsigned int;
 // Settings
 int SCR_WIDTH = 1024;
 int SCR_HEIGHT = 1024;
-int sphere_count = 2000000;
+int sphere_count = 4000000;
 
 std::string title = "First Parallel Version"; 
 
@@ -102,14 +102,19 @@ int main(int argc, char* argv[])
     std::vector<GLuint> visibilityFrames(2 * spheres.size(), 10);
     StorageBuffer visibilityFramesBuffer(GL_SHADER_STORAGE_BUFFER);
     visibilityFramesBuffer.generateBufferData(2 * spheres.size() * sizeof(GLuint), 4, 
-        visibilityFrames.data(), GL_DYNAMIC_COPY);
+    visibilityFrames.data(), GL_DYNAMIC_COPY);
     visibilityFramesBuffer.unbind();
     
     std::vector<GLuint> pixelCountFrames(SCR_WIDTH*SCR_HEIGHT, 0);
     StorageBuffer pixelCountFramesBuffer(GL_SHADER_STORAGE_BUFFER);
     pixelCountFramesBuffer.generateBufferData(SCR_WIDTH*SCR_HEIGHT * sizeof(GLuint), 5, 
-        pixelCountFrames.data(), GL_DYNAMIC_COPY);
+    pixelCountFrames.data(), GL_DYNAMIC_COPY);
     pixelCountFramesBuffer.unbind();
+    
+    StorageBuffer depthBuffer(GL_SHADER_STORAGE_BUFFER);
+    depthBuffer.generateBufferData(SCR_HEIGHT * SCR_WIDTH * sizeof(uint), 6, 
+        nullptr, GL_STATIC_DRAW);
+    depthBuffer.unbind();
 
     Benchmark benchmark(camera_controller, chkPoints);
     Profiler profiler(window, "media/off/fst_parallel/frame_times.off", "media/off/fst_parallel/process_times.off");
@@ -173,7 +178,7 @@ int main(int argc, char* argv[])
                 numGroupsX = (visibleSpheresCount + workGroupSizeXPerSphere - 1) / workGroupSizeXPerSphere;
                 
                 computeShader.setInt("sphereCount", visibleSpheresCount); // visible sphere count given
-            #else
+                #else
                 computeShader.setInt("sphereCount", sphere_count);
                 computeShader.setVec4("frustumTopFace", glm::vec4(frustum.topFace.normal, frustum.topFace.distance));
                 computeShader.setVec4("frustumBottomFace", glm::vec4(frustum.bottomFace.normal, frustum.bottomFace.distance));
@@ -187,7 +192,9 @@ int main(int argc, char* argv[])
             computeShader.setMat4("view", camera.getView());
             computeShader.setVec3("up", camera.getUp());
             computeShader.setVec3("front", camera.getFront());
+            computeShader.setVec3("right", camera.getRight());
             computeShader.setVec3("cameraPos", camera.getPosition());
+            computeShader.setFloat("fov", camera.getFov()); // visible sphere count given
 
             glDispatchCompute(numGroupsX, numGroupsY, 1);
             glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);

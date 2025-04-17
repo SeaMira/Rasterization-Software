@@ -70,7 +70,7 @@ void renderFrame(std::vector<uint32_t>& framebuffer,
         if (frustum.isCylinderInside(cylinders[i]))
         {
             frustumCylinders++;
-            drawCylinder2ndAttempt(proj, view, up, front, right, camPos, SCR_WIDTH, SCR_HEIGHT, 
+            drawCylinder(proj, view, up, front, right, camPos, SCR_WIDTH, SCR_HEIGHT, 
                  cylinders[i].pa, cylinders[i].pb, cylinders[i].radius, 
                  fov, framebuffer, depthBuffer);
         } 
