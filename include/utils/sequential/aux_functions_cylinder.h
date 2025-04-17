@@ -70,11 +70,21 @@ bool drawCylinder(const glm::mat4& proj, const glm::mat4& view,
     std::vector<uint32_t>& framebuffer, std::vector<float>& depthBuffer);
 
 
-    std::vector<glm::vec2> getCylinderBbox2ndAttempt(const glm::vec3& pa, const glm::vec3& pb, const glm::vec3& center, 
+std::vector<glm::vec2> getCylinderBbox2ndAttempt(const glm::vec3& pa, const glm::vec3& pb, const glm::vec3& center, 
     const glm::mat4& proj, const glm::vec3& camPos, 
     const glm::vec3& front, const glm::vec3& up, const float cylRadius);
 
 bool drawCylinder2ndAttempt(const glm::mat4& proj, const glm::mat4& view, 
+    const glm::vec3& up, const glm::vec3& front, const glm::vec3& right, const glm::vec3& camPos, 
+    const int SCR_WIDTH, const int SCR_HEIGHT, 
+    const glm::vec3& pa, const glm::vec3& pb, const float& cylRadius, const float& fov,
+    std::vector<uint32_t>& framebuffer, std::vector<float>& depthBuffer);
+
+std::vector<glm::vec2> getCylinderBbox3rdAttempt(const glm::vec3& pa, const glm::vec3& pb, const glm::vec3& center, 
+    const glm::mat4& proj, const glm::vec3& camPos, 
+    const glm::vec3& front, const glm::vec3& up, const float cylRadius);
+
+bool drawCylinder3rdAttempt(const glm::mat4& proj, const glm::mat4& view, 
     const glm::vec3& up, const glm::vec3& front, const glm::vec3& right, const glm::vec3& camPos, 
     const int SCR_WIDTH, const int SCR_HEIGHT, 
     const glm::vec3& pa, const glm::vec3& pb, const float& cylRadius, const float& fov,
