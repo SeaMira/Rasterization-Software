@@ -292,7 +292,6 @@ void drawSphere(Sphere sphere)
                 {
                     const vec3 normal = normalize( cameraPos + rd*h - sphere.positionr.xyz );
                     const float lambertCos = dot(normal, -normalize(rd*h));
-                    depthBuffer[index] = depthUint;
                     pixelOwnershipBuffer[index] = sphere.index;
                     imageStore(depthData, ivec2(px, py), vec4(depth));
                     imageStore(outputImage, ivec2(px, py), vec4(lambertCos * lightColor * diffuseI, 1.0));

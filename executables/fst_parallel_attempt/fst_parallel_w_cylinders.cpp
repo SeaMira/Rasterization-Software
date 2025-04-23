@@ -29,7 +29,7 @@ using uint = unsigned int;
 // Settings
 int SCR_WIDTH = 1024;
 int SCR_HEIGHT = 1024;
-int sphere_count = 0;
+int sphere_count = 2000000;
 int cylinder_count = 2000000;
 
 std::string title = "First Parallel Version: Spheres and Cylinders"; 
@@ -108,7 +108,7 @@ int main(int argc, char* argv[])
         fillSpheresData(spheres, visibleSpheres);
         
         visibleCylindersCount = cylinder_count;
-        fillCylindersData(cylinders, visibleCylinders);
+        fillCylindersData(cylinders, visibleCylinders, sphere_count);
     #endif
     
     StorageBuffer sphereBuffer(GL_SHADER_STORAGE_BUFFER);
@@ -125,17 +125,17 @@ int main(int argc, char* argv[])
     Texture downsampledDepthTexture(GL_TEXTURE_2D, GL_R32F, SCR_WIDTH/(1 << downsampleLevel), SCR_HEIGHT/(1 << downsampleLevel), 4);
     // Framebuffer downsampleDepthFBO;
     // downsampleDepthFBO.attachTexture(GL_COLOR_ATTACHMENT0, downsampledDepthTexture);
-    
-    std::vector<GLuint> visibilityFrames(2 * spheres.size(), 10);
+    // all entities visibility info ssbo
+    int totalEntities = sphere_count + cylinder_count;
+    std::vector<GLuint> visibilityFrames(2 * totalEntities, 10);
     StorageBuffer visibilityFramesBuffer(GL_SHADER_STORAGE_BUFFER);
-    visibilityFramesBuffer.generateBufferData(2 * spheres.size() * sizeof(GLuint), 5, 
+    visibilityFramesBuffer.generateBufferData(2 * totalEntities * sizeof(GLuint), 5, 
     visibilityFrames.data(), GL_DYNAMIC_COPY);
     visibilityFramesBuffer.unbind();
     
-    std::vector<GLuint> pixelCountFrames(SCR_WIDTH*SCR_HEIGHT, 0);
     StorageBuffer pixelCountFramesBuffer(GL_SHADER_STORAGE_BUFFER);
     pixelCountFramesBuffer.generateBufferData(SCR_WIDTH*SCR_HEIGHT * sizeof(GLuint), 6, 
-    pixelCountFrames.data(), GL_DYNAMIC_COPY);
+    nullptr, GL_DYNAMIC_COPY);
     pixelCountFramesBuffer.unbind();
     
     StorageBuffer depthBuffer(GL_SHADER_STORAGE_BUFFER);
@@ -223,7 +223,7 @@ int main(int argc, char* argv[])
             
             cylinderShader.use();
             #if CPU_FRUSTUM_CULLING
-                cullCylinders(cylinders, visibleCylinders, frustum, visibleCylindersCount);
+                cullCylinders(cylinders, visibleCylinders, frustum, visibleCylindersCount, sphere_count);
                 cylinderBuffer.bind();
                 glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, visibleCylindersCount * sizeof(CylinderContainer), visibleCylinders.data());
                 cylinderBuffer.unbind();

@@ -57,7 +57,7 @@ uniform int cylinderCount;
 
 const vec3 lightColor = vec3(0.01, 1.0, 0.05);
 const float diffuseI = 0.9;
-const int pixelsToCheck = 5;
+const int pixelsToCheck = 3;
 
 
 struct ScreenRayCasting
@@ -174,20 +174,20 @@ void getCylinderBbox(out vec2 projectedPoints[4], vec3 pa, vec3 pb, vec3 center,
         
 }
 
-// vec3 computeRd(int px, int py, 
-//                 float fovTan, float halfFovTan)
-// {
-//     vec2 p = (-vec2(screenResolution.x, screenResolution.y) + 2.0f*vec2(px, py))/vec2(screenResolution.x, screenResolution.y);
-//     return normalize( p.x*right* halfFovTan + p.y*up * fovTan + front );
-// }
+vec3 computeRd(int px, int py, 
+                float fovTan, float halfFovTan)
+{
+    vec2 p = (-vec2(screenResolution.x, screenResolution.y) + 2.0f*vec2(px, py))/vec2(screenResolution.x, screenResolution.y);
+    return normalize( p.x*right* halfFovTan + p.y*up * fovTan + front );
+}
 
-// float onSphDepth(vec3 rd, int px, int py, vec3 spherePos, float r, vec3 rayStart, vec3 dx, vec3 dy)
-// {
-//     const float h = iSphere(cameraPos, rd, spherePos, r);
-//     const vec3 hit = (rayStart + float(px) * dx + float(py) * dy) * h;
-//     const float depth = (hit.z * proj[2].z + proj[3].z) / -hit.z;
-//     return depth;
-// }
+float onCylDepth(vec3 rd, int px, int py, vec3 pa, vec3 pb, float r, vec3 rayStart, vec3 dx, vec3 dy)
+{
+    const float h = iCylinder(cameraPos, rd, pa, pb, r).x;
+    const vec3 hit = (rayStart + float(px) * dx + float(py) * dy) * h;
+    const float depth = (hit.z * proj[2].z + proj[3].z) / -hit.z;
+    return depth;
+}
 
 float intersectX(vec2 a, vec2 b, float y) 
 {
@@ -196,29 +196,25 @@ float intersectX(vec2 a, vec2 b, float y)
     return a.x + t * (b.x - a.x);
 }
 
-// bool isSphereBillboardVisible(int xcoords[pixelsToCheck], int ycoords[pixelsToCheck], float pixelDepths[pixelsToCheck])
-// {
-//     ivec2 downsampledTexSize = textureSize(downsampledDepthTexture, 0);
-//     const int ds_x = downsampledTexSize.x;
-//     const int ds_y = downsampledTexSize.y;
+bool isBillboardVisible(int xcoords[pixelsToCheck], int ycoords[pixelsToCheck], float pixelDepths[pixelsToCheck])
+{
+    ivec2 downsampledTexSize = textureSize(downsampledDepthTexture, 0);
+    const int ds_x = downsampledTexSize.x;
+    const int ds_y = downsampledTexSize.y;
 
-//     float pixel1 = texelFetch(downsampledDepthTexture, ivec2(int(float(xcoords[0]*ds_x)/float(screenResolution.x)), int(float(ycoords[0]*ds_y)/float(screenResolution.y))), 0).r;
-//     float pixel2 = texelFetch(downsampledDepthTexture, ivec2(int(float(xcoords[1]*ds_x)/float(screenResolution.x)), int(float(ycoords[1]*ds_y)/float(screenResolution.y))), 0).r;
-//     float pixel3 = texelFetch(downsampledDepthTexture, ivec2(int(float(xcoords[2]*ds_x)/float(screenResolution.x)), int(float(ycoords[2]*ds_y)/float(screenResolution.y))), 0).r;
-//     float pixel4 = texelFetch(downsampledDepthTexture, ivec2(int(float(xcoords[3]*ds_x)/float(screenResolution.x)), int(float(ycoords[3]*ds_y)/float(screenResolution.y))), 0).r;
-//     float pixel5 = texelFetch(downsampledDepthTexture, ivec2(int(float(xcoords[4]*ds_x)/float(screenResolution.x)), int(float(ycoords[4]*ds_y)/float(screenResolution.y))), 0).r;
+    float pixel1 = texelFetch(downsampledDepthTexture, ivec2(int(float(xcoords[0]*ds_x)/float(screenResolution.x)), int(float(ycoords[0]*ds_y)/float(screenResolution.y))), 0).r;
+    float pixel2 = texelFetch(downsampledDepthTexture, ivec2(int(float(xcoords[1]*ds_x)/float(screenResolution.x)), int(float(ycoords[1]*ds_y)/float(screenResolution.y))), 0).r;
+    float pixel3 = texelFetch(downsampledDepthTexture, ivec2(int(float(xcoords[2]*ds_x)/float(screenResolution.x)), int(float(ycoords[2]*ds_y)/float(screenResolution.y))), 0).r;
 
-//     for (int i = 0; i < pixelsToCheck; i++)
-//     {
-//         if (pixelDepths[i] <= pixel1 || 
-//             pixelDepths[i] <= pixel2 || 
-//             pixelDepths[i] <= pixel3 || 
-//             pixelDepths[i] <= pixel4 || 
-//             pixelDepths[i] <= pixel5)
-//             return true;
-//     }
-//     return false;
-// }
+    for (int i = 0; i < pixelsToCheck; i++)
+    {
+        if (pixelDepths[i] <= pixel1 || 
+            pixelDepths[i] <= pixel2 ||
+            pixelDepths[i] <= pixel3)
+            return true;
+    }
+    return false;
+}
 
 void drawCylinder(Cylinder cylinder)
 {
@@ -271,50 +267,66 @@ void drawCylinder(Cylinder cylinder)
     vec3 rayStart = screenRayCasting.rayStart;
 
 
-    // float mid_x = min(max((screenMin.x + screenMax.x)/2, 0), screenResolution.x);
-    // float mid_y = min(max((screenMin.y + screenMax.y)/2, 0), screenResolution.y);
+    // Cylinder axis
+    const vec3 z = normalize(camImpPosB - camImpPosA);
 
-    // vec3 middleLeft = computeRd(int(mid_x-difx*0.49f), int(mid_y), fovTan, halfFovTan);
-    // vec3 middleRight = computeRd(int(mid_x+difx*0.49f), int(mid_y), fovTan, halfFovTan);
-    // vec3 middleBottom = computeRd(int(mid_x), int(mid_y-dify*0.49f), fovTan, halfFovTan);
-    // vec3 middleTop = computeRd(int(mid_x), int(mid_y+dify*0.49f), fovTan, halfFovTan);
-    // vec3 middlePixelsVec = computeRd((screenMin.x + screenMax.x) / 2, (screenMin.y + screenMax.y) / 2, fovTan, halfFovTan);
+    // Find orthonormal x,y axes orthogonal to cylinder axis
+    vec3 x = normalize(cross(center, z));
+
+    const vec3 closePa1 = camImpPosA - x * ra;
+    const vec3 closePa2 = camImpPosA + x * ra;
+    vec3 closePa = closePa1.z < closePa2.z ? closePa1 : closePa2;
+    const vec4 closePaProj = proj * vec4(closePa, 1.0f);
+    closePa = vec3(closePaProj.x / closePaProj.w, closePaProj.y / closePaProj.w, closePaProj.z / closePaProj.w);
+    const ivec2 closePaScreen = ivec2((closePa.x * 0.5f + 0.5f) * screenResolution.x, (closePa.y * 0.5f + 0.5f) * screenResolution.y);
+    closePa = computeRd(closePaScreen.x, closePaScreen.y, fovTan, halfFovTan);
     
-
-    // int xcoords[pixelsToCheck] = {int(mid_x-difx*0.49f), int(mid_x+difx*0.49f), int(mid_x), int(mid_x), (screenMin.x + screenMax.x) / 2};
-    // int ycoords[pixelsToCheck] = {int(mid_y), int(mid_y), int(mid_y-dify*0.49f), int(mid_y+dify*0.49f), (screenMin.y + screenMax.y) / 2};
-    // float pixelDepths[pixelsToCheck] = {
-    //     onSphDepth(middleLeft, int(mid_x-difx*0.49f), int(mid_y), sphere.positionr.xyz, sphere.positionr.w, rayStart, dx, dy),
-    //     onSphDepth(middleRight, int(mid_x+difx*0.49f), int(mid_y), sphere.positionr.xyz, sphere.positionr.w, rayStart, dx, dy),
-    //     onSphDepth(middleBottom, int(mid_x), int(mid_y-dify*0.49f), sphere.positionr.xyz, sphere.positionr.w, rayStart, dx, dy),
-    //     onSphDepth(middleTop, int(mid_x), int(mid_y+dify*0.49f), sphere.positionr.xyz, sphere.positionr.w, rayStart, dx, dy),
-    //     onSphDepth(middlePixelsVec, (screenMin.x + screenMax.x) / 2, (screenMin.y + screenMax.y) / 2, sphere.positionr.xyz, sphere.positionr.w, rayStart, dx, dy),
-    // };
+    const vec3 closePb1 = camImpPosB - x * ra;
+    const vec3 closePb2 = camImpPosB + x * ra;
+    vec3 closePb = closePb1.z < closePb2.z ? closePb1 : closePb2;
+    const vec4 closePbProj = proj * vec4(closePb, 1.0f);
+    closePb = vec3(closePbProj.x / closePbProj.w, closePbProj.y / closePbProj.w, closePbProj.z / closePbProj.w);
+    const ivec2 closePbScreen = ivec2(int((closePb.x * 0.5f + 0.5f) * screenResolution.x), int((closePb.y * 0.5f + 0.5f) * screenResolution.y));
+    closePb = computeRd(closePbScreen.x, closePbScreen.y, fovTan, halfFovTan);
     
+    const vec3 closeCenter1 = center - x * ra;
+    const vec3 closeCenter2 = center + x * ra;
+    vec3 closeCenter = closeCenter1.z < closeCenter2.z ? closeCenter1 : closeCenter2;
+    const vec4 closeCenterProj = proj * vec4(closeCenter, 1.0f);
+    closeCenter = vec3(closeCenterProj.x / closeCenterProj.w, closeCenterProj.y / closeCenterProj.w, closeCenterProj.z / closeCenterProj.w);
+    const ivec2 closeCenterScreen = ivec2(int((closeCenter.x * 0.5f + 0.5f) * screenResolution.x), int((closeCenter.y * 0.5f + 0.5f) * screenResolution.y));
+    closeCenter = computeRd(closeCenterScreen.x, closeCenterScreen.y, fovTan, halfFovTan);
 
+    int xcoords[pixelsToCheck] = {closePaScreen.x, closePbScreen.x, closeCenterScreen.x};
+    int ycoords[pixelsToCheck] = {closePaScreen.y, closePbScreen.y, closeCenterScreen.y};
+    float pixelDepths[pixelsToCheck] = {
+        onCylDepth(closePa, closePaScreen.x, closePaScreen.y, pa, pb, ra, rayStart, dx, dy),
+        onCylDepth(closePb, closePbScreen.x, closePbScreen.y, pa, pb, ra, rayStart, dx, dy),
+        onCylDepth(closeCenter, closeCenterScreen.x, closeCenterScreen.y, pa, pb, ra, rayStart, dx, dy),
+    };
 
-    // if (!isSphereBillboardVisible(xcoords, ycoords, pixelDepths))
-    // {
-    //     if (visibilityFrameBuffer[sphere.index].frames > 0 && 
-    //         visibilityFrameBuffer[sphere.index].pixels == 0) 
-    //     {
-    //         visibilityFrameBuffer[sphere.index].frames -= 1;
-    //     }
-    //     else if (visibilityFrameBuffer[sphere.index].frames == 0 && 
-    //         visibilityFrameBuffer[sphere.index].pixels == 0) 
-    //     {
-    //         spheres[gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_WorkGroupSize.x].wasDrawn[0] = 0;
-    //         return;
-    //     }
-    //     else 
-    //     {
-    //         visibilityFrameBuffer[sphere.index].frames = 10;
-    //     }
-    // } else
-    // {
-    //     visibilityFrameBuffer[sphere.index].frames = 10;
-    // }
-    // spheres[gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_WorkGroupSize.x].wasDrawn[0] = 1;
+    if (!isBillboardVisible(xcoords, ycoords, pixelDepths))
+    {
+        if (visibilityFrameBuffer[cylinder.index].frames > 0 && 
+            visibilityFrameBuffer[cylinder.index].pixels == 0) 
+        {
+            visibilityFrameBuffer[cylinder.index].frames -= 1;
+        }
+        else if (visibilityFrameBuffer[cylinder.index].frames == 0 && 
+            visibilityFrameBuffer[cylinder.index].pixels == 0) 
+        {
+            cylinders[gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_WorkGroupSize.x].wasDrawn[0] = 0;
+            return;
+        }
+        else 
+        {
+            visibilityFrameBuffer[cylinder.index].frames = 10;
+        }
+    } else
+    {
+        visibilityFrameBuffer[cylinder.index].frames = 10;
+    }
+    cylinders[gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_WorkGroupSize.x].wasDrawn[0] = 1;
     
     
     for (int py = min(screenResolution.y-1, maxY); py >= max(0, minY); --py)
@@ -372,7 +384,7 @@ void drawCylinder(Cylinder cylinder)
                     {
                         vec3  normal = normalize(vec3(tnor.y, tnor.z, tnor.w));
                         const float lambertCos = dot(normal, -normalize(t*rd));
-                        depthBuffer[index] = depthUint;
+                        pixelOwnershipBuffer[index] = cylinder.index;
                         imageStore(depthData, ivec2(px, py), vec4(depth));
                         imageStore(outputImage, ivec2(px, py), vec4(lambertCos * lightColor * diffuseI, 1.0));
                     }
@@ -393,9 +405,9 @@ void main()
         return;  // If index is greater that the amount of cylinders, return
     }
 
-    // Get cylidner
+    // Get cylinder
     Cylinder c = cylinders[index];
 
     drawCylinder(c);
-    // visibilityFrameBuffer[c.index].pixels = 0;
+    visibilityFrameBuffer[c.index].pixels = 0;
 }

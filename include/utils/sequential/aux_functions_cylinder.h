@@ -90,8 +90,13 @@ bool drawCylinder(const glm::mat4& proj, const glm::mat4& view,
  * @param fov Field of view of the camera. 
  * @param framebuffer Framebuffer containing color info of every pixel.
  * @param depthBuffer Depth buffer containing info of every pixel's projection depth. 
+ * @param hizPyramid Hierarchical Z buffer with mipmaps for occlusion culling.
+ * @param sphereVisibilityFrameCache Counter with visibility grace frames.
+ * @param pixelOwnership Pixel's ownership vector.
+ * @param cylinderIndex Cylinder index on cylinder buffer.
+ * @param pixelsOwned Number of pixels owned by the cylinder.
  * 
- * @return True if any pixels from the sphere was drawn, false otherwise.
+ * @return True if any pixels from the cylinder was drawn, false otherwise.
  */
 bool drawCylinderWithOcclusionCulling(const glm::mat4& proj, const glm::mat4& view, 
     const glm::vec3& up, const glm::vec3& front, const glm::vec3& right, const glm::vec3& camPos, 

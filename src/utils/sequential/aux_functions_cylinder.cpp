@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <functional>
 #include "utils/sequential/aux_functions_cylinder.h"
 
 // BBoxCorners getCylinderBbox(glm::vec3& pa, glm::vec3& pb, glm::vec3& center, 
@@ -332,6 +333,50 @@ bool drawCylinder(const glm::mat4& proj, const glm::mat4& view,
 
 }
 
+bool cylinderOcclusionCulling(const int& SCR_WIDTH, const int& SCR_HEIGHT, 
+    const float& cylRadius, const glm::vec3& pa, const glm::vec3& pb, 
+    const glm::vec3 center, const glm::mat4& proj,
+    HierarchicalZBuffer& hizPyramid, uint8_t& cylinderVisibilityFrameCache,
+    int pixelsOwned, std::function<glm::vec3(int, int)> computeRd,
+    std::function<float(glm::vec3, int, int)> onSphDepth)
+{
+    // Cylinder axis
+    const glm::vec3 z = glm::normalize(pb - pa);
+
+    // Find orthonormal x,y axes orthogonal to cylinder axis
+    glm::vec3 x = glm::normalize(glm::cross(center, z));
+
+    const glm::vec3 closePa1 = pa - x * cylRadius;
+    const glm::vec3 closePa2 = pa + x * cylRadius;
+    glm::vec3 closePa = closePa1.z < closePa2.z ? closePa1 : closePa2;
+    const glm::vec4 closePaProj = proj * glm::vec4(closePa, 1.0f);
+    closePa = glm::vec3(closePaProj.x / closePaProj.w, closePaProj.y / closePaProj.w, closePaProj.z / closePaProj.w);
+    const glm::ivec2 closePaScreen = glm::ivec2((closePa.x * 0.5f + 0.5f) * SCR_WIDTH, (closePa.y * 0.5f + 0.5f) * SCR_HEIGHT);
+    closePa = computeRd(closePaScreen.x, closePaScreen.y);
+    
+    const glm::vec3 closePb1 = pb - x * cylRadius;
+    const glm::vec3 closePb2 = pb + x * cylRadius;
+    glm::vec3 closePb = closePb1.z < closePb2.z ? closePb1 : closePb2;
+    const glm::vec4 closePbProj = proj * glm::vec4(closePb, 1.0f);
+    closePb = glm::vec3(closePbProj.x / closePbProj.w, closePbProj.y / closePbProj.w, closePbProj.z / closePbProj.w);
+    const glm::ivec2 closePbScreen = glm::ivec2((closePb.x * 0.5f + 0.5f) * SCR_WIDTH, (closePb.y * 0.5f + 0.5f) * SCR_HEIGHT);
+    closePb = computeRd(closePbScreen.x, closePbScreen.y);
+
+    std::vector<PixelZ> cylinderPixels = {
+        PixelZ(closePaScreen.x, closePaScreen.y, onSphDepth(closePa, closePaScreen.x, closePaScreen.y)),
+        PixelZ(closePbScreen.x, closePbScreen.y, onSphDepth(closePb, closePbScreen.x, closePbScreen.y)),
+    };
+
+    if (!isBillboardVisible(cylinderPixels, hizPyramid))
+    {
+        // std::cout << "pixels owned by: " << sphereIndex << " - " << pixelsOwned << " frames " << (int)(cylinderVisibilityFrameCache & 0b01111111) << std::endl;
+        if ((cylinderVisibilityFrameCache & 0b01111111) == 0 && pixelsOwned == 0)
+            return false;
+        else if ((cylinderVisibilityFrameCache & 0b01111111) > 0 && pixelsOwned == 0)
+            cylinderVisibilityFrameCache = (cylinderVisibilityFrameCache & 0b01111111) - 1;
+    }
+    return true;
+}
 
 bool drawCylinderWithOcclusionCulling(const glm::mat4& proj, const glm::mat4& view, 
     const glm::vec3& up, const glm::vec3& front, const glm::vec3& right, const glm::vec3& camPos, 
@@ -384,7 +429,7 @@ bool drawCylinderWithOcclusionCulling(const glm::mat4& proj, const glm::mat4& vi
     // Start ray origin in world
     glm::vec3 rayStart = screenRayCasting.rayStart;
     
-    auto computeRd = [&](int px, int py) -> glm::vec3 {
+    auto computeRd = [&SCR_WIDTH, SCR_HEIGHT, right, halfFovTan, up, fovTan, front](int px, int py) -> glm::vec3 {
         glm::vec2 p = (-glm::vec2(SCR_WIDTH, SCR_HEIGHT) + 2.0f*glm::vec2(px, py))/glm::vec2(SCR_WIDTH, SCR_HEIGHT);
         return glm::normalize( p.x*right* halfFovTan + p.y*up * fovTan + front );
     };
@@ -398,46 +443,9 @@ bool drawCylinderWithOcclusionCulling(const glm::mat4& proj, const glm::mat4& vi
 
     // Occlusion culling 
 
-    // Cylinder axis
-    const glm::vec3 z = glm::normalize(camImpPosB - camImpPosA);
-
-    // Find orthonormal x,y axes orthogonal to cylinder axis
-    glm::vec3 x = glm::normalize(glm::cross(center, z));
-    glm::vec3 y = glm::normalize(glm::cross(x, z)); // make full basis
-
-    glm::vec3 closePa1 = camImpPosA - x * cylRadius;
-    glm::vec3 closePa2 = camImpPosA + x * cylRadius;
-    glm::vec3 closePa = closePa1.z < closePa2.z ? closePa1 : closePa2;
-    const glm::vec4 closePaProj = proj * glm::vec4(closePa, 1.0f);
-    glm::vec3 ndcClosePa = glm::vec3(closePaProj.x / closePaProj.w, closePaProj.y / closePaProj.w, closePaProj.z / closePaProj.w);
-    glm::ivec2 closePaScreen = glm::ivec2((ndcClosePa.x * 0.5f + 0.5f) * SCR_WIDTH, (ndcClosePa.y * 0.5f + 0.5f) * SCR_HEIGHT);
-    glm::vec3 closePaRd = computeRd(closePaScreen.x, closePaScreen.y);
-    
-    glm::vec3 closePb1 = camImpPosB - x * cylRadius;
-    glm::vec3 closePb2 = camImpPosB + x * cylRadius;
-    glm::vec3 closePb = closePb1.z < closePb2.z ? closePb1 : closePb2;
-    const glm::vec4 closePbProj = proj * glm::vec4(closePb, 1.0f);
-    glm::vec3 ndcClosePb = glm::vec3(closePbProj.x / closePbProj.w, closePbProj.y / closePbProj.w, closePbProj.z / closePbProj.w);
-    glm::ivec2 closePbScreen = glm::ivec2((ndcClosePb.x * 0.5f + 0.5f) * SCR_WIDTH, (ndcClosePb.y * 0.5f + 0.5f) * SCR_HEIGHT);
-    glm::vec3 closePbRd = computeRd(closePbScreen.x, closePbScreen.y);
-
-    std::vector<PixelZ> cylinderPixels = {
-        PixelZ(closePaScreen.x, closePaScreen.y, onSphDepth(closePaRd, closePaScreen.x, closePaScreen.y)),
-        PixelZ(closePbScreen.x, closePbScreen.y, onSphDepth(closePbRd, closePbScreen.x, closePbScreen.y)),
-    };
-
-    if (!isBillboardVisible(cylinderPixels, hizPyramid))
-    {
-        // std::cout << "pixels owned by: " << sphereIndex << " - " << pixelsOwned << " frames " << (int)(cylinderVisibilityFrameCache & 0b01111111) << std::endl;
-        if ((cylinderVisibilityFrameCache & 0b01111111) == 0 && pixelsOwned == 0)
-        {
-            // std::cout << "cylinder no frames" << std::endl;
-            return false;
-        }
-        else if ((cylinderVisibilityFrameCache & 0b01111111) > 0 && pixelsOwned == 0)
-            // std::cout << "menos frames de gracia para " << sphereIndex << std::endl;
-            cylinderVisibilityFrameCache = (cylinderVisibilityFrameCache & 0b01111111) - 1;
-    }
+    if (!cylinderOcclusionCulling(SCR_WIDTH, SCR_HEIGHT, cylRadius, pa, pb, center, proj,
+        hizPyramid, cylinderVisibilityFrameCache, pixelsOwned, computeRd, onSphDepth))
+        return false;
     ////
     
     #pragma omp parallel for collapse(2)

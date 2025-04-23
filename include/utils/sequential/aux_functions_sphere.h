@@ -132,7 +132,7 @@ bool drawSphereWithOcclusionCulling(const glm::mat4& proj, const glm::mat4& view
     uint8_t& sphereVisibilityFrameCache, std::vector<int>& pixelOwnership, int& sphereIndex, int pixelsOwned);
 
 /**
- * @brief Projects and draws a sphere billboard onto the viewport.abort
+ * @brief Projects and draws a sphere billboard onto the viewport.
  * 
  * Takes a sphere on world coordinates and projects its billboard onto the viewport in the framebuffer 
  * and taking into account the values of the depth buffer for it. If not visible it gets culled.

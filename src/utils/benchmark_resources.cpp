@@ -6,9 +6,9 @@
 SceneType currentScene = SceneType::PACKAGE_SCENE;
 std::filesystem::path scene_path = "assets/molecules/1AGA.mmtf";
 
-int gridWidth = 16;
-int gridHeight = 16;
-int gridDepth = 16;
+int gridWidth = 200;
+int gridHeight = 200;
+int gridDepth = 100;
 int interleaveW = 5;
 int interleaveH = 5;
 
