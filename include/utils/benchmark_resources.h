@@ -8,6 +8,8 @@
 #include <string>
 #include <glm/glm.hpp>
 
+#include "geometry/cylinder/cylinder.h"
+
 /**
  * @enum SceneType
  * @brief Enumeration for the type of scene to load.
@@ -20,6 +22,7 @@ enum class SceneType {
     PACKAGE_SCENE
 };
 
+
 /** 
  * @brief Global variable with the scene type to load.
  */
@@ -31,17 +34,17 @@ extern std::filesystem::path scene_path;
 
 // benchmark settings
 /** 
- * @brief Global variable with the grid spheres amount along the width axis on created scenes.
+ * @brief Global variable with the grid spaces amount along the width axis on created scenes.
  */
-extern int spheresGridWidth;
+extern int gridWidth;
 /** 
- * @brief Global variable with the grid spheres amount along the height axis on created scenes.
+ * @brief Global variable with the grid spaces amount along the height axis on created scenes.
  */
-extern int spheresGridHeight;
+extern int gridHeight;
 /** 
- * @brief Global variable with the grid spheres amount along the depth axis on created scenes.
+ * @brief Global variable with the grid spaces amount along the depth axis on created scenes.
  */
-extern int spheresGridDepth;
+extern int gridDepth;
 /** 
  * @brief Global variable with the grid width interleave for benchmark checkpoints.
  */
@@ -76,17 +79,42 @@ extern int interleaveY;
 std::vector<glm::vec4> loaded_scene(std::filesystem::path& path, int sphere_count);
 
 /**
+ * @brief Load a scene from a file utilizing a basic chemfiles loader.
+ * 
+ * Uses a ChemFilesLoader object to load the bonds from a file in a cylinder vector.
+ * 
+ * @param path Path to the file to load the scene from.
+ * @param cylinder_count Number of cylinders to load from the file.
+ * 
+ * @return Cylinder vector with the cylinders .
+ */
+std::vector<Cylinder> loaded_cylinder_scene(std::filesystem::path& path, int cylinder_count);
+
+/**
  * @brief Create a grid scene with spheres distributed in a 2D grid pattern.
  * 
  * Creates a grid scene with spheres distributed in a 2D grid pattern with as much spheres as indicated
  * in the spheres count given. Global variable used to know the grid width
  * 
- * @param spheresGridWidth Width of the grid to create.
+ * @param gridWidth Number of spaces along the width of the grid to create.
  * @param sphere_count Number of spheres to create.
  * 
  * @return vec4 vector with the spheres positions.
  */
-std::vector<glm::vec4> grid_scene(int spheresGridWidth, int sphere_count);
+std::vector<glm::vec4> grid_scene(int gridWidth, int sphere_count);
+
+/**
+ * @brief Create a grid scene with cylinders distributed in a 2D grid pattern.
+ * 
+ * Creates a grid scene with cylinders distributed in a 2D grid pattern with as much cylinders as indicated
+ * in the cylinders count given. Global variable used to know the grid width
+ * 
+ * @param gridWidth Number of spaces along the width of the grid to create.
+ * @param cylinder_count Number of cylinders to create.
+ * 
+ * @return vec4 vector with the cylinders positions.
+ */
+std::vector<Cylinder> cylinder_grid_scene(int gridWidth, int cylinder_count);
 
 /**
  * @brief Create a package scene with spheres distributed in a 3D grid pattern.
@@ -94,14 +122,29 @@ std::vector<glm::vec4> grid_scene(int spheresGridWidth, int sphere_count);
  * Creates a package scene with spheres distributed in a 3D grid pattern with as much spheres as indicated
  * in the spheres count given. Global variables used to know the grid width, height and depth.
  * 
- * @param spheresGridWidth Width of the grid to create.
- * @param spheresGridHeight Height of the grid to create.
- * @param spheresGridDepth Depth of the grid to create.
+ * @param gridWidth Width of the grid to create.
+ * @param gridHeight Height of the grid to create.
+ * @param gridDepth Depth of the grid to create.
  * @param sphere_count Number of spheres to create.
  * 
  * @return vec4 vector with the spheres positions.
  */
-std::vector<glm::vec4> package_scene(int spheresGridWidth, int spheresGridHeight, int spheresGridDepth, int sphere_count);
+std::vector<glm::vec4> package_scene(int gridWidth, int gridHeight, int gridDepth, int sphere_count);
+
+/**
+ * @brief Create a package scene with cylinders distributed in a 3D grid pattern.
+ * 
+ * Creates a package scene with cylinders distributed in a 3D grid pattern with as much cylinders as indicated
+ * in the cylinders count given. Global variables used to know the grid width, height and depth.
+ * 
+ * @param gridWidth Width of the grid to create.
+ * @param gridHeight Height of the grid to create.
+ * @param gridDepth Depth of the grid to create.
+ * @param cylinder_count Number of cylinders to create.
+ * 
+ * @return Cylinder vector with the cylinders positions.
+ */
+std::vector<Cylinder> cylinder_package_scene(int gridWidth, int gridHeight, int gridDepth, int cylinder_count);
 
 /**
  * @brief Gets the strategic checkpoints and camera targets for a benchmarck on an specific scene.
@@ -110,14 +153,14 @@ std::vector<glm::vec4> package_scene(int spheresGridWidth, int spheresGridHeight
  * grid that distributes the spheres.
  * 
  * @param sphere_count a reference to the value that represents the amount of spheres on the scene.
- * @param spheresGridWidth the width of the grid that distributes the spheres.
+ * @param gridWidth the spaces along the width of the grid.
  * @param interleaveW the distance between checkpoints on the width axis.
  * @param interleaveH the distance between checkpoints on the height axis.
  * @param interleaveZ the distance between checkpoints on the depth axis.
  * 
  * @return vector of pairs with the checkpoints and camera targets.
  */
-std::vector<std::pair<glm::vec3, glm::vec3>> benchmark1_structured_grid(int& sphere_count, int spheresGridWidth, int interleaveW, int interleaveH, int interleaveZ);
+std::vector<std::pair<glm::vec3, glm::vec3>> benchmark1_structured_grid(int& sphere_count, int gridWidth, int interleaveW, int interleaveH, int interleaveZ);
 
 /**
  * @brief Gets the strategic checkpoints and camera targets for a benchmarck on an specific scene.
@@ -140,16 +183,16 @@ std::vector<std::pair<glm::vec3, glm::vec3>> benchmark2_loaded_molecules(std::ve
  * Creates benchmark checkpoints and targets for the camera, depending on the amount of spheres and distance from one point to another on every axis in the 3D grid.
  * 
  * @param sphere_count a reference to the value that represents the amount of spheres on the scene.
- * @param spheresGridWidth the width of the grid that distributes the spheres.
- * @param spheresGridHeight the height of the grid that distributes the spheres.
- * @param spheresGridDepth the depth of the grid that distributes the spheres.
+ * @param gridWidth the width of the grid that distributes the spheres.
+ * @param gridHeight the height of the grid that distributes the spheres.
+ * @param gridDepth the depth of the grid that distributes the spheres.
  * @param interleaveW the distance between checkpoints on the width axis.
  * @param interleaveH the distance between checkpoints on the height axis.
  * @param interleaveZ the distance between checkpoints on the depth axis.
  * 
  * @return vector of pairs with the checkpoints and camera targets.
  */
-std::vector<std::pair<glm::vec3, glm::vec3>> benchmark3_package(int& sphere_count, int spheresGridWidth, int spheresGridHeight, int spheresGridDepth, int interleaveW, int interleaveH, int interleaveZ);
+std::vector<std::pair<glm::vec3, glm::vec3>> benchmark3_package(int& sphere_count, int gridWidth, int gridHeight, int gridDepth, int interleaveW, int interleaveH, int interleaveZ);
 
 /**
  * @brief Gets the vector of spheres depending on the global variables values set.
@@ -160,6 +203,16 @@ std::vector<std::pair<glm::vec3, glm::vec3>> benchmark3_package(int& sphere_coun
  * @param sphere_count reference to the amount of spherez
  */
 std::vector<glm::vec4> getScene(int sphere_count);
+
+/**
+ * @brief Gets the vector of cylinders depending on the global variables values set.
+ * 
+ * Gets the vector of cylinders depending on the global variables values set. The global variable currentScene is used to know which kind of scene to create and 
+ * the cylinders amount to save.
+ * 
+ * @param cylinder_count reference to the amount of spherez
+ */
+std::vector<Cylinder> getCylinderScene(int cylinder_count);
 
 /**
  * @brief Gets the strategic checkpoints and camera targets for a benchmarck on an specific scene.

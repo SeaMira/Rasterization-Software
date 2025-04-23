@@ -38,6 +38,8 @@ void ChemFilesLoader::load(const std::filesystem::path & path)
 
             // Obtén las posiciones de los átomos
             auto positions = frame.positions();
+            auto topology = frame.topology();
+            auto bonds = topology.bonds();
 
             // Itera sobre todos los átomos en el frame
             for (size_t j = 0; j < frame.size(); ++j) 
@@ -49,6 +51,15 @@ void ChemFilesLoader::load(const std::filesystem::path & path)
                 float radius = SymbolRadius[atom.atomic_number().value_or( 0 )];
 
                 m_positions.push_back({position[0], position[1], position[2], radius});
+            }
+
+            for (const auto& bond : bonds) 
+            {
+                auto atom1 = bond[0];
+                auto atom2 = bond[1];
+
+                // Add atom indexes to the bond vector
+                m_bonds.push_back({atom1, atom2});
             }
         }
 
@@ -74,4 +85,9 @@ void ChemFilesLoader::prepareChemfiles()
 std::vector<glm::vec4> & ChemFilesLoader::getSphereInfo()
 {
     return m_positions;
+}
+
+std::vector<std::pair<int, int>> & ChemFilesLoader::getBondsInfo()
+{
+    return m_bonds;
 }

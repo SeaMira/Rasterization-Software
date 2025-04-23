@@ -6,9 +6,9 @@
 SceneType currentScene = SceneType::PACKAGE_SCENE;
 std::filesystem::path scene_path = "assets/molecules/1AGA.mmtf";
 
-int spheresGridWidth = 4;
-int spheresGridHeight = 4;
-int spheresGridDepth = 4;
+int gridWidth = 16;
+int gridHeight = 16;
+int gridDepth = 16;
 int interleaveW = 5;
 int interleaveH = 5;
 
@@ -20,30 +20,57 @@ int interleaveY = 10;
 std::vector<glm::vec4> loaded_scene(std::filesystem::path& path, int sphere_count)
 {
     ChemFilesLoader loader(path);
-    std::vector<glm::vec4> positions = loader.getSphereInfo();
+    std::vector<glm::vec4>& positions = loader.getSphereInfo();
     std::vector<glm::vec4> spheres(positions.begin(), positions.begin() + std::min(positions.size(), static_cast<size_t>(sphere_count)));
     return spheres;
 }
 
-std::vector<glm::vec4> grid_scene(int spheresGridWidth, int sphere_count)
+std::vector<Cylinder> loaded_cylinder_scene(std::filesystem::path& path, int cylinder_count)
+{
+    ChemFilesLoader loader(path);
+    std::vector<Cylinder> cylinders;
+
+    for (int i = 0; i < std::min(loader.getBondsAmount(), cylinder_count); i++)
+    {
+        std::pair<glm::vec4, glm::vec4> bond = loader.getBond(i);
+        cylinders.push_back({bond.first, bond.second, .35f});
+    }
+    return cylinders;
+}
+
+std::vector<glm::vec4> grid_scene(int gridWidth, int sphere_count)
 {
     std::vector<glm::vec4> spheres;
     for (int i = 0; i < sphere_count; i++)
     {
-        spheres.push_back({(float)(i%spheresGridWidth)*2.0f, (float)(i/spheresGridWidth) * 2.0f, (float)(i%spheresGridWidth)*2.0f, 1.0f});
+        spheres.push_back({(float)(i%gridWidth)*2.0f, (float)(i/gridWidth) * 2.0f, (float)(i%gridWidth)*2.0f, 1.0f});
     }
     return spheres;
 }
 
-std::vector<glm::vec4> package_scene(int spheresGridWidth, int spheresGridHeight, int spheresGridDepth, int sphere_count)
+std::vector<Cylinder> cylinder_grid_scene(int gridWidth, int cylinder_count)
+{
+    std::vector<Cylinder> cylinders;
+    for (int i = 0; i < cylinder_count; i++)
+    {
+        cylinders.push_back(
+            {{(float)(i%gridWidth)*2.0f, (float)(i/gridWidth) * 2.0f, (float)(i%gridWidth)*2.0f},
+            {(float)((i+1)%gridWidth)*2.0f, (float)(i/gridWidth) * 2.0f, (float)((i+1)%gridWidth)*2.0f},
+            1.0f}
+        );
+    }
+    return cylinders;
+}
+
+std::vector<glm::vec4> package_scene(int gridWidth, int gridHeight, int gridDepth, int sphere_count)
 {
     std::vector<glm::vec4> spheres;
     int count = 0;
-    for (int i = 0; i < spheresGridWidth; i++)
+    for (int i = 0; i < gridWidth; i++)
     {
-        for (int j = 0; j < spheresGridHeight; j++)
+        for (int j = 0; j < gridHeight; j++)
         {
-            for (int k = 0; k < spheresGridDepth; k++)
+            for (int k = 0; k < gridDepth; k++)
             {
                 if (count >= sphere_count) break;
                 spheres.push_back({(float)i*2.0f, (float)j*2.0f, (float)k*2.0f, 1.0f});
@@ -54,12 +81,35 @@ std::vector<glm::vec4> package_scene(int spheresGridWidth, int spheresGridHeight
     return spheres;
 }
 
-std::vector<std::pair<glm::vec3, glm::vec3>> benchmark1_structured_grid(int& sphere_count, int spheresGridWidth, int interleaveW, int interleaveH, int interleaveZ)
+std::vector<Cylinder> cylinder_package_scene(int gridWidth, int gridHeight, int gridDepth, int cylinder_count)
+{
+    std::vector<Cylinder> cylinders;
+    int count = 0;
+    for (int i = 0; i < gridWidth; i++)
+    {
+        for (int j = 0; j < gridHeight; j++)
+        {
+            for (int k = 0; k < gridDepth; k++)
+            {
+                if (count >= cylinder_count) break;
+                cylinders.push_back(
+                    {{(float)i*2.0f, (float)j*2.0f, (float)k*2.0f},
+                    {(float)i*2.0f, (float)j*2.0f, (float)(k+1)*2.0f},
+                    .5f}
+                );
+                count++;
+            }
+        }
+    }
+    return cylinders;
+}
+
+std::vector<std::pair<glm::vec3, glm::vec3>> benchmark1_structured_grid(int& sphere_count, int gridWidth, int interleaveW, int interleaveH, int interleaveZ)
 {
     std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints;
 
-    float h_delta = (sphere_count/spheresGridWidth) * 2.0f / interleaveH;
-    float w_delta = (float)(spheresGridWidth / interleaveW) * 2.0f;
+    float h_delta = (sphere_count/gridWidth) * 2.0f / interleaveH;
+    float w_delta = (float)(gridWidth / interleaveW) * 2.0f;
     for (int i = 0; i < interleaveW; i++)
     {
         for (int j = 0; j < interleaveH; j++)
@@ -136,11 +186,11 @@ std::vector<std::pair<glm::vec3, glm::vec3>> benchmark2_loaded_molecules(std::ve
     return chkPoints;
 }
 
-std::vector<std::pair<glm::vec3, glm::vec3>> benchmark3_package(int& sphere_count, int spheresGridWidth, int spheresGridHeight, int spheresGridDepth, int interleaveW, int interleaveH, int interleaveZ)
+std::vector<std::pair<glm::vec3, glm::vec3>> benchmark3_package(int& sphere_count, int gridWidth, int gridHeight, int gridDepth, int interleaveW, int interleaveH, int interleaveZ)
 {
-    float w_delta = (float)spheresGridWidth / interleaveW;
-    float h_delta = (float)spheresGridHeight / interleaveH;
-    float d_delta = (float)spheresGridDepth / interleaveZ;
+    float w_delta = (float)gridWidth / interleaveW;
+    float h_delta = (float)gridHeight / interleaveH;
+    float d_delta = (float)gridDepth / interleaveZ;
     
     std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints;
 
@@ -188,8 +238,8 @@ std::vector<std::pair<glm::vec3, glm::vec3>> benchmark3_package(int& sphere_coun
         
         chkPoints.push_back(
             {
-                glm::vec3((float)spheresGridWidth, (float)spheresGridHeight, -(float)k*2.0f),
-                glm::vec3((float)spheresGridWidth, (float)spheresGridHeight, 1.0f) 
+                glm::vec3((float)gridWidth, (float)gridHeight, -(float)k*2.0f),
+                glm::vec3((float)gridWidth, (float)gridHeight, 1.0f) 
             }
         );
         
@@ -208,13 +258,32 @@ std::vector<glm::vec4> getScene(int sphere_count)
         return loaded_scene(scene_path, sphere_count);
         break;
     case SceneType::GRID_SCENE:
-        return grid_scene(spheresGridWidth, sphere_count);
+        return grid_scene(gridWidth, sphere_count);
         break;
     case SceneType::PACKAGE_SCENE:
-        return package_scene(spheresGridWidth, spheresGridHeight, spheresGridDepth, sphere_count);
+        return package_scene(gridWidth, gridHeight, gridDepth, sphere_count);
         break;
     default:
-        return grid_scene(spheresGridWidth, sphere_count);
+        return grid_scene(gridWidth, sphere_count);
+        break;
+    }
+}
+
+std::vector<Cylinder> getCylinderScene(int cylinder_count)
+{
+    switch (currentScene)
+    {
+    case SceneType::LOADED_SCENE:
+        return loaded_cylinder_scene(scene_path, cylinder_count);
+        break;
+    case SceneType::GRID_SCENE:
+        return cylinder_grid_scene(gridWidth, cylinder_count);
+        break;
+    case SceneType::PACKAGE_SCENE:
+        return cylinder_package_scene(gridWidth, gridHeight, gridDepth, cylinder_count);
+        break;
+    default:
+        return cylinder_grid_scene(gridWidth, cylinder_count);
         break;
     }
 }
@@ -227,13 +296,13 @@ std::vector<std::pair<glm::vec3, glm::vec3>> getCheckpoints(int& sphere_count, s
         return benchmark2_loaded_molecules(spheres, interleaveAngle, interleaveZ, interleaveY);
         break;
     case SceneType::GRID_SCENE:
-        return benchmark1_structured_grid(sphere_count, spheresGridWidth, interleaveW, interleaveH, interleaveZ);
+        return benchmark1_structured_grid(sphere_count, gridWidth, interleaveW, interleaveH, interleaveZ);
         break;
     case SceneType::PACKAGE_SCENE:
-        return benchmark3_package(sphere_count, spheresGridWidth, spheresGridHeight, spheresGridDepth, interleaveW, interleaveH, interleaveZ);
+        return benchmark3_package(sphere_count, gridWidth, gridHeight, gridDepth, interleaveW, interleaveH, interleaveZ);
         break;
     default:
-        return benchmark1_structured_grid(sphere_count, spheresGridWidth, interleaveW, interleaveH, interleaveZ);
+        return benchmark1_structured_grid(sphere_count, gridWidth, interleaveW, interleaveH, interleaveZ);
         break;
     }
 }

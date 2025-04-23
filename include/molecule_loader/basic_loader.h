@@ -92,8 +92,20 @@ public:
      */
     std::vector<glm::vec4> & getSphereInfo();
 
+    /**
+     * @brief Returns a reference to the vector of bonds data.
+     * @return A reference to a vector of std::pair<int, int> containing the bonds between atoms.
+     * 
+     * Bonds are represented as pairs of indexes between atoms.
+     */
+    std::vector<std::pair<int, int>> & getBondsInfo();
+
+    inline int getBondsAmount() { return m_bonds.size(); } /**< Returns the amount of bonds. */
+    std::pair<glm::vec4, glm::vec4> getBond(int index) const { return {m_positions[m_bonds[index].first], m_positions[m_bonds[index].second]}; } /**< Returns the cilinder at the given index. */
+
 private:
     std::vector<glm::vec4> m_positions; /**< A vector of glm::vec4 containing the sphere positions and their radius. Each sphere represents an atom. */
+    std::vector<std::pair<int, int>> m_bonds; /**< A vector of glm::vec4 containing the sphere positions and their radius. Each sphere represents an atom. */
 
 
 };
