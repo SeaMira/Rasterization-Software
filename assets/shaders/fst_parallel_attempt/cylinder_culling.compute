@@ -1,0 +1,449 @@
+#version 460
+
+layout(local_size_x = 256) in;
+layout(rgba8, binding = 0) uniform image2D outputImage;
+
+struct Cylinder 
+{
+    vec4 pa_r;
+    vec4 pb_r;
+    int index;
+    int wasDrawn[3];
+};
+
+layout(std430, binding = 2) buffer CylinderBuffer 
+{
+    Cylinder cylinders[];
+};
+
+
+layout(binding = 3, r32f) uniform image2D depthData;
+layout(binding = 4) uniform sampler2D downsampledDepthTexture; 
+
+struct FramePixelsCount
+{
+    uint frames;
+    uint pixels;
+    
+};
+
+layout(std430, binding = 5) buffer VisibilityFrameBuffer 
+{
+    FramePixelsCount visibilityFrameBuffer[];
+};
+
+layout(std430, binding = 6) buffer PixelOwnershipBuffer 
+{
+    uint pixelOwnershipBuffer[];
+};
+
+layout(std430, binding = 7) buffer DepthBuffer 
+{
+    uint depthBuffer[];
+};
+
+uniform mat4 view;
+uniform mat4 proj;
+
+uniform vec4 frustumTopFace;
+uniform vec4 frustumBottomFace;
+uniform vec4 frustumRightFace;
+uniform vec4 frustumLeftFace;
+uniform vec4 frustumFarFace;
+uniform vec4 frustumNearFace;
+
+uniform vec3 front;
+uniform vec3 up;
+uniform vec3 right;
+uniform vec3 cameraPos;
+
+uniform ivec2 screenResolution;
+uniform float fov;
+
+uniform int cylinderCount;
+
+const vec3 lightColor = vec3(0.01, 1.0, 0.05);
+const float diffuseI = 0.9;
+const int pixelsToCheck = 5;
+
+// frustum culling
+struct BBox3D
+{
+    vec3 mMin;
+    vec3 mMax;
+};
+
+bool isOnOrForwardPlaneAABB(vec4 plane, BBox3D bbox) 
+{
+    vec3 negativeVertex = bbox.mMin;
+    vec3 normal = plane.xyz;
+    float distance = plane.w;
+
+    if (normal.x >= 0) negativeVertex.x = bbox.mMax.x;
+        else negativeVertex.x = bbox.mMin.x;
+
+    if (normal.y >= 0) negativeVertex.y = bbox.mMax.y;
+        else negativeVertex.y = bbox.mMin.y;
+
+    if (normal.z >= 0) negativeVertex.z = bbox.mMax.z;
+        else negativeVertex.z = bbox.mMin.z;
+
+    return dot(normal, negativeVertex) - distance >= 0;
+}
+
+bool isCylinderInside(vec3 pa, vec3 pb, float radius)
+{
+    vec3 a = pb - pa;
+    vec3 e = radius*sqrt( 1.0f - a*a/dot(a,a) );
+    BBox3D bbox3d = BBox3D(min( pa - e, pb - e ), max( pa + e, pb + e ));
+
+    return isOnOrForwardPlaneAABB(frustumLeftFace, bbox3d) &&
+           isOnOrForwardPlaneAABB(frustumRightFace, bbox3d) &&
+           isOnOrForwardPlaneAABB(frustumFarFace, bbox3d) &&
+           isOnOrForwardPlaneAABB(frustumNearFace, bbox3d) &&
+           isOnOrForwardPlaneAABB(frustumTopFace, bbox3d) &&
+           isOnOrForwardPlaneAABB(frustumBottomFace, bbox3d);
+}
+// frustum culling
+
+
+struct ScreenRayCasting
+{
+    vec3 rayStart; ///< Starting caster ray in world coordinates.
+    vec3 dx; ///< Per pixel delta direction vector for the x-axis.
+    vec3 dy; ///< Per pixel delta direction vector for the y-axis.
+};
+
+ScreenRayCasting makeScreenRayCasting(float aspectRatio)
+{
+    float fovRad = radians(fov);
+    float fovTan = tan(fovRad * 0.5f);
+    float halfFovTan = fovTan * aspectRatio;
+
+    // View-space ray directions for screen corners
+    vec3 corner00 = normalize((-1.0f * halfFovTan) * right + (-1.0f * fovTan) * up + front); // bottom-left
+    vec3 corner10 = normalize(( 1.0f * halfFovTan) * right + (-1.0f * fovTan) * up + front); // bottom-right
+    vec3 corner01 = normalize((-1.0f * halfFovTan) * right + ( 1.0f * fovTan) * up + front); // top-left
+
+    // Transform to world space only once
+    vec3 wCorner00 = mat3(view) * corner00;
+    vec3 wCorner10 = mat3(view) * corner10;
+    vec3 wCorner01 = mat3(view) * corner01;
+
+    // Delta per pixel
+    vec3 dx = (wCorner10 - wCorner00) / float(screenResolution.x);
+    vec3 dy = (wCorner01 - wCorner00) / float(screenResolution.y);
+
+    vec3 rayStart = wCorner00;
+
+    return ScreenRayCasting(rayStart, dx, dy);
+}
+
+uint vecToColor(vec3 lambertCos) {
+    uint R = uint(lambertCos.r * 255.0);
+    uint G = uint(lambertCos.g * 255.0);
+    uint B = uint(lambertCos.b * 255.0);
+    return (R << 0) | (G << 8) | (B << 16) | (0xFF << 24);
+}
+
+vec4 iCylinder(vec3 ro, vec3 rd, vec3 pa, vec3 pb, float ra) 
+{
+    vec3  ba = pb - pa;
+    vec3  oc = ro - pa;
+
+    float baba = dot(ba,ba);
+    float bard = dot(ba,rd);
+    float baoc = dot(ba,oc);
+    
+    float k2 = baba - bard*bard;
+    float k1 = baba*dot(oc,rd) - baoc*bard;
+    float k0 = baba*dot(oc,oc) - baoc*baoc - ra*ra*baba;
+    
+    
+    float h = k1*k1 - k2*k0;
+    if( h<0.0f ) return vec4(-1.0f);
+    h = sqrt(h);
+    float t = (-k1-h)/k2;
+
+    // body
+    float y = baoc + t*bard;
+    if( y>0.0f && y<baba ) return vec4( t, oc+t*rd - ba*y/baba );
+    
+    // caps
+    // t = ( ((y<0.0f) ? 0.0f : baba) - baoc)/bard;
+    // if( abs(k1+k2*t)<h ) return vec4( t, ba*sign(y)/sqrt(baba) );
+
+    return vec4(-1.0f);
+}
+
+void getCylinderBbox(out vec2 projectedPoints[4], vec3 pa, vec3 pb, vec3 center, 
+    float cylRadius)
+{
+    // Cylinder axis
+    const vec3 z = normalize(pb - pa);
+
+    // Find orthonormal x,y axes orthogonal to cylinder axis
+    vec3 x = normalize(cross(center, z));
+    vec3 y = normalize(cross(x, z)); // make full basis
+
+    // Compute impostor construction vectors.
+    const float dV0 = length( pa );
+    const float dV1 = length( pb );
+
+    const float sinAngle = cylRadius / dV0;
+    float		angle	 = asin( sinAngle );
+    const vec3	y1		 = y * cylRadius;
+    const vec3	x2		 = x * cylRadius * cos( angle );
+    const vec3	y2		 = y1 * sinAngle;
+    angle				 = asin( cylRadius / dV1 );
+    const vec3 x3		 = x * ( dV1 - cylRadius ) * tan( angle );
+
+    // Compute impostors vertices.
+    const vec3 v1 = pa - x2 + y2;
+    const vec3 v2 = pa + x2 + y2;
+    const vec3 v3 = pb - x3 + y1;
+    const vec3 v4 = pb + x3 + y1;
+
+    const vec4 v1Proj = proj * vec4(v1, 1.0f);
+    const vec4 v2Proj = proj * vec4(v2, 1.0f);
+    const vec4 v3Proj = proj * vec4(v3, 1.0f);
+    const vec4 v4Proj = proj * vec4(v4, 1.0f);
+
+    vec3 ndcv1Proj = vec3(v1Proj.x / v1Proj.w, v1Proj.y / v1Proj.w, v1Proj.z / v1Proj.w);
+    vec3 ndcv2Proj = vec3(v2Proj.x / v2Proj.w, v2Proj.y / v2Proj.w, v2Proj.z / v2Proj.w);
+    vec3 ndcv3Proj = vec3(v3Proj.x / v3Proj.w, v3Proj.y / v3Proj.w, v3Proj.z / v3Proj.w);
+    vec3 ndcv4Proj = vec3(v4Proj.x / v4Proj.w, v4Proj.y / v4Proj.w, v4Proj.z / v4Proj.w);
+
+    projectedPoints[0] = vec2(ndcv1Proj);
+    projectedPoints[1] = vec2(ndcv2Proj);
+    projectedPoints[2] = vec2(ndcv4Proj);
+    projectedPoints[3] = vec2(ndcv3Proj);
+        
+}
+
+// vec3 computeRd(int px, int py, 
+//                 float fovTan, float halfFovTan)
+// {
+//     vec2 p = (-vec2(screenResolution.x, screenResolution.y) + 2.0f*vec2(px, py))/vec2(screenResolution.x, screenResolution.y);
+//     return normalize( p.x*right* halfFovTan + p.y*up * fovTan + front );
+// }
+
+// float onSphDepth(vec3 rd, int px, int py, vec3 spherePos, float r, vec3 rayStart, vec3 dx, vec3 dy)
+// {
+//     const float h = iSphere(cameraPos, rd, spherePos, r);
+//     const vec3 hit = (rayStart + float(px) * dx + float(py) * dy) * h;
+//     const float depth = (hit.z * proj[2].z + proj[3].z) / -hit.z;
+//     return depth;
+// }
+
+float intersectX(vec2 a, vec2 b, float y) 
+{
+    if (a.y == b.y) return a.x; // horizontal line
+    float t = (y - a.y) / (b.y - a.y);
+    return a.x + t * (b.x - a.x);
+}
+
+// bool isSphereBillboardVisible(int xcoords[pixelsToCheck], int ycoords[pixelsToCheck], float pixelDepths[pixelsToCheck])
+// {
+//     ivec2 downsampledTexSize = textureSize(downsampledDepthTexture, 0);
+//     const int ds_x = downsampledTexSize.x;
+//     const int ds_y = downsampledTexSize.y;
+
+//     float pixel1 = texelFetch(downsampledDepthTexture, ivec2(int(float(xcoords[0]*ds_x)/float(screenResolution.x)), int(float(ycoords[0]*ds_y)/float(screenResolution.y))), 0).r;
+//     float pixel2 = texelFetch(downsampledDepthTexture, ivec2(int(float(xcoords[1]*ds_x)/float(screenResolution.x)), int(float(ycoords[1]*ds_y)/float(screenResolution.y))), 0).r;
+//     float pixel3 = texelFetch(downsampledDepthTexture, ivec2(int(float(xcoords[2]*ds_x)/float(screenResolution.x)), int(float(ycoords[2]*ds_y)/float(screenResolution.y))), 0).r;
+//     float pixel4 = texelFetch(downsampledDepthTexture, ivec2(int(float(xcoords[3]*ds_x)/float(screenResolution.x)), int(float(ycoords[3]*ds_y)/float(screenResolution.y))), 0).r;
+//     float pixel5 = texelFetch(downsampledDepthTexture, ivec2(int(float(xcoords[4]*ds_x)/float(screenResolution.x)), int(float(ycoords[4]*ds_y)/float(screenResolution.y))), 0).r;
+
+//     for (int i = 0; i < pixelsToCheck; i++)
+//     {
+//         if (pixelDepths[i] <= pixel1 || 
+//             pixelDepths[i] <= pixel2 || 
+//             pixelDepths[i] <= pixel3 || 
+//             pixelDepths[i] <= pixel4 || 
+//             pixelDepths[i] <= pixel5)
+//             return true;
+//     }
+//     return false;
+// }
+
+void drawCylinder(Cylinder cylinder)
+{
+    vec3 pa = cylinder.pa_r.xyz;
+    vec3 pb = cylinder.pb_r.xyz;
+    float ra = cylinder.pa_r.w;
+    vec3 camSpaceCylA = vec3(view * vec4(pa, 1.0f));
+    vec3 camSpaceCylB = vec3(view * vec4(pb, 1.0f));
+
+    vec3 camImpPosA, camImpPosB;
+    if ( camSpaceCylA.z < camSpaceCylB.z )
+	{
+		camImpPosA = camSpaceCylB;
+		camImpPosB = camSpaceCylA;
+	}
+	else
+	{
+		camImpPosA = camSpaceCylA;
+		camImpPosB = camSpaceCylB;
+	}
+
+    vec3 center = normalize( ( camImpPosA + camImpPosB ) * 0.5f );
+    vec2 projectedPoints[4];
+    getCylinderBbox(projectedPoints, camImpPosA, camImpPosB, center, ra);
+    
+    float aspectRatio = float(screenResolution.x) / float(screenResolution.y);
+    
+    int minY = screenResolution.y;
+    int maxY = 0;
+    for (int i = 0; i < 4; i++) 
+    {
+        projectedPoints[i].x = int((projectedPoints[i].x * 0.5f + 0.5f) * screenResolution.x);
+        projectedPoints[i].y = int((projectedPoints[i].y * 0.5f + 0.5f) * screenResolution.y);
+
+        minY = min(minY, int(floor(projectedPoints[i].y))); 
+        maxY = max(maxY, int(ceil(projectedPoints[i].y)));
+    }
+
+    float fovRad = radians(fov);
+    float fovTan = tan(fovRad * 0.5f);
+    float halfFovTan = fovTan * aspectRatio;
+
+    ScreenRayCasting screenRayCasting = makeScreenRayCasting(aspectRatio);
+
+    // Delta per pixel
+    vec3 dx = screenRayCasting.dx;
+    vec3 dy = screenRayCasting.dy;
+
+    // Start ray origin in world
+    vec3 rayStart = screenRayCasting.rayStart;
+
+
+    // float mid_x = min(max((screenMin.x + screenMax.x)/2, 0), screenResolution.x);
+    // float mid_y = min(max((screenMin.y + screenMax.y)/2, 0), screenResolution.y);
+
+    // vec3 middleLeft = computeRd(int(mid_x-difx*0.49f), int(mid_y), fovTan, halfFovTan);
+    // vec3 middleRight = computeRd(int(mid_x+difx*0.49f), int(mid_y), fovTan, halfFovTan);
+    // vec3 middleBottom = computeRd(int(mid_x), int(mid_y-dify*0.49f), fovTan, halfFovTan);
+    // vec3 middleTop = computeRd(int(mid_x), int(mid_y+dify*0.49f), fovTan, halfFovTan);
+    // vec3 middlePixelsVec = computeRd((screenMin.x + screenMax.x) / 2, (screenMin.y + screenMax.y) / 2, fovTan, halfFovTan);
+    
+
+    // int xcoords[pixelsToCheck] = {int(mid_x-difx*0.49f), int(mid_x+difx*0.49f), int(mid_x), int(mid_x), (screenMin.x + screenMax.x) / 2};
+    // int ycoords[pixelsToCheck] = {int(mid_y), int(mid_y), int(mid_y-dify*0.49f), int(mid_y+dify*0.49f), (screenMin.y + screenMax.y) / 2};
+    // float pixelDepths[pixelsToCheck] = {
+    //     onSphDepth(middleLeft, int(mid_x-difx*0.49f), int(mid_y), sphere.positionr.xyz, sphere.positionr.w, rayStart, dx, dy),
+    //     onSphDepth(middleRight, int(mid_x+difx*0.49f), int(mid_y), sphere.positionr.xyz, sphere.positionr.w, rayStart, dx, dy),
+    //     onSphDepth(middleBottom, int(mid_x), int(mid_y-dify*0.49f), sphere.positionr.xyz, sphere.positionr.w, rayStart, dx, dy),
+    //     onSphDepth(middleTop, int(mid_x), int(mid_y+dify*0.49f), sphere.positionr.xyz, sphere.positionr.w, rayStart, dx, dy),
+    //     onSphDepth(middlePixelsVec, (screenMin.x + screenMax.x) / 2, (screenMin.y + screenMax.y) / 2, sphere.positionr.xyz, sphere.positionr.w, rayStart, dx, dy),
+    // };
+    
+
+
+    // if (!isSphereBillboardVisible(xcoords, ycoords, pixelDepths))
+    // {
+    //     if (visibilityFrameBuffer[sphere.index].frames > 0 && 
+    //         visibilityFrameBuffer[sphere.index].pixels == 0) 
+    //     {
+    //         visibilityFrameBuffer[sphere.index].frames -= 1;
+    //     }
+    //     else if (visibilityFrameBuffer[sphere.index].frames == 0 && 
+    //         visibilityFrameBuffer[sphere.index].pixels == 0) 
+    //     {
+    //         spheres[gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_WorkGroupSize.x].wasDrawn[0] = 0;
+    //         return;
+    //     }
+    //     else 
+    //     {
+    //         visibilityFrameBuffer[sphere.index].frames = 10;
+    //     }
+    // } else
+    // {
+    //     visibilityFrameBuffer[sphere.index].frames = 10;
+    // }
+    // spheres[gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_WorkGroupSize.x].wasDrawn[0] = 1;
+    
+    
+    for (int py = min(screenResolution.y-1, maxY); py >= max(0, minY); --py)
+    {
+        float xIntersections[4];
+        int intersections = 0;
+
+        for (int i = 0; i < 4; ++i) 
+        {
+            const vec2 a = projectedPoints[i];
+            const vec2 b = projectedPoints[(i + 1) % 4];
+
+            if ((py >= a.y && py <= b.y) || (py >= b.y && py <= a.y)) 
+            {
+                float x = intersectX(a, b, py);
+                xIntersections[intersections] = x;
+                intersections++;
+            }
+        }
+
+        if (intersections >= 2)
+        {
+            float xMin = xIntersections[0];
+            float xMax = xIntersections[0];
+            for (int i = 1; i < intersections; ++i) 
+            {
+                xMin = min(xMin, xIntersections[i]);
+                xMax = max(xMax, xIntersections[i]);
+            }
+
+            vec3 rayColStart = rayStart + float(py) * dy;
+            for (int px = max(0, int(ceil(xMin))); px <= min(int(floor(xMax)), screenResolution.x -1); ++px) 
+            {
+                vec2 p = (-vec2(screenResolution.x, screenResolution.y) + 2.0f*vec2(px, py))/vec2(screenResolution.x, screenResolution.y);
+
+                // create view ray
+                vec3 rd = normalize( p.x*right* halfFovTan + p.y*up * fovTan + front );
+
+                vec4 tnor = iCylinder( cameraPos, rd, pa, pb, ra );
+                int index = px + screenResolution.x*py;
+                // int index = px + screenResolution.x*py;
+                // const bool showBbox = (px == min(int(floor(xMax)), screenResolution.x -1) || 
+                //     py == min(screenResolution.y-1, maxY) || 
+                //     px == max(0, int(ceil(xMin))) || 
+                //     py == max(0, minY));
+                // if (showBbox) imageStore(outputImage, ivec2(px, py), vec4(0.0));
+                if (tnor.x > 0.0f) 
+                {
+                    float t = tnor.x;
+                    const vec3  hit = (rayColStart + float(px) * dx) * t;
+                    const float depth = (hit.z * proj[2].z + proj[3].z) / -hit.z ;
+                    const uint depthUint = floatBitsToUint(depth);
+                    uint old = atomicMin(depthBuffer[index], depthUint);
+                    if (uintBitsToFloat(old) > depth)
+                    {
+                        vec3  normal = normalize(vec3(tnor.y, tnor.z, tnor.w));
+                        const float lambertCos = dot(normal, -normalize(t*rd));
+                        depthBuffer[index] = depthUint;
+                        imageStore(depthData, ivec2(px, py), vec4(depth));
+                        imageStore(outputImage, ivec2(px, py), vec4(lambertCos * lightColor * diffuseI, 1.0));
+                    }
+                }
+            }
+
+        }
+    }
+}
+
+
+void main() 
+{
+    uint index = gl_GlobalInvocationID.x;
+
+    // Check if the index is out of bounds
+    if (index >= cylinderCount) {
+        return;  // If index is greater that the amount of cylinders, return
+    }
+
+    // Get cylidner
+    Cylinder c = cylinders[index];
+
+    if (isCylinderInside(c.pa_r.xyz, c.pb_r.xyz, c.pa_r.w)) 
+        drawCylinder(c);
+    // visibilityFrameBuffer[c.index].pixels = 0;
+}

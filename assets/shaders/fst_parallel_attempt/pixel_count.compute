@@ -8,12 +8,12 @@ struct FramePixelsCount
     
 };
 
-layout(std430, binding = 4) buffer VisibilityFrameBuffer 
+layout(std430, binding = 5) buffer VisibilityFrameBuffer 
 {
     FramePixelsCount visibilityFrameBuffer[];
 };
 
-layout(std430, binding = 5) buffer PixelOwnershipBuffer 
+layout(std430, binding = 6) buffer PixelOwnershipBuffer 
 {
     uint pixelOwnershipBuffer[];
 };

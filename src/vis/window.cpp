@@ -50,7 +50,7 @@ Window::Window( std::string& title, std::size_t width, std::size_t height, bool 
 
     if ( !m_window )
         throw std::runtime_error( SDL_GetError() );
-
+    
     m_ui = std::make_unique<AppUI>();   
 }
 

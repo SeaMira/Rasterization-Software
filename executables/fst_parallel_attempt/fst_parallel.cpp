@@ -27,7 +27,7 @@ using uint = unsigned int;
 // Settings
 int SCR_WIDTH = 1024;
 int SCR_HEIGHT = 1024;
-int sphere_count = 4000000;
+int sphere_count = 126;
 
 std::string title = "First Parallel Version"; 
 
@@ -64,9 +64,9 @@ int main(int argc, char* argv[])
     CameraController camera_controller(window, camera);
     
     #if CPU_FRUSTUM_CULLING
-        ComputeShader computeShader("assets/shaders/fst_parallel_attempt/fst_parallel.compute");
+        ComputeShader computeShader("assets/shaders/fst_parallel_attempt/sphere.compute");
     #else
-        ComputeShader computeShader("assets/shaders/fst_parallel_attempt/fst_parallel_culling.compute");
+        ComputeShader computeShader("assets/shaders/fst_parallel_attempt/sphere_culling.compute");
     #endif
     ComputeShader cleaningComputeShader("assets/shaders/fst_parallel_attempt/set_to_black.compute");
     ComputeShader hizPyramidComputeShader("assets/shaders/fst_parallel_attempt/mipmap_gen.compute");
@@ -94,25 +94,25 @@ int main(int argc, char* argv[])
         visibleSpheres.data(), GL_STATIC_DRAW);
     sphereBuffer.unbind();
     
-    Texture depthTexture(GL_TEXTURE_2D, GL_R32F, SCR_WIDTH, SCR_HEIGHT, 2);
-    Texture downsampledDepthTexture(GL_TEXTURE_2D, GL_R32F, SCR_WIDTH/(1 << downsampleLevel), SCR_HEIGHT/(1 << downsampleLevel), 3);
+    Texture depthTexture(GL_TEXTURE_2D, GL_R32F, SCR_WIDTH, SCR_HEIGHT, 3);
+    Texture downsampledDepthTexture(GL_TEXTURE_2D, GL_R32F, SCR_WIDTH/(1 << downsampleLevel), SCR_HEIGHT/(1 << downsampleLevel), 4);
     // Framebuffer downsampleDepthFBO;
     // downsampleDepthFBO.attachTexture(GL_COLOR_ATTACHMENT0, downsampledDepthTexture);
     
     std::vector<GLuint> visibilityFrames(2 * spheres.size(), 10);
     StorageBuffer visibilityFramesBuffer(GL_SHADER_STORAGE_BUFFER);
-    visibilityFramesBuffer.generateBufferData(2 * spheres.size() * sizeof(GLuint), 4, 
+    visibilityFramesBuffer.generateBufferData(2 * spheres.size() * sizeof(GLuint), 5, 
     visibilityFrames.data(), GL_DYNAMIC_COPY);
     visibilityFramesBuffer.unbind();
     
     std::vector<GLuint> pixelCountFrames(SCR_WIDTH*SCR_HEIGHT, 0);
     StorageBuffer pixelCountFramesBuffer(GL_SHADER_STORAGE_BUFFER);
-    pixelCountFramesBuffer.generateBufferData(SCR_WIDTH*SCR_HEIGHT * sizeof(GLuint), 5, 
+    pixelCountFramesBuffer.generateBufferData(SCR_WIDTH*SCR_HEIGHT * sizeof(GLuint), 6, 
     pixelCountFrames.data(), GL_DYNAMIC_COPY);
     pixelCountFramesBuffer.unbind();
     
     StorageBuffer depthBuffer(GL_SHADER_STORAGE_BUFFER);
-    depthBuffer.generateBufferData(SCR_HEIGHT * SCR_WIDTH * sizeof(uint), 6, 
+    depthBuffer.generateBufferData(SCR_HEIGHT * SCR_WIDTH * sizeof(uint), 7, 
         nullptr, GL_STATIC_DRAW);
     depthBuffer.unbind();
 
