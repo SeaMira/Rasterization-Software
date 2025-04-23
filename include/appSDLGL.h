@@ -30,6 +30,10 @@ public:
     {
         ////
         createGraphicsContext();
+        const GLubyte* renderer = glGetString(GL_RENDERER);
+        const GLubyte* vendor   = glGetString(GL_VENDOR);
+        std::cout << "Renderer: " << renderer << "\n";
+        std::cout << "Vendor: " << vendor << "\n";
         Window::initImGuiContext();
         initImGui();
         ////
