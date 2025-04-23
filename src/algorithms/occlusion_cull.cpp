@@ -82,10 +82,10 @@ bool isPixelLastLevelOccluded(float pixelDepth, const HierarchicalZBuffer& hiZPy
     return false;  // Sphere not occluded
 }
 
-bool isSphereBillboardVisible(std::vector<PixelZ>& spherePixels, const HierarchicalZBuffer& hiZPyramid)
+bool isBillboardVisible(std::vector<PixelZ>& pixels, const HierarchicalZBuffer& hiZPyramid)
 {
     std::vector<float> depths;
-    for (const PixelZ& pixel : spherePixels)
+    for (const PixelZ& pixel : pixels)
     {
         float currentDepth;
         for (int level = (hiZPyramid.size() - 1); level >= 0; level--)
@@ -104,7 +104,7 @@ bool isSphereBillboardVisible(std::vector<PixelZ>& spherePixels, const Hierarchi
         }
     }
     for (const float& depth : depths)
-        for (const PixelZ& pixel : spherePixels)
+        for (const PixelZ& pixel : pixels)
             // TODO: check delta depth depending on camera speed/framerate? 
             if (pixel.z <= depth)
                 return true;

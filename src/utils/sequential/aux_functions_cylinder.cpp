@@ -166,8 +166,7 @@ glm::vec4 iCylinder(glm::vec3 ro, glm::vec3 rd, glm::vec3 pa, glm::vec3 pb, floa
 
 
 std::vector<glm::vec2> getCylinderBbox(glm::vec3& pa, glm::vec3& pb, glm::vec3& center, 
-    const glm::mat4& proj, const glm::vec3& camPos, 
-    const glm::vec3& front, const glm::vec3& up, const float cylRadius)
+    const glm::mat4& proj, const float cylRadius)
 {
 
     // Cylinder axis
@@ -208,8 +207,8 @@ std::vector<glm::vec2> getCylinderBbox(glm::vec3& pa, glm::vec3& pb, glm::vec3& 
     std::vector<glm::vec2> projectedPoints = {
         glm::vec2(ndcv1Proj),
         glm::vec2(ndcv2Proj),
-        glm::vec2(ndcv3Proj),
-        glm::vec2(ndcv4Proj)
+        glm::vec2(ndcv4Proj),
+        glm::vec2(ndcv3Proj)
     };
     
     return projectedPoints;
@@ -243,7 +242,7 @@ bool drawCylinder(const glm::mat4& proj, const glm::mat4& view,
 		camImpPosB = camSpaceCylB;
 	}
     glm::vec3 center = normalize( ( camImpPosA + camImpPosB ) * 0.5f );
-    std::vector<glm::vec2> projectedPoints = getCylinderBbox(camImpPosA, camImpPosB, center, proj, camPos, front, up, cylRadius);
+    std::vector<glm::vec2> projectedPoints = getCylinderBbox(camImpPosA, camImpPosB, center, proj, cylRadius);
 
     int minY = SCR_HEIGHT;
     int maxY = 0;
@@ -306,6 +305,177 @@ bool drawCylinder(const glm::mat4& proj, const glm::mat4& view,
 
                 glm::vec4 tnor = iCylinder( camPos, rd, pa, pb, cylRadius );
                 int index = (SCR_HEIGHT - py - 1) * SCR_WIDTH + px;
+                const bool showBbox = (px == std::min((int)std::floor(xMax), SCR_WIDTH -1) || 
+                    py == std::min(SCR_HEIGHT-1, (int)projectedPoints[0].y) || 
+                    px == std::max(0, (int)std::ceil(xMin)) || 
+                    py == std::max(0, (int)projectedPoints[2].y));
+                if (showBbox) framebuffer[index] = vecToColor(glm::vec3(0));
+                if (tnor.x > 0.0f) 
+                {
+                    float t = tnor.x;
+                    const glm::vec3  hit = (rayColStart + float(px) * dx) * t;
+                    const float depth = (hit.z * proj[2].z + proj[3].z) / -hit.z ;
+
+                    if (depth < depthBuffer[index])
+                    {
+                        glm::vec3  normal = glm::normalize(glm::vec3(tnor.y, tnor.z, tnor.w));
+                        const float lambertCos = glm::dot(normal, -glm::normalize(t*rd));
+                        depthBuffer[index] = depth;
+                        framebuffer[index] = vecToColor(255 * lambertCos * lightColor * diffuseI);
+                    }
+                }
+            }
+        }
+    }
+
+    return true;
+
+}
+
+
+bool drawCylinderWithOcclusionCulling(const glm::mat4& proj, const glm::mat4& view, 
+    const glm::vec3& up, const glm::vec3& front, const glm::vec3& right, const glm::vec3& camPos, 
+    const int SCR_WIDTH, const int SCR_HEIGHT, 
+    const glm::vec3& pa, const glm::vec3& pb, const float& cylRadius, const float& fov,
+    std::vector<uint32_t>& framebuffer, std::vector<float>& depthBuffer,
+    HierarchicalZBuffer& hizPyramid, 
+    uint8_t& cylinderVisibilityFrameCache, std::vector<int>& pixelOwnership, int cylinderIndex, int pixelsOwned)
+{
+    glm::vec3 camSpaceCylA = glm::vec3(view * glm::vec4(pa.x, pa.y, pa.z, 1.0f));
+    glm::vec3 camSpaceCylB = glm::vec3(view * glm::vec4(pb.x, pb.y, pb.z, 1.0f));
+
+    glm::vec3 camImpPosA, camImpPosB;
+    if ( camSpaceCylA.z < camSpaceCylB.z )
+	{
+		camImpPosA = camSpaceCylB;
+		camImpPosB = camSpaceCylA;
+	}
+	else
+	{
+		camImpPosA = camSpaceCylA;
+		camImpPosB = camSpaceCylB;
+	}
+    glm::vec3 center = normalize( ( camImpPosA + camImpPosB ) * 0.5f );
+    std::vector<glm::vec2> projectedPoints = getCylinderBbox(camImpPosA, camImpPosB, center, proj, cylRadius);
+
+    int minY = SCR_HEIGHT;
+    int maxY = 0;
+    for (auto& point : projectedPoints) 
+    {
+        point.x = (int)((point.x * 0.5f + 0.5f) * SCR_WIDTH);
+        point.y = (int)((point.y * 0.5f + 0.5f) * SCR_HEIGHT);
+
+        minY = std::min(minY, (int)point.y);
+        maxY = std::max(maxY, (int)point.y);
+    }
+
+    float aspectRatio = (float)SCR_WIDTH / (float)SCR_HEIGHT;
+    float fovRad = glm::radians(fov);
+    float fovTan = tan(fovRad * 0.5f);
+    float halfFovTan = fovTan * aspectRatio;
+
+    
+    // View-space ray directions for screen corners
+    ScreenRayCasting screenRayCasting(fov, aspectRatio, SCR_WIDTH, SCR_HEIGHT, right, up, front, view);
+
+    // Delta per pixel
+    glm::vec3 dx = screenRayCasting.dx;
+    glm::vec3 dy = screenRayCasting.dy;
+    // Start ray origin in world
+    glm::vec3 rayStart = screenRayCasting.rayStart;
+    
+    auto computeRd = [&](int px, int py) -> glm::vec3 {
+        glm::vec2 p = (-glm::vec2(SCR_WIDTH, SCR_HEIGHT) + 2.0f*glm::vec2(px, py))/glm::vec2(SCR_WIDTH, SCR_HEIGHT);
+        return glm::normalize( p.x*right* halfFovTan + p.y*up * fovTan + front );
+    };
+    
+    auto onSphDepth = [&](glm::vec3 rd, int px, int py) -> float {
+        const float h = iCylinder(camPos, rd, pa, pb, cylRadius).x;
+        const glm::vec3 hit = (rayStart + float(px) * dx + float(py) * dy) * h;
+        const float depth = (hit.z * proj[2].z + proj[3].z) / -hit.z;
+        return depth;
+    };
+
+    // Occlusion culling 
+
+    // Cylinder axis
+    const glm::vec3 z = glm::normalize(camImpPosB - camImpPosA);
+
+    // Find orthonormal x,y axes orthogonal to cylinder axis
+    glm::vec3 x = glm::normalize(glm::cross(center, z));
+    glm::vec3 y = glm::normalize(glm::cross(x, z)); // make full basis
+
+    glm::vec3 closePa1 = camImpPosA - x * cylRadius;
+    glm::vec3 closePa2 = camImpPosA + x * cylRadius;
+    glm::vec3 closePa = closePa1.z < closePa2.z ? closePa1 : closePa2;
+    const glm::vec4 closePaProj = proj * glm::vec4(closePa, 1.0f);
+    glm::vec3 ndcClosePa = glm::vec3(closePaProj.x / closePaProj.w, closePaProj.y / closePaProj.w, closePaProj.z / closePaProj.w);
+    glm::ivec2 closePaScreen = glm::ivec2((ndcClosePa.x * 0.5f + 0.5f) * SCR_WIDTH, (ndcClosePa.y * 0.5f + 0.5f) * SCR_HEIGHT);
+    glm::vec3 closePaRd = computeRd(closePaScreen.x, closePaScreen.y);
+    
+    glm::vec3 closePb1 = camImpPosB - x * cylRadius;
+    glm::vec3 closePb2 = camImpPosB + x * cylRadius;
+    glm::vec3 closePb = closePb1.z < closePb2.z ? closePb1 : closePb2;
+    const glm::vec4 closePbProj = proj * glm::vec4(closePb, 1.0f);
+    glm::vec3 ndcClosePb = glm::vec3(closePbProj.x / closePbProj.w, closePbProj.y / closePbProj.w, closePbProj.z / closePbProj.w);
+    glm::ivec2 closePbScreen = glm::ivec2((ndcClosePb.x * 0.5f + 0.5f) * SCR_WIDTH, (ndcClosePb.y * 0.5f + 0.5f) * SCR_HEIGHT);
+    glm::vec3 closePbRd = computeRd(closePbScreen.x, closePbScreen.y);
+
+    std::vector<PixelZ> cylinderPixels = {
+        PixelZ(closePaScreen.x, closePaScreen.y, onSphDepth(closePaRd, closePaScreen.x, closePaScreen.y)),
+        PixelZ(closePbScreen.x, closePbScreen.y, onSphDepth(closePbRd, closePbScreen.x, closePbScreen.y)),
+    };
+
+    if (!isBillboardVisible(cylinderPixels, hizPyramid))
+    {
+        // std::cout << "pixels owned by: " << sphereIndex << " - " << pixelsOwned << " frames " << (int)(cylinderVisibilityFrameCache & 0b01111111) << std::endl;
+        if ((cylinderVisibilityFrameCache & 0b01111111) == 0 && pixelsOwned == 0)
+        {
+            // std::cout << "cylinder no frames" << std::endl;
+            return false;
+        }
+        else if ((cylinderVisibilityFrameCache & 0b01111111) > 0 && pixelsOwned == 0)
+            // std::cout << "menos frames de gracia para " << sphereIndex << std::endl;
+            cylinderVisibilityFrameCache = (cylinderVisibilityFrameCache & 0b01111111) - 1;
+    }
+    ////
+    
+    #pragma omp parallel for collapse(2)
+    for (int py = std::min(SCR_HEIGHT-1, maxY); py >= std::max(0, minY); --py)
+    {
+        std::vector<float> xIntersections;
+
+        for (int i = 0; i < 4; ++i) 
+        {
+            const glm::vec2& a = projectedPoints[i];
+            const glm::vec2& b = projectedPoints[(i + 1) % 4];
+
+            if ((py >= a.y && py <= b.y) || (py >= b.y && py <= a.y)) 
+            {
+                float x = intersectX(a, b, py);
+                xIntersections.push_back(x);
+            }
+        }
+        if (xIntersections.size() >= 2) 
+        {
+            float xMin = xIntersections[0];
+            float xMax = xIntersections[0];
+            for (size_t i = 1; i < xIntersections.size(); ++i) 
+            {
+                xMin = std::min(xMin, xIntersections[i]);
+                xMax = std::max(xMax, xIntersections[i]);
+            }
+            glm::vec3 rayColStart = rayStart + float(py) * dy;
+            for (int px = std::max(0, (int)std::ceil(xMin)); px <= std::min((int)std::floor(xMax), SCR_WIDTH -1); ++px) 
+            {
+
+                glm::vec2 p = (-glm::vec2(SCR_WIDTH, SCR_HEIGHT) + 2.0f*glm::vec2(px, py))/glm::vec2(SCR_WIDTH, SCR_HEIGHT);
+
+                // create view ray
+                glm::vec3 rd = glm::normalize( p.x*right* halfFovTan + p.y*up * fovTan + front );
+
+                glm::vec4 tnor = iCylinder( camPos, rd, pa, pb, cylRadius );
+                int index = (SCR_HEIGHT - py - 1) * SCR_WIDTH + px;
                 // const bool showBbox = (px == std::min((int)std::floor(xMax), SCR_WIDTH -1) || 
                 //     py == std::min(SCR_HEIGHT-1, (int)projectedPoints[0].y) || 
                 //     px == std::max(0, (int)std::ceil(xMin)) || 
@@ -323,6 +493,7 @@ bool drawCylinder(const glm::mat4& proj, const glm::mat4& view,
                         const float lambertCos = glm::dot(normal, -glm::normalize(t*rd));
                         depthBuffer[index] = depth;
                         framebuffer[index] = vecToColor(255 * lambertCos * lightColor * diffuseI);
+                        pixelOwnership[index] = cylinderIndex;
                     }
                 }
             }

@@ -30,6 +30,7 @@ add_subproject(cylinder_projection_cpu "${CMAKE_SOURCE_DIR}/executables/seq_vers
 
 # First parallel attempt define
 add_subproject(fst_parallel "${CMAKE_SOURCE_DIR}/executables/fst_parallel_attempt/fst_parallel.cpp")
+add_subproject(fst_parallel_w_cylinders "${CMAKE_SOURCE_DIR}/executables/fst_parallel_attempt/fst_parallel_w_cylinders.cpp")
 
 # Second parallel attempt define
 add_subproject(snd_parallel "${CMAKE_SOURCE_DIR}/executables/snd_parallel_attempt/bbox_intersect.cpp")
@@ -40,6 +41,7 @@ add_subproject(thrd_parallel "${CMAKE_SOURCE_DIR}/executables/thrd_parallel_atte
 target_link_libraries(brute_sequencial PUBLIC sequential_dependencies)
 target_link_libraries(cylinder_projection_cpu PUBLIC sequential_dependencies)
 target_link_libraries(fst_parallel PUBLIC parallel_dependencies)
+target_link_libraries(fst_parallel_w_cylinders PUBLIC parallel_dependencies)
 target_link_libraries(snd_parallel PUBLIC parallel_dependencies)
 target_link_libraries(thrd_parallel PUBLIC parallel_dependencies)
 

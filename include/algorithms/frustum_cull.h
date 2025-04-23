@@ -2,9 +2,9 @@
 #define _FRUSTUM_CULLING_H_
 #include <glm/glm.hpp>
 #include "utils/sequential/common.h"
+#include "geometry/cylinder/cylinder.h"
 
 class Camera;
-
 
 /**
  * @struct Plane

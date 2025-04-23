@@ -133,7 +133,7 @@ bool drawSphereWithOcclusionCulling(const glm::mat4& proj, const glm::mat4& view
         PixelZ((screenMin.x + screenMax.x) / 2, (screenMin.y + screenMax.y) / 2, onSphDepth(middlePixelsVec, (screenMin.x + screenMax.x) / 2, (screenMin.y + screenMax.y) / 2))
     };
     
-    if (!isSphereBillboardVisible(spherePixels, hizPyramid))
+    if (!isBillboardVisible(spherePixels, hizPyramid))
     {
         // std::cout << "pixels owned by: " << sphereIndex << " - " << pixelsOwned << " frames " << (int)(sphereVisibilityFrameCache & 0b01111111) << std::endl;
         if ((sphereVisibilityFrameCache & 0b01111111) == 0 && pixelsOwned == 0)

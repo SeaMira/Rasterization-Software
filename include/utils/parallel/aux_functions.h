@@ -1,13 +1,24 @@
 #ifndef _AUX_PARALLEL_H_
 #define _AUX_PARALLEL_H_
 
-#define CPU_FRUSTUM_CULLING 0
+#define CPU_FRUSTUM_CULLING 1
 
 #include "algorithms/frustum_cull.h"
+#include "geometry/cylinder/cylinder.h"
+
+using Sphere = glm::vec4;
 
 struct SphereContainer
 {
     glm::vec4 positionr;
+    int index;
+    int wasDrawn[3];
+};
+
+struct CylinderContainer
+{
+    glm::vec4 pa_r;
+    glm::vec4 pb_r;
     int index;
     int wasDrawn[3];
 };
@@ -22,7 +33,7 @@ struct SphereContainer
  * @param frustum The camera frustum.
  * @param visibleSpheresCount The number of spheres that are on the camera frustum.
  */
-void cullSpheres(std::vector<glm::vec4>& spheres, std::vector<SphereContainer>& visibleSpheres, Frustum& frustum, int& visibleSpheresCount);
+void cullSpheres(std::vector<Sphere>& spheres, std::vector<SphereContainer>& visibleSpheres, Frustum& frustum, int& visibleSpheresCount);
 
 /**
  * @brief Completes a spheres vector with index and visibility bool.
@@ -34,5 +45,28 @@ void cullSpheres(std::vector<glm::vec4>& spheres, std::vector<SphereContainer>& 
  * @param visibleSpheres The list of spheres with index, visibility bool and padding (for SSBO).
  */
 void fillSpheresData(std::vector<glm::vec4>& spheres, std::vector<SphereContainer>& visibleSpheres);
+
+/**
+ * @brief Filters cylinders that are actually on the camera frustum.
+ * 
+ * Takes a list of cylinders and filters the ones that are actually on the camera frustum, storing them in another cylinders vector. It also stores how many cylinders are in this second vector.
+ * 
+ * @param cylinders The list of cylinders to be filtered.
+ * @param visibleCylinders The list of cylinders that are actually on the camera frustum.
+ * @param frustum The camera frustum.
+ * @param visibleCylindersCount The number of cylinders that are on the camera frustum.
+ */
+void cullCylinders(std::vector<Cylinder>& cylinders, std::vector<CylinderContainer>& visibleCylinders, Frustum& frustum, int& visibleCylindersCount);
+
+/**
+ * @brief Completes a cylinders vector with index and visibility bool.
+ * 
+ * Completes a cylinders vector with index, visibility bool and padding for the SSBO from
+ * the complete cylinders vector.
+ * 
+ * @param cylinders The list of cylinders to be filtered.
+ * @param visibleCylinders The list of cylinders with index, visibility bool and padding (for SSBO).
+ */
+void fillCylindersData(std::vector<Cylinder>& cylinders, std::vector<CylinderContainer>& visibleCylinders);
 
 #endif // _AUX_PARALLEL_H_

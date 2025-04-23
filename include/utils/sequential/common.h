@@ -17,12 +17,7 @@ struct BBox3D
     glm::vec3 mMax;
 };
 
-struct Cylinder
-{
-    glm::vec3 pa; // extreme A
-    glm::vec3 pb; // extreme B
-    float radius;
-};
+
 
 const glm::vec3 lightColor(0.01f, 1.0f, 0.05f);
 const float diffuseI = 0.9f;

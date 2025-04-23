@@ -147,14 +147,14 @@ bool isPixelOccluded(float pixelDepth, const HierarchicalZBuffer& hizPyramid, in
 bool isPixelLastLevelOccluded(float pixelDepth, const HierarchicalZBuffer& hizPyramid, int screenX, int screenY);
 
 /**
- * @brief Tells if certain pixels of an sphere billboard are occluded by pixels on the Hierarchical Z Buffer pyramid.
+ * @brief Tells if certain pixels of a billboard are occluded by pixels on the Hierarchical Z Buffer pyramid.
  * 
- * Given the pixels projected from a sphere billboard and the Hierarchical Z Buffer pyramid, it tells if the pixels are occluded by other pixels on the Hierarchical Z Buffer pyramid.
+ * Given the pixels projected from a billboard and the Hierarchical Z Buffer pyramid, it tells if the pixels are occluded by other pixels on the Hierarchical Z Buffer pyramid.
  *
- * @param spherePixels A vector of PixelZ representing the pixels of the sphere billboard.
+ * @param pixels A vector of PixelZ representing the pixels of the billboard.
  * @param hizPyramid The HierarchicalZBuffer representing the different depth precision levels.
  * 
- * @return true if the sphere billboard is visible, false otherwise. 
+ * @return true if the billboard is visible, false otherwise. 
  */
-bool isSphereBillboardVisible(std::vector<PixelZ>& spherePixels, const HierarchicalZBuffer& hizPyramid);
+bool isBillboardVisible(std::vector<PixelZ>& pixels, const HierarchicalZBuffer& hizPyramid);
 #endif
