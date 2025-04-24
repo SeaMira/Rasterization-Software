@@ -48,11 +48,9 @@ int downsampleWorkGroupSizeY = 16/downsampleLevel;
 
 struct SphereBillboard 
 {
-    glm::vec4 cameraSpaceSphPosR;   // 16b - camera space position of the sphere and radius
-    glm::vec4 upRightCornerMaxX;     // 16b - up right corner of the billboard in camera space and the max X coordinate in screen space 
-    glm::vec4 upLeftCornerMaxY;      // 16b - up left corner of the billboard in camera space and the max Y coordinate in screen space
-    glm::vec4 downRightCornerMinX;   // 16b - down right corner of the billboard in camera space and the min X coordinate in screen space
-    glm::vec4 downLeftCornerMinY;    // 16b - down left corner of the billboard in camera space and the min Y coordinate in screen space
+    glm::vec4 sphPosR;   // 16b - camera space position of the sphere and radius
+    glm::vec2 minCorner;     // 16b - up right corner of the billboard in camera space and the max X coordinate in screen space 
+    glm::vec2 maxCorner;      // 16b - up left corner of the billboard in camera space and the max Y coordinate in screen space
     uint index;
     int padding1, padding2, padding3;
     // 96b
@@ -199,13 +197,13 @@ int main(int argc, char* argv[])
                 bboxExtractionShader.setInt("sphereCount", visibleSpheresCount); // visible sphere count given
             #else
                 visibleSpheresAtomicCounter.bind();
-                void* mappedAtomic = glMapBufferRange(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), GL_MAP_READ_BIT);
-                if (mappedAtomic != nullptr) 
-                {
-                    GLuint* atomicValue = reinterpret_cast<GLuint*>(mappedAtomic);
-                    notOccludedSpheresCount = *atomicValue;
-                    glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
-                }
+                // void* mappedAtomic = glMapBufferRange(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), GL_MAP_READ_BIT);
+                // if (mappedAtomic != nullptr) 
+                // {
+                //     GLuint* atomicValue = reinterpret_cast<GLuint*>(mappedAtomic);
+                //     notOccludedSpheresCount = *atomicValue;
+                //     glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+                // }
                 glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &resetValue);
                 visibleSpheresAtomicCounter.unbind();
                 
@@ -223,6 +221,8 @@ int main(int argc, char* argv[])
             bboxExtractionShader.setMat4("view", camera.getView());
             bboxExtractionShader.setVec3("up", camera.getUp());
             bboxExtractionShader.setVec3("front", camera.getFront());
+            bboxExtractionShader.setVec3("right", camera.getRight());
+            bboxExtractionShader.setFloat("fov", camera.getFov());
             bboxExtractionShader.setVec3("cameraPos", camera.getPosition());
             glDispatchCompute(numGroupsX, numGroupsY, 1);
             glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
@@ -235,6 +235,11 @@ int main(int argc, char* argv[])
             bboxIntersectionShader.setFloat("far", camera.getFar());
             bboxIntersectionShader.setVec2I("screenResolution", screenResolution);
             bboxIntersectionShader.setMat4("proj", camera.getProjection());
+            bboxIntersectionShader.setMat4("view", camera.getView());
+            bboxIntersectionShader.setVec3("up", camera.getUp());
+            bboxIntersectionShader.setVec3("front", camera.getFront());
+            bboxIntersectionShader.setVec3("right", camera.getRight());
+            bboxIntersectionShader.setFloat("fov", camera.getFov());
             bboxIntersectionShader.setVec3("cameraPos", camera.getPosition());
             glDispatchCompute((SCR_WIDTH + workGroupSizeXPerPixel - 1) / workGroupSizeXPerPixel, 
                 (SCR_HEIGHT + workGroupSizeYPerPixel - 1) / workGroupSizeYPerPixel, 

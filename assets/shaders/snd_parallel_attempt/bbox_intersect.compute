@@ -7,17 +7,14 @@ layout(binding = 4, r32f) uniform image2D depthData;
 
 struct SphereBillboard 
 {
-    vec4 cameraSpaceSphPosR;    // 16b - camera space position of the sphere and radius
-    vec4 upRightCornerMaxX;     // 16b - up right corner of the billboard in camera space and the max X coordinate in screen space 
-    vec4 upLeftCornerMaxY;      // 16b - up left corner of the billboard in camera space and the max Y coordinate in screen space
-    vec4 downRightCornerMinX;   // 16b - down right corner of the billboard in camera space and the min X coordinate in screen space
-    vec4 downLeftCornerMinY;    // 16b - down left corner of the billboard in camera space and the min Y coordinate in screen space
+    vec4 sphPosR;    // 16b - camera space position of the sphere and radius
+    vec2 minCorner;
+    vec2 maxCorner;
     uint index;
     int padding1;
     int padding2;
     int padding3;
-    // 96b
-};  
+}; 
 
 layout(std430, binding = 2) buffer SphereBillboardDataBuffer
 {
@@ -32,22 +29,68 @@ layout(std430, binding = 7) buffer PixelOwnershipBuffer
 shared SphereBillboard sharedSphereBillboards[1+ int(gl_WorkGroupSize.x * gl_WorkGroupSize.y * gl_WorkGroupSize.z)];
 
 uniform mat4 proj;
+uniform mat4 view;
+
 uniform vec3 cameraPos;
+uniform vec3 front;
+uniform vec3 up;
+uniform vec3 right;
+
 uniform ivec2 screenResolution;
 uniform int sphereCount;
 uniform float far;
+uniform float fov;
 
 vec3 lightColor = vec3(0.05, 1.0, 0.01);
 float diffuseI = 0.9;
 
+struct ScreenRayCasting
+{
+    vec3 rayStart; ///< Starting caster ray in world coordinates.
+    vec3 dx; ///< Per pixel delta direction vector for the x-axis.
+    vec3 dy; ///< Per pixel delta direction vector for the y-axis.
+};
+
+ScreenRayCasting makeScreenRayCasting(float aspectRatio)
+{
+    float fovRad = radians(fov);
+    float fovTan = tan(fovRad * 0.5f);
+    float halfFovTan = fovTan * aspectRatio;
+
+    // View-space ray directions for screen corners
+    vec3 corner00 = normalize((-1.0f * halfFovTan) * right + (-1.0f * fovTan) * up + front); // bottom-left
+    vec3 corner10 = normalize(( 1.0f * halfFovTan) * right + (-1.0f * fovTan) * up + front); // bottom-right
+    vec3 corner01 = normalize((-1.0f * halfFovTan) * right + ( 1.0f * fovTan) * up + front); // top-left
+
+    // Transform to world space only once
+    vec3 wCorner00 = mat3(view) * corner00;
+    vec3 wCorner10 = mat3(view) * corner10;
+    vec3 wCorner01 = mat3(view) * corner01;
+
+    // Delta per pixel
+    vec3 dx = (wCorner10 - wCorner00) / float(screenResolution.x);
+    vec3 dy = (wCorner01 - wCorner00) / float(screenResolution.y);
+
+    vec3 rayStart = wCorner00;
+
+    return ScreenRayCasting(rayStart, dx, dy);
+}
+
 float iSphere(vec3 ro, vec3 rd, vec3 sph, float radius )
 {
-    float a = dot(rd, rd);
-    float b = dot( rd, sph );
-    float c = dot( sph, sph ) - radius*radius;
-    float h = b*b - a * c;
-    if( h < 0.0f) return -1.0f;
-    return (b - sqrt( h ))/a;
+    vec3 oc = ro - sph;
+	float b = dot( oc, rd );
+	float c = dot( oc, oc ) - radius*radius;
+	float h = b*b - c;
+	if( h<0.0 ) return -1.0;
+	return -b - sqrt( h );
+}
+
+vec3 computeRd(int px, int py, 
+                float fovTan, float halfFovTan)
+{
+    vec2 p = (-vec2(screenResolution.x, screenResolution.y) + 2.0f*vec2(px, py))/vec2(screenResolution.x, screenResolution.y);
+    return normalize( p.x*right* halfFovTan + p.y*up * fovTan + front );
 }
 
 void main()
@@ -65,6 +108,20 @@ void main()
     bool colorChanged = false;
     vec4 color = vec4(0.0);
     uint sphereIndex = 0;
+
+    float aspectRatio = float(screenResolution.x) / float(screenResolution.y);
+    float fovRad = radians(fov);
+    float fovTan = tan(fovRad * 0.5f);
+    float halfFovTan = fovTan * aspectRatio;
+
+    ScreenRayCasting screenRayCasting = makeScreenRayCasting(aspectRatio);
+
+    // Delta per pixel
+    vec3 dx = screenRayCasting.dx;
+    vec3 dy = screenRayCasting.dy;
+
+    // Start ray origin in world
+    vec3 ray = screenRayCasting.rayStart + float(coords.x) * dx + float(coords.y) * dy;
 
     for (int batch = 0; batch < batches; batch++)
     {
@@ -85,31 +142,26 @@ void main()
             SphereBillboard sphereBillboard = sharedSphereBillboards[index];
             if (sphereBillboard.padding1 == 1) continue;
 
-            const ivec2 screenMin = ivec2(int(sphereBillboard.downRightCornerMinX.w), int(sphereBillboard.downLeftCornerMinY.w));
-            const ivec2 screenMax = ivec2(int(sphereBillboard.upRightCornerMaxX.w), int(sphereBillboard.upLeftCornerMaxY.w));
+            const ivec2 screenMin = ivec2(int(sphereBillboard.minCorner.x), int(sphereBillboard.minCorner.y));
+            const ivec2 screenMax = ivec2(int(sphereBillboard.maxCorner.x), int(sphereBillboard.maxCorner.y));
             // pixel not in the bounding box
             if ( (screenMin.x > coords.x || coords.x > screenMax.x) || 
                 (screenMin.y > coords.y || coords.y > screenMax.y) ) 
                     continue;
 
-            const float difx = screenMax.x - screenMin.x;
-            const float dify = screenMax.y - screenMin.y;
-            const float u = float(coords.x - screenMin.x)/ difx;
-            const float v = float(coords.y - screenMin.y)/ dify;
-            vec3 A = mix(sphereBillboard.upLeftCornerMaxY.xyz, sphereBillboard.upRightCornerMaxX.xyz, u);
-            vec3 B = mix(sphereBillboard.downLeftCornerMinY.xyz, sphereBillboard.downRightCornerMinX.xyz, u);
-            const vec3 viewImpPos = mix(A, B, v);
-            const float h = iSphere(cameraPos, viewImpPos, sphereBillboard.cameraSpaceSphPosR.xyz, sphereBillboard.cameraSpaceSphPosR.w);
+
+            const vec3 rd = computeRd(coords.x, coords.y, fovTan, halfFovTan);
+            const float h = iSphere(cameraPos, rd, sphereBillboard.sphPosR.xyz, sphereBillboard.sphPosR.w);
 
             // imageStore(outputImage, coords, vec4(0.0));
             if (h > 0.0f) 
             {
-                const vec3 hit = viewImpPos * h;
-                const float depth = hit.z < 0.0f ? (hit.z * proj[2].z + proj[3].z) / -hit.z : far;
+                const vec3 hit = ray * h;
+                const float depth = (hit.z * proj[2].z + proj[3].z) / -hit.z ;
                 if (minDepth > depth) 
                 {
-                    const vec3 normal = normalize( hit - sphereBillboard.cameraSpaceSphPosR.xyz );
-                    const float lambertCos = dot(normal, -normalize(hit));
+                    const vec3 normal = normalize( cameraPos + rd*h - sphereBillboard.sphPosR.xyz );
+                    const float lambertCos = dot(normal, -normalize(rd*h));
                     minDepth = depth;
                     color = vec4(lambertCos * lightColor * diffuseI, 1.0);
                     sphereIndex = sphereBillboard.index;
