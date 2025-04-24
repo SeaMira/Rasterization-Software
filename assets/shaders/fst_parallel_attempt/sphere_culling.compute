@@ -67,12 +67,6 @@ const int pixelsToCheck = 5;
 
 struct bboxCorners
 {
-    // view space
-    vec3 upRightCorner;
-    vec3 upLeftCorner;
-    vec3 downRightCorner;
-    vec3 downLeftCorner;
-
     // screen space
     vec2 minCorner;
     vec2 maxCorner;
@@ -177,7 +171,7 @@ bboxCorners getSphereBbox(const vec3 cameraSpaceSphere, const vec3 camImposPos,
     vec2 maxCorner = max(max(ndcUpRight.xy, ndcUpLeft.xy), max(ndcDownRight.xy, ndcDownLeft.xy));
 
 
-    return bboxCorners(upRightCorner, upLeftCorner, downRightCorner, downLeftCorner, minCorner, maxCorner); 
+    return bboxCorners(minCorner, maxCorner); 
 }
 
 vec3 computeRd(int px, int py, 
@@ -258,7 +252,7 @@ void drawSphere(Sphere sphere)
     float mid_x = min(max((screenMin.x + screenMax.x)/2, 0), screenResolution.x);
     float mid_y = min(max((screenMin.y + screenMax.y)/2, 0), screenResolution.y);
 
-   vec3 middleLeft = computeRd(int(mid_x-difx*0.49f), int(mid_y), fovTan, halfFovTan);
+    vec3 middleLeft = computeRd(int(mid_x-difx*0.49f), int(mid_y), fovTan, halfFovTan);
     vec3 middleRight = computeRd(int(mid_x+difx*0.49f), int(mid_y), fovTan, halfFovTan);
     vec3 middleBottom = computeRd(int(mid_x), int(mid_y-dify*0.49f), fovTan, halfFovTan);
     vec3 middleTop = computeRd(int(mid_x), int(mid_y+dify*0.49f), fovTan, halfFovTan);
@@ -324,7 +318,6 @@ void drawSphere(Sphere sphere)
                 {
                     const vec3 normal = normalize( cameraPos + rd*h - sphere.positionr.xyz );
                     const float lambertCos = dot(normal, -normalize(rd*h));
-                    depthBuffer[index] = depthUint;
                     pixelOwnershipBuffer[index] = sphere.index;
                     imageStore(depthData, ivec2(px, py), vec4(depth));
                     imageStore(outputImage, ivec2(px, py), vec4(lambertCos * lightColor * diffuseI, 1.0));
