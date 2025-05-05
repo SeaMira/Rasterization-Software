@@ -50,6 +50,19 @@ void CameraControlledPath::nextCheckpoint()
     }
 }
 
+void CameraControlledPath::setCheckpoint(int checkpoint_id)
+{
+    if (m_checkpoints.size() < 2) return;
+    m_progress = 0.0f;
+    if (checkpoint_id < m_checkpoints.size() - 1 && checkpoint_id >= 0) 
+    {
+        m_currentIndex = checkpoint_id;
+        Checkpoint& pointToCheck = m_checkpoints[checkpoint_id];
+        m_camera->SetPosition(pointToCheck.position);
+        m_camera->lookAtTarget(pointToCheck.target);
+    }
+}
+
 void CameraControlledPath::lastCheckpoint()
 {
     if (m_checkpoints.size() < 2) return;

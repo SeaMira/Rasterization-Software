@@ -65,6 +65,10 @@ extern int interleaveZ;
  * @brief Global variable with the height interleave for benchmark checkpoints on file loaded scenes.
  */
 extern int interleaveY;
+/** 
+ * @brief Global variable with an extra radius factor for benchmark checkpoints on file loaded scenes.
+ */
+extern float radFactor;
 
 /**
  * @brief Load a scene from a file utilizing a basic chemfiles loader.
@@ -169,13 +173,31 @@ std::vector<std::pair<glm::vec3, glm::vec3>> benchmark1_structured_grid(int& sph
  * and distance from the mass center of the spheres. The checkpoints rotate around the mass center at diferent heights and by a certain angle delta.
  * 
  * @param spheres a reference to the vector with the spheres positions.
+ * @param cylinders a reference to the vector with the cylinders positions.
  * @param interleaveAngle the angle delta between each rotation checkpoints.
  * @param interleaveZ the distance between checkpoints on the depth axis.
  * @param interleaveY the distance between checkpoints on the height axis.
+ * @param radFactor the radius factor to be used for the distance from the mass center of the spheres.
  * 
  * @return vector of pairs with the checkpoints and camera targets.
  */
-std::vector<std::pair<glm::vec3, glm::vec3>> benchmark2_loaded_molecules(std::vector<glm::vec4>& spheres, int interleaveAngle, int interleaveZ, int interleaveY);
+std::vector<std::pair<glm::vec3, glm::vec3>> benchmark2_loaded_molecules(std::vector<glm::vec4>& spheres, std::vector<Cylinder>& cylinders, int interleaveAngle, int interleaveZ, int interleaveY, float radFactor);
+
+/**
+ * @brief Gets the strategic checkpoints and camera targets for a benchmarck on an specific scene.
+ * 
+ * Creates benchmark checkpoints and targets for the camera, depending on the spheres positions 
+ * and distance from the mass center of the spheres. The checkpoints rotate around the mass center at diferent heights and by a certain angle delta.
+ * 
+ * @param spheres a reference to the vector with the spheres positions.
+ * @param interleaveAngle the angle delta between each rotation checkpoints.
+ * @param interleaveZ the distance between checkpoints on the depth axis.
+ * @param interleaveY the distance between checkpoints on the height axis.
+ * @param radFactor the radius factor to be used for the distance from the mass center of the spheres.
+ * 
+ * @return vector of pairs with the checkpoints and camera targets.
+ */
+std::vector<std::pair<glm::vec3, glm::vec3>> benchmark2_loaded_molecules(std::vector<glm::vec4>& spheres, int interleaveAngle, int interleaveZ, int interleaveY, float radFactor);
 
 /**
  * @brief Gets the strategic checkpoints and camera targets for a benchmarck on an specific scene (3D regular spheres grid).
@@ -213,6 +235,20 @@ std::vector<glm::vec4> getScene(int sphere_count);
  * @param cylinder_count reference to the amount of spherez
  */
 std::vector<Cylinder> getCylinderScene(int cylinder_count);
+
+/**
+ * @brief Gets the strategic checkpoints and camera targets for a benchmarck on an specific scene.
+ * 
+ * Given the setted global variables, this function returns the strategic checkpoints and camera targets for a benchmarck on an specific scene depending also on the distribution of the
+ * spheres in the vector.
+ * 
+ * @param sphere_count a reference to the value that represents the amount of spheres on the scene.
+ * @param spheres reference to the vector with the spheres positions.
+ * @param cylinders reference to the vector with the cylinders positions.
+ * 
+ * @return vector of pairs with the checkpoints and camera targets.
+ */
+std::vector<std::pair<glm::vec3, glm::vec3>> getCheckpoints(int& sphere_count, std::vector<glm::vec4>& spheres, std::vector<Cylinder>& cylinders);
 
 /**
  * @brief Gets the strategic checkpoints and camera targets for a benchmarck on an specific scene.

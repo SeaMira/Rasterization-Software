@@ -3,11 +3,11 @@
 #include "molecule_loader/basic_loader.h"
 
 // LOADED_SCENE or GRID_SCENE
-SceneType currentScene = SceneType::PACKAGE_SCENE;
+SceneType currentScene = SceneType::LOADED_SCENE;
 std::filesystem::path scene_path = "assets/molecules/1AGA.mmtf";
 
-int gridWidth = 200;
-int gridHeight = 200;
+int gridWidth = 100;
+int gridHeight = 1000;
 int gridDepth = 100;
 int interleaveW = 5;
 int interleaveH = 5;
@@ -15,6 +15,7 @@ int interleaveH = 5;
 int interleaveAngle = 10;
 int interleaveZ = 10;
 int interleaveY = 10;
+float radFactor = 2.5f;
 
 
 std::vector<glm::vec4> loaded_scene(std::filesystem::path& path, int sphere_count)
@@ -139,13 +140,80 @@ std::vector<std::pair<glm::vec3, glm::vec3>> benchmark1_structured_grid(int& sph
 }
 
 
-std::vector<std::pair<glm::vec3, glm::vec3>> benchmark2_loaded_molecules(std::vector<glm::vec4>& spheres, int interleaveAngle, int interleaveZ, int interleaveY)
+std::vector<std::pair<glm::vec3, glm::vec3>> benchmark2_loaded_molecules(std::vector<glm::vec4>& spheres, std::vector<Cylinder>& cylinders, int interleaveAngle, int interleaveZ, int interleaveY, float radFactor)
 {
     float x_max = FLT_MIN;
     float y_max = FLT_MIN, y_min = FLT_MAX;
     float z_max = FLT_MIN;
     glm::vec3 mass_center(0.0f);
 
+    if (spheres.empty() && cylinders.empty()) return {{mass_center, mass_center}};
+
+    if (spheres.size() >= cylinders.size()) 
+    {
+        for (auto& sphere : spheres)
+        {
+            mass_center += glm::vec3(sphere);
+            if (sphere.y < y_min) y_min = sphere.y;
+            if (sphere.y > y_max) y_max = sphere.y;
+            if (abs(sphere.x) > x_max) x_max = abs(sphere.x);
+            if (abs(sphere.z) > z_max) z_max = abs(sphere.z);
+        }
+        mass_center /= spheres.size();
+    } else
+    {
+        for (auto& cylinder : cylinders)
+        {
+            glm::vec3 cyl_center = glm::vec3(cylinder.pa + cylinder.pb) / 2.0f;
+            mass_center += cyl_center;
+            if (cyl_center.y < y_min) y_min = cyl_center.y;
+            if (cyl_center.y > y_max) y_max = cyl_center.y;
+            if (abs(cyl_center.x) > x_max) x_max = abs(cyl_center.x);
+            if (abs(cyl_center.z) > z_max) z_max = abs(cyl_center.z);
+        }
+        mass_center /= cylinders.size();
+    }
+
+    float d_theta = 360.0f/(float)interleaveAngle;
+    float radius = sqrt(x_max*x_max + z_max*z_max) * radFactor;
+    float d_radius = radius/(float) interleaveZ;
+    float d_height = (y_max - y_min) / (float) interleaveY;
+
+    std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints;
+    
+    for (int i = 0; i < interleaveAngle; i++)
+    {
+        for (int j = 1; j < interleaveZ; j++)
+        {
+            for (int k = 0; k <= interleaveY; k++)
+            {
+                float d = (float)j * d_radius;
+                chkPoints.push_back(
+                    {
+                        mass_center +
+                        glm::vec3(d*cos(glm::radians((float)i*d_theta)), 
+                        y_min + (float)k*d_height, 
+                        d*sin(glm::radians((float)i*d_theta))), 
+                        glm::vec3(mass_center.x, y_min + (float)k*d_height, mass_center.z)
+                    }
+                );
+            }
+        }
+    }
+
+    return chkPoints;
+}
+
+std::vector<std::pair<glm::vec3, glm::vec3>> benchmark2_loaded_molecules(std::vector<glm::vec4>& spheres, int interleaveAngle, int interleaveZ, int interleaveY, float radFactor)
+{
+    float x_max = FLT_MIN;
+    float y_max = FLT_MIN, y_min = FLT_MAX;
+    float z_max = FLT_MIN;
+    glm::vec3 mass_center(0.0f);
+
+    if (spheres.empty()) return {{mass_center, mass_center}};
+
+    
     for (auto& sphere : spheres)
     {
         mass_center += glm::vec3(sphere);
@@ -155,9 +223,10 @@ std::vector<std::pair<glm::vec3, glm::vec3>> benchmark2_loaded_molecules(std::ve
         if (abs(sphere.z) > z_max) z_max = abs(sphere.z);
     }
     mass_center /= spheres.size();
+    
 
     float d_theta = 360.0f/(float)interleaveAngle;
-    float radius = sqrt(x_max*x_max + z_max*z_max);
+    float radius = sqrt(x_max*x_max + z_max*z_max) * radFactor;
     float d_radius = radius/(float) interleaveZ;
     float d_height = (y_max - y_min) / (float) interleaveY;
 
@@ -288,12 +357,31 @@ std::vector<Cylinder> getCylinderScene(int cylinder_count)
     }
 }
 
+std::vector<std::pair<glm::vec3, glm::vec3>> getCheckpoints(int& sphere_count, std::vector<glm::vec4>& spheres, std::vector<Cylinder>& cylinders)
+{
+    switch (currentScene)
+    {
+    case SceneType::LOADED_SCENE:
+        return benchmark2_loaded_molecules(spheres, cylinders, interleaveAngle, interleaveZ, interleaveY, radFactor);
+        break;
+    case SceneType::GRID_SCENE:
+        return benchmark1_structured_grid(sphere_count, gridWidth, interleaveW, interleaveH, interleaveZ);
+        break;
+    case SceneType::PACKAGE_SCENE:
+        return benchmark3_package(sphere_count, gridWidth, gridHeight, gridDepth, interleaveW, interleaveH, interleaveZ);
+        break;
+    default:
+        return benchmark1_structured_grid(sphere_count, gridWidth, interleaveW, interleaveH, interleaveZ);
+        break;
+    }
+}
+
 std::vector<std::pair<glm::vec3, glm::vec3>> getCheckpoints(int& sphere_count, std::vector<glm::vec4>& spheres)
 {
     switch (currentScene)
     {
     case SceneType::LOADED_SCENE:
-        return benchmark2_loaded_molecules(spheres, interleaveAngle, interleaveZ, interleaveY);
+        return benchmark2_loaded_molecules(spheres, interleaveAngle, interleaveZ, interleaveY, radFactor);
         break;
     case SceneType::GRID_SCENE:
         return benchmark1_structured_grid(sphere_count, gridWidth, interleaveW, interleaveH, interleaveZ);

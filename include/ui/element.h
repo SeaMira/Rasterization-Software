@@ -90,6 +90,37 @@ private:
 };
 
 /**
+ * @class SliderElementTopBoundedI
+ * @brief A slider element for ints where the maximum value is dynamically set by a reference.
+ * 
+ * Similar to `SliderElementTopBounded`, but for integers.
+ */
+class SliderElementTopBoundedI: public Element
+{
+public:
+    /**
+     * @brief Constructs a SliderElementTopBounded with the specified parameters.
+     * @param label The label to display next to the slider.
+     * @param value A reference to the int value that the slider will modify.
+     * @param minValue The minimum value of the slider.
+     * @param maxValue A reference to the maximum value of the slider.
+     */
+    SliderElementTopBoundedI(std::string label, int& value, int minValue, int& maxValue)
+        : label(label), value(&value), minValue(minValue), maxValue(&maxValue) {}
+
+    /// Renders the slider using ImGui with a dynamic maximum value.
+    void render() override 
+    {
+    ImGui::SliderInt(label.c_str(), value, minValue, *maxValue);
+    }
+private:
+    std::string label; ///< string: The label of the slider.
+    int* value;      ///< int*: The int value that the slider modifies.
+    int minValue;    ///< int: The minimum value of the slider.
+    int* maxValue;   ///< int*: A reference to the maximum value of the slider.
+};
+
+/**
  * @class SliderElementLowBounded
  * @brief A slider element where the minimum value is dynamically set by a reference.
  * 
@@ -118,6 +149,37 @@ private:
     float* value;      ///< The float value that the slider modifies.
     float* minValue;   ///< A reference to the minimum value of the slider.
     float maxValue;    ///< The maximum value of the slider.
+};
+
+/**
+ * @class SliderElementLowBoundedI
+ * @brief A slider element for integers where the minimum value is dynamically set by a reference.
+ * 
+ * Similar to `SliderElementLowBounded`, but for integers.
+ */
+class SliderElementLowBoundedI: public Element
+{
+public:
+    /**
+     * @brief Constructs a SliderElementLowBounded with the specified parameters.
+     * @param label The label to display next to the slider.
+     * @param value A reference to the int value that the slider will modify.
+     * @param minValue A reference to the minimum value of the slider.
+     * @param maxValue The maximum value of the slider.
+     */
+    SliderElementLowBoundedI(std::string label, int& value, int& minValue, int maxValue)
+        : label(label), value(&value), minValue(&minValue), maxValue(maxValue) {}
+
+    /// Renders the slider using ImGui with a dynamic minimum value.
+    void render() override 
+    {
+    ImGui::SliderInt(label.c_str(), value, *minValue, maxValue);
+    }
+private:
+    std::string label; ///< The label of the slider.
+    int* value;      ///< The int value that the slider modifies.
+    int* minValue;   ///< A reference to the minimum value of the slider.
+    int maxValue;    ///< The maximum value of the slider.
 };
 
 /**

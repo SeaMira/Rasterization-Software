@@ -29,8 +29,8 @@ using uint = unsigned int;
 // Settings
 int SCR_WIDTH = 1024;
 int SCR_HEIGHT = 1024;
-int sphere_count = 2000000;
-int cylinder_count = 2000000;
+int sphere_count = 126;
+int cylinder_count = 126;
 
 std::string title = "First Parallel Version: Spheres and Cylinders"; 
 
@@ -65,6 +65,7 @@ int main(int argc, char* argv[])
         {"Sphere count", &sphere_count},
         {"Cylinder count", &cylinder_count},
         {"Spheres On Frustum", &visibleSpheresCount},
+        {"Cylinders On Frustum", &visibleCylindersCount},
         {"Drawn spheres", &notOccludedSpheresCount}
     };
 
@@ -99,7 +100,7 @@ int main(int argc, char* argv[])
 
     cylinder_count = cylinders.size(); 
 
-    std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints = getCheckpoints(sphere_count, spheres);
+    std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints = getCheckpoints(sphere_count, spheres, cylinders);
     
     std::vector<SphereContainer> visibleSpheres(sphere_count);    
     std::vector<CylinderContainer> visibleCylinders(cylinder_count);    
@@ -108,7 +109,7 @@ int main(int argc, char* argv[])
         fillSpheresData(spheres, visibleSpheres);
         
         visibleCylindersCount = cylinder_count;
-        fillCylindersData(cylinders, visibleCylinders, sphere_count);
+        fillCylindersData(cylinders, visibleCylinders, cylinder_count);
     #endif
     
     StorageBuffer sphereBuffer(GL_SHADER_STORAGE_BUFFER);
@@ -144,8 +145,13 @@ int main(int argc, char* argv[])
     depthBuffer.unbind();
 
     Benchmark benchmark(camera_controller, chkPoints);
-    Profiler profiler(window, "media/off/fst_parallel/frame_times.off", "media/off/fst_parallel/process_times.off");
-    
+
+    #if CPU_FRUSTUM_CULLING
+        Profiler profiler(window, "media/off/fst_parallel_w_cyl/cpu_frame_times.off", "media/off/fst_parallel/cpu_process_times.off", sphere_count, cylinder_count);
+    #else
+        Profiler profiler(window, "media/off/fst_parallel_w_cyl/gpu_frame_times.off", "media/off/fst_parallel/gpu_process_times.off", sphere_count, cylinder_count);
+    #endif
+
     window.setupSceneInfoGui("Scene Info", scene_data);
     window.setupCameraGui("Camera Info", &camera);
     window.setupInputInfoGui("General Input Info");
@@ -170,7 +176,7 @@ int main(int argc, char* argv[])
         {
             camera_controller.cameraUpdate();
             benchmark.update();
-            profiler.updateProfiler();
+            profiler.updateProfiler(benchmark.getCheckpointID(), visibleSpheresCount, notOccludedSpheresCount, visibleCylindersCount, notOccludedCylindersCount);
 
             if (window.getInput().isKeyDown(Key::T)) profiler.startSavingNextFrames(benchmark.getCheckpointID());
 

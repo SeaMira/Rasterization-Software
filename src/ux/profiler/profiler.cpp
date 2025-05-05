@@ -4,8 +4,8 @@
 #include "ux/profiler/profiler.h"
 
 Profiler::Profiler(Window& window, std::string frame_times_file, 
-    std::string process_times_file, double seconds_timer) : 
-    m_window(&window), m_seconds_timer(seconds_timer),
+    std::string process_times_file, int sphere_count, int cylinder_count, double seconds_timer) : 
+    m_window(&window), m_spheres_on_scene(sphere_count), m_cylinders_on_scene(cylinder_count), m_seconds_timer(seconds_timer),
     m_frame_times_file(frame_times_file), m_process_times_file(process_times_file) 
 {
     m_frequency = SDL_GetPerformanceFrequency();
@@ -55,19 +55,29 @@ void Profiler::startSavingNextFrames(int checkpoint)
     std::cout << "Started frame saving." << std::endl;
 }
 
-void Profiler::updateProfiler()
+void Profiler::updateProfiler(int checkpoint, int spheres_on_frustum, int visible_spheres, int cylinders_on_frustum, int visible_cylinders)
 {
     if (checking_frames)
     {
         m_frame_current_time = SDL_GetPerformanceCounter();
         double elapsedSeconds = (double)(m_frame_current_time - m_frame_start_time) / m_frequency;
         m_dts.push_back(elapsedSeconds - m_last_frame_sec_dt);
+        m_checkpoints.push_back(checkpoint);
+        m_spheres_on_frustum.push_back(spheres_on_frustum);
+        m_visible_spheres.push_back(visible_spheres);
+        m_cylinders_on_frustum.push_back(cylinders_on_frustum);
+        m_visible_cylinders.push_back(visible_cylinders);
         m_last_frame_sec_dt = elapsedSeconds;
         if (elapsedSeconds >= m_seconds_timer) 
         {
-            writeToFramesCounter_off(m_checkpoint);
+            writeToFramesCounter_off();
             checking_frames = false;
             std::vector<double>().swap(m_dts);
+            std::vector<int>().swap(m_checkpoints);
+            std::vector<int>().swap(m_spheres_on_frustum);
+            std::vector<int>().swap(m_visible_spheres);
+            std::vector<int>().swap(m_cylinders_on_frustum);
+            std::vector<int>().swap(m_visible_cylinders);
             std::cout << "Finished frame saving on " << elapsedSeconds << " seconds." << std::endl;
         }
     }
@@ -83,7 +93,7 @@ void Profiler::finishSavingNextProcessTime()
     m_process_total_time = (SDL_GetPerformanceCounter() - m_process_start_time)/m_frequency;
 }
 
-void Profiler::writeToFramesCounter_off(int checkpoint)
+void Profiler::writeToFramesCounter_off()
 {
     std::ofstream file(m_frame_times_file, std::ios::out | std::ios::app);
     if (!file.is_open()) 
@@ -97,9 +107,15 @@ void Profiler::writeToFramesCounter_off(int checkpoint)
         for (int i = 0; i < m_dts.size(); i++)
         {
             file 
-            << checkpoint << "," 
+            << m_checkpoints[i] << "," 
             << i << "," 
-            << m_dts[i]
+            << m_dts[i] << ","
+            << m_spheres_on_scene << ","
+            << m_spheres_on_frustum[i] << ","
+            << m_visible_spheres[i] << ","
+            << m_cylinders_on_scene << ","
+            << m_cylinders_on_frustum[i] << ","
+            << m_visible_cylinders[i]
             << "\n";
         }
     }

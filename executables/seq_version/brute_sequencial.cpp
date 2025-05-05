@@ -40,6 +40,8 @@ std::string title = "Brute Sequential Method";
 
 bool shown = true;
 
+bool withOcclusionCulling = true;
+
 int topLevel = 4;
 int level = 3;
 bool showHiz = false;
@@ -62,7 +64,7 @@ std::unordered_map<int, int> buildSpherePixelCount(const std::vector<int>& pixel
 
 std::unordered_map<int, int> ownedPixelsMap = buildSpherePixelCount(pixelOwnership);
 
-void renderFrame(std::vector<uint32_t>& framebuffer, 
+void renderFrameWithOcclusionCulling(std::vector<uint32_t>& framebuffer, 
     std::vector<float>& depthBuffer, std::vector<glm::vec4>& spheres,
     Camera& cam) 
 {
@@ -104,9 +106,35 @@ void renderFrame(std::vector<uint32_t>& framebuffer,
     }
     std::fill(pixelOwnership.begin(), pixelOwnership.end(), -1);
 
-    if (showHiz) drawMipmaps(hizPyramid, level, framebuffer, SCR_WIDTH, SCR_HEIGHT);
     frustumSpheres = frustumSpheresCount;
     visibleSpheres = visibleSpheresCount;
+    
+}
+
+void renderFrameWithoutOcclusionCulling(std::vector<uint32_t>& framebuffer, 
+    std::vector<float>& depthBuffer, std::vector<glm::vec4>& spheres,
+    Camera& cam) 
+{
+    const glm::mat4& proj = cam.getProjection();
+    const glm::mat4& view = cam.getView();
+    const glm::vec3& up = cam.getUp();
+    const glm::vec3& right = cam.getRight();
+    const glm::vec3& front = cam.getFront();
+    const glm::vec3& camPos = cam.getPosition();
+    const float& fov = cam.getFov();
+    const Frustum frustum(cam);
+    int frustumSpheresCount = 0;
+    int visibleSpheresCount = 0;
+    frustumSpheres = 0;
+    for(int i = 0; i < spheres.size(); i++)
+    {
+        if (frustum.isSphereInside(spheres[i]))
+        {
+            frustumSpheres++;
+            drawSphere(proj, view, up, front, right, camPos, SCR_WIDTH, SCR_HEIGHT, fov, spheres[i], framebuffer, depthBuffer);
+        }
+    }
+    visibleSpheres = frustumSpheres;
     
 }
 
@@ -133,7 +161,8 @@ int main(int argc, char* argv[])
     std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints = getCheckpoints(sphere_count, spheres);
     
     Benchmark benchmark(camera_controller, chkPoints);
-    Profiler profiler(window, "media/off/seq/frame_times.off", "media/off/seq/process_times.off");
+    Profiler profiler(window, (withOcclusionCulling ? "media/off/seq/occ_frame_times.off": "media/off/seq/frame_times.off"), 
+        (withOcclusionCulling ? "media/off/seq/occ_process_times.off": "media/off/seq/process_times.off"), sphere_count, 0);
     
     window.setupSceneInfoGui("Scene Info", scene_data);
     window.setupCameraGui("Camera Info", &camera);
@@ -151,14 +180,17 @@ int main(int argc, char* argv[])
             camera_controller.cameraUpdate();
             benchmark.update();
 
-            profiler.updateProfiler();
+            profiler.updateProfiler(benchmark.getCheckpointID(), frustumSpheres, visibleSpheres, 0, 0);
             if (window.getInput().isKeyDown(Key::T)) profiler.startSavingNextFrames(benchmark.getCheckpointID());
 
             std::fill(framebuffer.begin(), framebuffer.end(), 0xFFFFFF00);
-            
-            renderFrame(framebuffer, depthBuffer, spheres, camera);
+            if (withOcclusionCulling)
+            {
+                renderFrameWithOcclusionCulling(framebuffer, depthBuffer, spheres, camera);
+                hizPyramid = generateHiZPyramid(DepthBuffer{SCR_WIDTH, SCR_HEIGHT, camera.getFar(), depthBuffer}, topLevel);
+            } else
 
-            hizPyramid = generateHiZPyramid(DepthBuffer{SCR_WIDTH, SCR_HEIGHT, camera.getFar(), depthBuffer}, topLevel);
+            if (showHiz) drawMipmaps(hizPyramid, level, framebuffer, SCR_WIDTH, SCR_HEIGHT);
             std::fill(depthBuffer.begin(), depthBuffer.end(), FLT_MAX);
 
             window.updateTexture(framebuffer);
@@ -171,6 +203,12 @@ int main(int argc, char* argv[])
                 takeScreenshot(window.getRenderer(), sshot_name);   
             }
 
+            if (window.getInput().isKeyDown(Key::O)) 
+            {
+                withOcclusionCulling = !withOcclusionCulling;
+                std::cout << "Occlusion Culling: " << (withOcclusionCulling ? "On" : "Off") << std::endl;
+            }
+            
             if (window.getInput().isKeyDown(Key::H)) 
             {
                 std::cout << "Show hiz " << showHiz << std::endl;

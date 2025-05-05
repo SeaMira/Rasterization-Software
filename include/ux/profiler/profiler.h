@@ -26,7 +26,7 @@ public:
      * @param seconds_timer the time the saving of frame times takes.
      */
     Profiler(Window& window, std::string frame_times_file, 
-        std::string process_times_file, double seconds_timer = 30.0);
+        std::string process_times_file, int sphere_count, int cylinder_count, double seconds_timer = 30.0);
 
     /**
      * @brief Copy constructor for the Profiler class.
@@ -69,8 +69,14 @@ public:
      * 
      * If the frames are being saved, it updates the frame saving process. If the saving time
      * passed it writes on the file of frame times.
+     * 
+     * @param checkpoint the checkpoint to be saved.
+     * @param spheres_on_frustum the amount of spheres on the frustum.
+     * @param visible_spheres the amount of visible spheres.
+     * @param cylinders_on_frustum the amount of cylinders on the frustum.
+     * @param visible_cylinders the amount of visible cylinders.
      */
-    void updateProfiler();
+    void updateProfiler(int checkpoint, int spheres_on_frustum, int visible_spheres, int cylinders_on_frustum, int visible_cylinders);
 
     /**
      * @brief starts chronometer and flags for saving the next process time.
@@ -87,9 +93,10 @@ public:
     /**
      * @brief writes the frame times to the file.
      * 
-     * Writes the frame times to the file for a certain checkpoint.
+     * Writes the frame times to the file.
+     * 
      */
-    void writeToFramesCounter_off(int checkpoint);
+    void writeToFramesCounter_off();
 
     /**
      * @brief writes the process time to the file.
@@ -103,11 +110,19 @@ private:
     uint64_t m_frequency; ///< the frequency of the performance counter.
 
     int m_checkpoint; ///< the checkpoint to start saving the frames from.
+    int m_spheres_on_scene; ///< the amount of spheres on the scene.
+    int m_cylinders_on_scene; ///< the amount of cylinders on the scene.
+
     uint64_t m_frame_start_time; ///< the start time of saving frames.
     uint64_t m_frame_current_time; ///< the current time of the frame time saving.
     double m_last_frame_sec_dt; ///< the last frame time in seconds.
     double m_seconds_timer; ///< the time spent saving the frame times.
     std::vector<double> m_dts; ///< the frame times to be saved.
+    std::vector<int> m_checkpoints; ///< vector with the traversed checkpoints for each frame.
+    std::vector<int> m_spheres_on_frustum; ///< vector with amount of spheres on frustum for each frame.
+    std::vector<int> m_visible_spheres; ///< vector with amount of visible spheres each frame.
+    std::vector<int> m_cylinders_on_frustum; ///< vector with amount of cylinders on frustum for each frame.
+    std::vector<int> m_visible_cylinders; ///< vector with amount of visible cylinders each frame.
 
     uint64_t m_process_start_time; ///< the start time of the process time saving.
     uint64_t m_process_total_time; ///< the total time of the process time saving.

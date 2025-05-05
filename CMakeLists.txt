@@ -55,8 +55,12 @@ add_custom_command(
 add_custom_target(copy_assets ALL DEPENDS "${CMAKE_BINARY_DIR}/assets")
 
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/off/seq)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/off/seq_w_cyl)
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/off/fst_parallel)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/off/fst_parallel_w_cyl)
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/off/scnd_parallel)
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/img/seq)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/img/seq_w_cyl)
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/img/fst_parallel)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/img/fst_parallel_w_cyl)
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/img/scnd_parallel)

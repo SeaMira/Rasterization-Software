@@ -27,6 +27,15 @@ BenchmarkInfoComponent::BenchmarkInfoComponent(std::string name, Benchmark* benc
     addElement(std::make_unique<ButtonElement>("Next",
         [this]() { nextCheckpoint(); }
     ));
+    addElement(std::make_unique<SliderElementTopBoundedI>(
+        "Initial track checkpoint", m_benchmark->m_initial_checkpoint, 0, m_benchmark->m_final_checkpoint
+    ));
+    addElement(std::make_unique<SliderElementLowBoundedI>(
+        "Final track checkpoint", m_benchmark->m_final_checkpoint, m_benchmark->m_initial_checkpoint, m_benchmark->m_last_checkpoint_id - 1
+    ));
+    addElement(std::make_unique<ButtonElement>("Play Track",
+        [this]() { m_benchmark->playTrack(); }
+    ));
 }
 
 void BenchmarkInfoComponent::render()

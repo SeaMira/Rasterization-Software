@@ -28,12 +28,25 @@ class Benchmark
          */
         Benchmark(CameraController& camera_controller, std::vector<std::pair<glm::vec3, glm::vec3>> checkpoints);
         
+
+        inline void setInitialTrackCheckpoint(int checkpoint_id) { m_initial_checkpoint = checkpoint_id; }
+        inline void setFinalTrackCheckpoint(int checkpoint_id) { m_final_checkpoint = checkpoint_id; }
+
         /**
          * @brief go to the next checkpoint.
          * 
          * Moves the camera to the next checkpoint in the path.
          */
         void goToNextCheckpoint();
+        
+        /**
+         * @brief sets the new checkpoint.
+         * 
+         * Moves the camera to a specific checkpoint in the path.
+         * 
+         * @param checkpoint_id the ID of the checkpoint to be set.
+         */
+        void setCheckpoint(int checkpoint_id);
 
         /**
          * @brief go to the last checkpoint.
@@ -57,11 +70,26 @@ class Benchmark
         void play();
 
         /**
+         * @brief play the benchmark track.
+         * 
+         * Plays the benchmark track so every frame contributes to camera movement from the selected initial checkpoint
+         * to the last selected checkpoint.
+         */
+        void playTrack();
+
+        /**
          * @brief stop the benchmark.
          * 
          * Stops the benchmark so the camera does not move.
          */
         void stop();
+        
+        /**
+         * @brief stop the benchmark track.
+         * 
+         * Stops the benchmark track so the camera does not move.
+         */
+        void stopTrack();
 
         /**
          * @brief speed the camera down.
@@ -93,6 +121,14 @@ class Benchmark
         void update();
 
         /**
+         * @brief update the benchmark track path.
+         * 
+         * Updates the benchmark so the camera moves along the track path the corresponding frame.
+         * It is stopped if the last frame is reached.
+         */
+        void updateTrack();
+
+        /**
          * @brief check the input for the benchmark.
          * 
          * Checks the input for the benchmark so the camera can be controlled.
@@ -112,7 +148,10 @@ class Benchmark
         CameraController* m_camera_controller; ///< the camera controller to be used for the benchmark.
         CameraControlledPath m_camera_path; ///< the camera controlled path for the benchmark.
         bool m_play = true; ///< whether the benchmark is playing or not.
-
+        bool m_play_track = true; ///< whether the benchmark is playing just a track or not.
+        int m_initial_checkpoint = 0; ///< the initial checkpoint to be used for a benchmark track.
+        int m_final_checkpoint; ///< the final checkpoint to be used for a benchmark track.
+        int m_last_checkpoint_id; ///< the last checkpoint id to be used for a benchmark.
         friend class BenchmarkInfoComponent; ///< the benchmark info component is a friend class so it can be shown on UI.
 
 };

@@ -33,8 +33,8 @@
 int SCR_WIDTH = 1024;
 int SCR_HEIGHT = 1024;
 
-int sphere_count = 16*16*16;
-int cylinder_count = 16*16*16;
+int sphere_count = 126;
+int cylinder_count = 126;
 int frustumSpheres = 0;
 int visibleSpheres = 0;
 
@@ -44,7 +44,7 @@ int visibleCylinders = 0;
 std::string title = "Sequential Method: Spheres and Cylinders"; 
 
 bool shown = true;
-bool withOcclusionCulling = false;
+bool withOcclusionCulling = true;
 
 int topLevel = 4;
 int level = 3;
@@ -184,7 +184,9 @@ void renderFrameWithoutOcclusionCulling(std::vector<uint32_t>& framebuffer,
                  fov, framebuffer, depthBuffer);
         } 
     }
+    visibleCylinders = frustumCylinders;
 
+    frustumSpheres = 0;
     for(int i = 0; i < spheres.size(); i++)
     {
         if (frustum.isSphereInside(spheres[i]))
@@ -193,6 +195,7 @@ void renderFrameWithoutOcclusionCulling(std::vector<uint32_t>& framebuffer,
             drawSphere(proj, view, up, front, right, camPos, SCR_WIDTH, SCR_HEIGHT, fov, spheres[i], framebuffer, depthBuffer);
         }
     }
+    visibleSpheres = frustumSpheres;
     
 }
 
@@ -202,9 +205,9 @@ int main(int argc, char* argv[])
         {"Screen width", &SCR_WIDTH},
         {"Screen height", &SCR_HEIGHT},
         {"Sphere count", &sphere_count},
-        {"Cylinder count", &cylinder_count},
         {"Spheres On Frustum", &frustumSpheres},
         {"Visible Spheres", &visibleSpheres},
+        {"Cylinder count", &cylinder_count},
         {"Cylinders On Frustum", &frustumCylinders},
         {"Visible Cylinders", &visibleCylinders},
     };
@@ -221,10 +224,18 @@ int main(int argc, char* argv[])
     std::vector<Cylinder> cylinders = getCylinderScene(cylinder_count);
     
     std::vector<Sphere> spheres = getScene(sphere_count);
+
+    std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints = getCheckpoints(sphere_count, spheres, cylinders);
+    
+    Benchmark benchmark(camera_controller, chkPoints);
+    Profiler profiler(window, 
+        (withOcclusionCulling ? "media/off/seq_w_cyl/occ_frame_times.off" : "media/off/seq_w_cyl/frame_times.off"), 
+        (withOcclusionCulling ? "media/off/seq_w_cyl/occ_process_times.off": "media/off/seq_w_cyl/process_times.off"), sphere_count, cylinder_count);
     
     window.setupSceneInfoGui("Scene Info", scene_data);
     window.setupCameraGui("Camera Info", &camera);
     window.setupInputInfoGui("General Input Info");
+    window.setupBenchmarkInfoGui("Benchmark", &benchmark);
 
     std::fill(depthBuffer.begin(), depthBuffer.end(), FLT_MAX);
     hizPyramid = generateHiZPyramid(DepthBuffer{SCR_WIDTH, SCR_HEIGHT, camera.getFar(), depthBuffer}, topLevel);
@@ -235,16 +246,20 @@ int main(int argc, char* argv[])
         {
             
             camera_controller.cameraUpdate();
+            benchmark.update();
 
+            profiler.updateProfiler(benchmark.getCheckpointID(), frustumSpheres, visibleSpheres, frustumCylinders, visibleCylinders);
+            if (window.getInput().isKeyDown(Key::T)) profiler.startSavingNextFrames(benchmark.getCheckpointID());
 
             std::fill(framebuffer.begin(), framebuffer.end(), 0xFFFFFF00);
             
             if (withOcclusionCulling) 
+            {
                 renderFrameWithOcclusionCulling(framebuffer, depthBuffer, cylinders, spheres, camera);
-            else 
+                hizPyramid = generateHiZPyramid(DepthBuffer{SCR_WIDTH, SCR_HEIGHT, camera.getFar(), depthBuffer}, topLevel);
+            } else 
                 renderFrameWithoutOcclusionCulling(framebuffer, depthBuffer, cylinders, spheres, camera);
 
-            hizPyramid = generateHiZPyramid(DepthBuffer{SCR_WIDTH, SCR_HEIGHT, camera.getFar(), depthBuffer}, topLevel);
             std::fill(depthBuffer.begin(), depthBuffer.end(), FLT_MAX);
 
             window.updateTexture(framebuffer);

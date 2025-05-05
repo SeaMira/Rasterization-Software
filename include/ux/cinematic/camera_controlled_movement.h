@@ -75,6 +75,15 @@ public:
     void nextCheckpoint();
 
     /**
+     * @brief go to a specific checkpoint.
+     * 
+     * Sets the camera to a checkpoint in the path.
+     * 
+     * @param checkpoint_id the ID of the checkpoint to go to.
+     */
+    void setCheckpoint(int checkpoint_id);
+
+    /**
      * @brief go to the last checkpoint.
      * 
      * Sets the camera to the last checkpoint in the path.

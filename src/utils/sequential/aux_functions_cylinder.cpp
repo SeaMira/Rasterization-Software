@@ -306,11 +306,11 @@ bool drawCylinder(const glm::mat4& proj, const glm::mat4& view,
 
                 glm::vec4 tnor = iCylinder( camPos, rd, pa, pb, cylRadius );
                 int index = (SCR_HEIGHT - py - 1) * SCR_WIDTH + px;
-                const bool showBbox = (px == std::min((int)std::floor(xMax), SCR_WIDTH -1) || 
-                    py == std::min(SCR_HEIGHT-1, (int)projectedPoints[0].y) || 
-                    px == std::max(0, (int)std::ceil(xMin)) || 
-                    py == std::max(0, (int)projectedPoints[2].y));
-                if (showBbox) framebuffer[index] = vecToColor(glm::vec3(0));
+                // const bool showBbox = (px == std::min((int)std::floor(xMax), SCR_WIDTH -1) || 
+                //     py == std::min(SCR_HEIGHT-1, (int)projectedPoints[0].y) || 
+                //     px == std::max(0, (int)std::ceil(xMin)) || 
+                //     py == std::max(0, (int)projectedPoints[2].y));
+                // if (showBbox) framebuffer[index] = vecToColor(glm::vec3(0));
                 if (tnor.x > 0.0f) 
                 {
                     float t = tnor.x;

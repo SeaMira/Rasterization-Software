@@ -38,8 +38,8 @@ GLuint workGroupSizeYPerPixel = 16;  // Deifining threads-per-group (Y)
 
 GLuint workGroupSizeXPerSphere = 256;  // Deifining threads-per-sphere (X)
 
-int visibleSpheresCount = 0;
-int notOccludedSpheresCount = 0;
+int frustumSpheres = 0;
+int drawnSpheres = 0;
 
 // downsample settings
 int downsampleLevel = 4;
@@ -53,8 +53,8 @@ int main(int argc, char* argv[])
         {"Screen width", &SCR_WIDTH},
         {"Screen height", &SCR_HEIGHT},
         {"Sphere count", &sphere_count},
-        {"Spheres On Frustum", &visibleSpheresCount},
-        {"Drawn spheres", &notOccludedSpheresCount}
+        {"Spheres On Frustum", &frustumSpheres},
+        {"Drawn spheres", &drawnSpheres}
     };
 
     AppOpenGL window { title, SCR_WIDTH, SCR_HEIGHT, shown };
@@ -85,7 +85,7 @@ int main(int argc, char* argv[])
     
     std::vector<SphereContainer> visibleSpheres(spheres.size());    
     #if !CPU_FRUSTUM_CULLING
-        visibleSpheresCount = sphere_count;
+        frustumSpheres = sphere_count;
         fillSpheresData(spheres, visibleSpheres);
     #endif
     
@@ -117,8 +117,12 @@ int main(int argc, char* argv[])
     depthBuffer.unbind();
 
     Benchmark benchmark(camera_controller, chkPoints);
-    Profiler profiler(window, "media/off/fst_parallel/frame_times.off", "media/off/fst_parallel/process_times.off");
     
+    #if CPU_FRUSTUM_CULLING
+        Profiler profiler(window, "media/off/fst_parallel/cpu_frame_times.off", "media/off/fst_parallel/cpu_process_times.off", sphere_count, 0);
+    #else
+        Profiler profiler(window, "media/off/fst_parallel/gpu_frame_times.off", "media/off/fst_parallel/gpu_process_times.off", sphere_count, 0);
+    #endif
     window.setupSceneInfoGui("Scene Info", scene_data);
     window.setupCameraGui("Camera Info", &camera);
     window.setupInputInfoGui("General Input Info");
@@ -140,7 +144,7 @@ int main(int argc, char* argv[])
         {
             camera_controller.cameraUpdate();
             benchmark.update();
-            profiler.updateProfiler();
+            profiler.updateProfiler(benchmark.getCheckpointID(), frustumSpheres, drawnSpheres, 0, 0);
 
             if (window.getInput().isKeyDown(Key::T)) profiler.startSavingNextFrames(benchmark.getCheckpointID());
 
@@ -171,13 +175,13 @@ int main(int argc, char* argv[])
             computeShader.use();
             Frustum frustum(camera);
             #if CPU_FRUSTUM_CULLING
-                cullSpheres(spheres, visibleSpheres, frustum, visibleSpheresCount);
+                cullSpheres(spheres, visibleSpheres, frustum, frustumSpheres);
                 sphereBuffer.bind();
-                glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, visibleSpheresCount * sizeof(SphereContainer), visibleSpheres.data());
+                glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, frustumSpheres * sizeof(SphereContainer), visibleSpheres.data());
                 sphereBuffer.unbind();
-                numGroupsX = (visibleSpheresCount + workGroupSizeXPerSphere - 1) / workGroupSizeXPerSphere;
+                numGroupsX = (frustumSpheres + workGroupSizeXPerSphere - 1) / workGroupSizeXPerSphere;
                 
-                computeShader.setInt("sphereCount", visibleSpheresCount); // visible sphere count given
+                computeShader.setInt("sphereCount", frustumSpheres); // visible sphere count given
                 #else
                 computeShader.setInt("sphereCount", sphere_count);
                 computeShader.setVec4("frustumTopFace", glm::vec4(frustum.topFace.normal, frustum.topFace.distance));
@@ -237,11 +241,11 @@ int main(int argc, char* argv[])
             // if (mappedData != nullptr) {
             //     // Accessing mapped buffer
             //     SphereContainer* spheresData = reinterpret_cast<SphereContainer*>(mappedData);
-            //     notOccludedSpheresCount = 0;
+            //     drawnSpheres = 0;
             //     // looping on elements checking if drawn or not
-            //     for (size_t i = 0; i < visibleSpheresCount; ++i)
-            //         if (spheresData[i].wasDrawn[0] == 1) 
-            //             notOccludedSpheresCount++;
+            //     for (size_t i = 0; i < frustumSpheres; ++i)
+            //         if (spheresData[i].wasDrawn[0]) 
+            //             drawnSpheres++;
                 
             //     // unmapping buffer once finished
             //     glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);

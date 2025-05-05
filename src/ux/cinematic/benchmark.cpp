@@ -8,12 +8,20 @@ m_camera_controller(&camera_controller), m_camera_path(*(camera_controller.camer
     {
         m_camera_path.addCheckpoint(checkpoint.first, checkpoint.second);
     }
+    m_final_checkpoint = checkpoints.size() - 1;
+    m_last_checkpoint_id = checkpoints.size();
 }
         
 void Benchmark::goToNextCheckpoint()
 {
     m_camera_path.nextCheckpoint();
 }
+
+void Benchmark::setCheckpoint(int checkpoint_id)
+{
+    m_camera_path.setCheckpoint(checkpoint_id);
+}
+
 
 void Benchmark::goToLastCheckpoint()
 {
@@ -29,11 +37,24 @@ void Benchmark::speedUp()
 void Benchmark::play()
 {
     m_play = true;
+    m_play_track = false;
+}
+
+void Benchmark::playTrack()
+{
+    m_play = false;
+    m_camera_path.setCheckpoint(m_initial_checkpoint);
+    m_play_track = true;
 }
 
 void Benchmark::stop()
 {
     m_play = false;
+}
+
+void Benchmark::stopTrack()
+{
+    m_play_track = false;
 }
 
 void Benchmark::speedDown()
@@ -58,6 +79,16 @@ void Benchmark::update()
     {
         checkInput();
         if (m_play) m_camera_path.update();
+        if (m_play_track) updateTrack();
+    }
+}
+
+void Benchmark::updateTrack()
+{
+    m_camera_path.update();
+    if (m_camera_path.getCurrentIndex() == m_final_checkpoint)
+    {
+        m_play_track = false;
     }
 }
 
