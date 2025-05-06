@@ -21,8 +21,8 @@ void cullCylinders(std::vector<Cylinder>& cylinders, std::vector<CylinderContain
     for (int i = 0 ; i < cylinders.size(); i++)
         if (frustum.isCylinderInside(cylinders[i]))
         visibleCylinders[visibleCylindersCount++] = {
-            glm::vec4(cylinders[i].pa, cylinders[i].radius), 
-            glm::vec4(cylinders[i].pb, cylinders[i].radius),
+            cylinders[i].pa_r, 
+            cylinders[i].pb_r,
             i + indexOffset, 
             {0, 0, 0}
         };    
@@ -32,9 +32,30 @@ void fillCylindersData(std::vector<Cylinder>& cylinders, std::vector<CylinderCon
 {
     for (int i = 0 ; i < cylinders.size(); i++)
         visibleCylinders[i] = {
-            glm::vec4(cylinders[i].pa, cylinders[i].radius), 
-            glm::vec4(cylinders[i].pb, cylinders[i].radius),
+            cylinders[i].pa_r, 
+            cylinders[i].pb_r,
             i + indexOffset, 
             {0, 0, 0}
         };  
+}
+
+void setCameraUniforms(ComputeShader& shader, Camera& camera)
+{
+    shader.setMat4("proj", camera.getProjection());
+    shader.setMat4("view", camera.getView());
+    shader.setVec3("up", camera.getUp());
+    shader.setVec3("front", camera.getFront());
+    shader.setVec3("right", camera.getRight());
+    shader.setVec3("cameraPos", camera.getPosition());
+    shader.setFloat("fov", camera.getFov());
+}
+
+void setFrustumUniforms(ComputeShader& shader, Frustum& frustum)
+{
+    shader.setVec4("frustumTopFace", glm::vec4(frustum.topFace.normal, frustum.topFace.distance));
+    shader.setVec4("frustumBottomFace", glm::vec4(frustum.bottomFace.normal, frustum.bottomFace.distance));
+    shader.setVec4("frustumRightFace", glm::vec4(frustum.rightFace.normal, frustum.rightFace.distance));
+    shader.setVec4("frustumLeftFace", glm::vec4(frustum.leftFace.normal, frustum.leftFace.distance));
+    shader.setVec4("frustumFarFace", glm::vec4(frustum.farFace.normal, frustum.farFace.distance));
+    shader.setVec4("frustumNearFace", glm::vec4(frustum.nearFace.normal, frustum.nearFace.distance));
 }
