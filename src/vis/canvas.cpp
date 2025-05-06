@@ -102,3 +102,69 @@ void Canvas::takeScreenshot(std::string screenshot_file) const
     SDL_DestroySurface(surface);
     m_fbo.unbind();
 }
+
+
+void Canvas::setupDepthData(int width, int height)
+{
+    m_depthData.setup(width, height, 1, 3);
+    m_isDepthDataSetup = true;
+    std::cout << "Depth data setup." << std::endl;
+}
+
+void Canvas::setupCleaningProgram(ComputeShader& cleaningShader)
+{
+    m_cleaningProgram = &cleaningShader;
+    m_isCleaningProgramSetup = true;
+    std::cout << "Cleaning program setup." << std::endl;
+}
+
+void Canvas::setupDepthDownsample(int desiredLevel, int width, int height)
+{
+    m_depthDownsample.setup(desiredLevel, width, height, 2);
+    m_isDepthDownsampleSetup = true;
+    std::cout << "Depth downsample setup." << std::endl;
+}
+
+void Canvas::setupDownsamplingProgram(ComputeShader& downsampleShader)
+{
+    m_downsampleProgram = &downsampleShader;
+    m_isDownsampleProgramSetup = true;
+    std::cout << "Downsampling program setup." << std::endl;
+}
+
+void Canvas::cleanCanvasBuffers(int workGroupSizeXPerPixel, int workGroupSizeYPerPixel, float far)
+{
+    if (m_isCleaningProgramSetup && m_isDepthDataSetup) 
+    {
+        m_cleaningProgram->use();
+        m_depthData.bindTextureImage(GL_READ_WRITE, GL_R32F);
+        if (m_isDepthDownsampleSetup)
+        {
+            m_depthDownsample.unbindImage(GL_READ_WRITE, GL_R32F);
+            m_depthDownsample.bind();
+        }
+        m_cleaningProgram->setFloat("far", far);
+        m_cleaningProgram->setVec2I("screenResolution", glm::ivec2(m_width, m_height));
+        glDispatchCompute((m_width + workGroupSizeXPerPixel - 1) / workGroupSizeXPerPixel, 
+                (m_height + workGroupSizeYPerPixel - 1) / workGroupSizeYPerPixel, 
+                1);
+        glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
+    }
+}
+
+void Canvas::downsampleCanvasDepth(int downsampleWorkGroupSizeX, int downsampleWorkGroupSizeY)
+{
+    if (m_isDepthDownsampleSetup && m_isDepthDataSetup && m_isDownsampleProgramSetup) 
+    {
+        m_downsampleProgram->use();
+        m_depthDownsample.bindImage(GL_READ_WRITE, GL_R32F);
+        m_depthData.unbindTextureImage(GL_READ_WRITE, GL_R32F);
+        m_depthData.bindTexture();
+        glm::vec2 utexelDimensions = glm::vec2( 1.0f / (float)m_width, 1.0f / (float)m_height );            
+        m_downsampleProgram->setVec2("utexelDimensions", utexelDimensions);
+        glDispatchCompute((m_width + downsampleWorkGroupSizeX - 1) / downsampleWorkGroupSizeX, 
+            (m_height + downsampleWorkGroupSizeY - 1) / downsampleWorkGroupSizeY, 
+            1);
+        glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+    }
+}

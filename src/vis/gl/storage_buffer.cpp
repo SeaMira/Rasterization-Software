@@ -6,9 +6,27 @@ StorageBuffer::StorageBuffer(GLenum target)
     glGenBuffers(1, &m_id);
 }
 
+StorageBuffer::StorageBuffer(GLenum target, int size, GLuint index,
+    const void * data, GLenum usage)
+{
+    m_target = target;
+    glGenBuffers(1, &m_id);
+    generateBufferData(size, index, data, usage);
+    unbind();
+}
+
 StorageBuffer::~StorageBuffer()
 {
     glDeleteBuffers(1, &m_id);
+}
+
+void StorageBuffer::setup(GLenum target, int size, GLuint index,
+    const void * data, GLenum usage)
+{
+    m_target = target;
+    glGenBuffers(1, &m_id);
+    generateBufferData(size, index, data, usage);
+    unbind();
 }
 
 void StorageBuffer::generateBufferData(int size, GLuint index,

@@ -2,8 +2,11 @@
 #define _CANVAS_H_
 
 #include <SDL3/SDL.h>
+#include "vis/compute_shader_program.h"
 #include "vis/gl/frame_buffer.h"
 #include "vis/gl/texture.h"
+#include "vis/gl/depth_data.h"
+#include "vis/gl/depth_downsample.h"
 
 /**
  * @class Canvas 
@@ -195,12 +198,77 @@ public:
      */
     void takeScreenshot(std::string screenshot_file) const;
 
+    /**
+     * @brief sets up the texture used as depth storage and the depth buffer used in
+     * code to apply atomics to it.
+     * 
+     * @param width width of the texture (depends on the screen resolution).
+     * @param height height of the texture (depends on the screen resolution).
+     */
+    void setupDepthData(int width, int height);
+
+    /**
+     * @brief sets up a "cleaning" shader program. Restart the depth buffer and the
+     * depth texture values.
+     * 
+     * Restart values on framebuffer, depth buffer and depth texture. May also be used to restart values on 
+     * other buffers (pixel ownership buffer, for example).
+     * 
+     * @param cleaningShader compute shader used to clean desired buffers.
+     */
+    void setupCleaningProgram(ComputeShader& cleaningShader);
+    
+    /**
+     * * @brief sets up a depth downsampled texture for mipmap generation on a customized
+     * shader program.
+     * 
+     * @param desiredLevel desired mipmap level of resolution.
+     * @param width width of the texture (depends on the screen resolution).
+     * @param height height of the texture (depends on the screen resolution).
+     */
+    void setupDepthDownsample(int desiredLevel, int width, int height);
+    
+    /**
+     * @brief generates a downsampled depth texture mipmap.
+     * 
+     * @param downsampleShader compute shader used to generate downsampled texture.  
+     */
+    void setupDownsamplingProgram(ComputeShader& downsampleShader);
+
+    /**
+     * @brief cleans the canvas framebuffer, depth buffers and customized using a compute shader.
+     * 
+     * @param workGroupSizeXPerPixel number of work groups per pixel in X direction.
+     * @param workGroupSizeYPerPixel number of work groups per pixel in Y direction.
+     * @param far far plane distance (restart value in depth buffer).
+     */
+    void cleanCanvasBuffers(int workGroupSizeXPerPixel, int workGroupSizeYPerPixel, float far);
+
+    /**
+     * @brief downsampled depth texture mipmap generation. Dispatches the program to compute the
+     * downsampled depth texture mipmap.
+     * 
+     * @param downsampleWorkGroupSizeX number of work groups per pixel in X direction.
+     * @param downsampleWorkGroupSizeY number of work groups per pixel in Y direction.
+     */
+    void downsampleCanvasDepth(int downsampleWorkGroupSizeX, int downsampleWorkGroupSizeY);
 
 private:
     Texture m_canvas; ///< texture used as a canvas to draw pixels.
     Framebuffer m_fbo; ///< framebuffer object associated to texture.
     GLsizei m_width; ///< width of the canvas.
     GLsizei m_height; ///< height of the canvas.
+    
+    DepthData m_depthData; ///< depth data object associated to canvas.
+    DepthDownsample m_depthDownsample; ///< depth downsample object associated to canvas.
+
+    ComputeShader* m_cleaningProgram; ///< compute shader used to clean desired buffers.
+    ComputeShader* m_downsampleProgram; ///< compute shader used to generate mipmap levels.
+
+    bool m_isCleaningProgramSetup = false; ///< canvas cleaning program setup flag.
+    bool m_isDownsampleProgramSetup = false; ///< depth downsample program setup flag.
+    bool m_isDepthDataSetup = false; ///< depth data setup flag.
+    bool m_isDepthDownsampleSetup = false; ///< depth downsample setup flag.
 };
 
 #endif

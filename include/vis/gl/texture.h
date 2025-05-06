@@ -14,6 +14,8 @@
  */
 class Texture {
 public:
+
+
     /**
      * @brief Texture class constructor.
      * 
@@ -91,6 +93,71 @@ public:
      * Class destructor, deletes textures. 
      */
     ~Texture();
+
+    /**
+     * @brief Texture class late setup.
+     * 
+     * Setup that allows to generate a Texture with a target, a certain image format (channels and size),
+     * width and height of the texture, type and pointer to image data. 
+     * 
+     * @param target buffer target to set.
+     * @param internalFormat image format, specifies the number of color components.
+     * @param width width of the texture.
+     * @param height height of the texture.
+     * @param format format of the pixel data.
+     * @param type data type of the pixel.
+     * @param unit index of image unit to which bind the texture.
+     * @param data pointer to the image data in memory.
+     * 
+     * More info on
+     * <a href="https://registry.khronos.org/OpenGL-Refpages/gl4/html/glTexImage2D.xhtml">glTexImage2D</a>
+     */
+    void setup(GLenum target, GLenum internalFormat, GLsizei width, GLsizei height, 
+        GLenum format, GLenum type, GLuint unit, void* data = nullptr);
+
+    /**
+     * @brief Texture class late setup.
+     * 
+     * Similar to the other setup but uses glTexStorage2D instead of glTexImage2D. Doesn´t
+     * need type or format.
+     * 
+     * @param target buffer target to set.
+     * @param internalFormat image format, specifies the number of color components.
+     * @param width width of the texture.
+     * @param height height of the texture.
+     * @param unit index of image unit to which bind the texture.
+     * 
+     * More info on
+     * <a href="https://registry.khronos.org/OpenGL-Refpages/es3.0/html/glTexStorage2D.xhtml">glTexStorage2D</a>
+     */
+    void setup(GLenum target, GLenum internalFormat, GLsizei width, GLsizei height, GLuint unit);
+
+    /**
+     * @brief Texture class late setup.
+     * 
+     * Similar to the other setup but uses glTexImage2D. Can set the values
+     * for parameters.
+     * 
+     * @param target buffer target to set.
+     * @param internalFormat image format, specifies the number of color components.
+     * @param width width of the texture.
+     * @param height height of the texture.
+     * @param format format of the pixel data.
+     * @param type data type of the pixel.
+     * @param unit index of image unit to which bind the texture.
+     * @param data pointer to the image data in memory.
+     * @param min_filter_param parameter value for texture min filter.
+     * @param max_filter_param parameter value for texture max filter.
+     * @param wrap_s_param parameter value for texture wrap for coordinate s.
+     * @param wrap_t_param parameter value for texture wrap for coordinate t.
+     * 
+     * More info on
+     * <a href="https://registry.khronos.org/OpenGL-Refpages/es3.0/html/glTexStorage2D.xhtml">glTexStorage2D</a>
+     */
+    void setup(GLenum target, GLenum internalFormat, GLsizei width, GLsizei height, 
+        GLenum format, GLenum type, GLuint unit, void* data,
+        GLint min_filter_param, GLint mag_filter_param, GLint wrap_s_param, GLint wrap_t_param);
+
 
     /**
      * @brief Binds textures.

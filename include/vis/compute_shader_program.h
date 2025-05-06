@@ -51,6 +51,14 @@ class ComputeShader
          * @param value Uniform int value.
          */
         void setInt(const std::string &name, int value) const;
+        
+        /**
+         * @brief Loads a uniform unsigned int on the shader.
+         * 
+         * @param name Uniform unsigned int name in shader.
+         * @param value Uniform unsigned int value.
+         */
+        void setUint(const std::string &name, unsigned int value) const;
 
         /**
          * @brief Loads a uniform float on the shader.

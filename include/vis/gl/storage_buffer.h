@@ -15,6 +15,14 @@
 class StorageBuffer
 {
 public:
+
+    /**
+     * @brief Default constructor for the StorageBuffer class.
+     * 
+     * Default constructor for the StorageBuffer class, generates buffers and saves atributes.
+     */
+    StorageBuffer() = default;
+
     /**
      * @brief Constructor for the StorageBuffer class.
      * 
@@ -23,6 +31,22 @@ public:
      * @param target the target of the storage buffer.
      */
     StorageBuffer(GLenum target);
+    
+    /**
+     * @brief Constructor for the StorageBuffer class.
+     * 
+     * Constructor for the StorageBuffer class, generates buffers and saves atributes.
+     * Loads the buffer with data and sets the target, index and usage, then it unbinds 
+     * the buffer since everything is done.
+     * 
+     * @param target the target of the storage buffer.
+     * @param size the size of the buffer data.
+     * @param index the index of the buffer data.
+     * @param data the data pointer to be stored in the buffer.
+     * @param usage the usage of the buffer data.
+     */
+    StorageBuffer(GLenum target, int size, GLuint index,
+        const void * data = nullptr, GLenum usage = GL_DYNAMIC_DRAW);
 
     /**
      * @brief Destructor for the StorageBuffer class.
@@ -32,9 +56,10 @@ public:
     ~StorageBuffer();
 
     /**
-     * @brief generate buffer data for the storage buffer.
+     * @brief generate buffer data for the storage buffer and loads it with data.
      * 
-     * Generates buffer data for the storage buffer at a certain index.
+     * Generates buffer data for the storage buffer at a certain index with the desired data. 
+     * Also binds the buffer to the target and index and sets the usage.
      * 
      * @param size the size of the buffer data.
      * @param index the index of the buffer data.
@@ -43,8 +68,20 @@ public:
      */
     void generateBufferData(int size, GLuint index,
         const void * data = nullptr, GLenum usage = GL_DYNAMIC_DRAW) const;
-    // void generateBufferStorage(int size, GLuint index,
-    //     const void * data = nullptr, GLbitfield flags = GL_DYNAMIC_STORAGE_BIT) const;
+    
+    /**
+     * @brief Setup function for the storage buffer. Late retrieving of the buffer data settings.
+     * Generates buffer data for the storage buffer at a certain index with the desired data. 
+     * Also binds the buffer to the target and index and sets the usage.
+     * 
+     * @param target the target of the storage buffer.
+     * @param size the size of the buffer data.
+     * @param index the index of the buffer data.
+     * @param data the data pointer to be stored in the buffer.
+     * @param usage the usage of the buffer data.
+     */
+    void setup(GLenum target, int size, GLuint index,
+        const void * data = nullptr, GLenum usage = GL_DYNAMIC_DRAW);
     
     /**
      * @brief Binds the buffer.
