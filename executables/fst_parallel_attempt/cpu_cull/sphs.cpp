@@ -27,7 +27,7 @@ using uint = unsigned int;
 // Settings
 int SCR_WIDTH = 1024;
 int SCR_HEIGHT = 1024;
-int sphere_count = 126;
+int sphere_count = 1000;
 
 std::string title = "First Parallel Version"; 
 
@@ -63,66 +63,43 @@ int main(int argc, char* argv[])
     camera.SetPosition(.0f, .0f, .0f);
     CameraController camera_controller(window, camera);
     
-    #if CPU_FRUSTUM_CULLING
-        ComputeShader computeShader("assets/shaders/fst_parallel_attempt/sphere.compute");
-    #else
-        ComputeShader computeShader("assets/shaders/fst_parallel_attempt/sphere_culling.compute");
-    #endif
-    ComputeShader cleaningComputeShader("assets/shaders/fst_parallel_attempt/set_to_black.compute");
-    ComputeShader hizPyramidComputeShader("assets/shaders/fst_parallel_attempt/mipmap_gen.compute");
-    ComputeShader pixelCountComputeShader("assets/shaders/fst_parallel_attempt/pixel_count.compute");
+    ComputeShader computeShader("assets/shaders/fst_parallel_attempt/cpu_cull/sphere.compute");
+
+    ComputeShader cleaningComputeShader("assets/shaders/fst_parallel_attempt/cpu_cull/set_to_black.compute");
+    ComputeShader hizPyramidComputeShader("assets/shaders/fst_parallel_attempt/cpu_cull/mipmap_gen.compute");
+    ComputeShader pixelCountComputeShader("assets/shaders/fst_parallel_attempt/cpu_cull/pixel_count.compute");
 
     Canvas canvas(GL_TEXTURE_2D, GL_RGBA8, SCR_WIDTH, SCR_HEIGHT);
     canvas.setFBO(GL_COLOR_ATTACHMENT0);
-    
-    if (!canvas.getFramebuffer().isComplete()) {
-        throw std::runtime_error("Error: Incomplete Framebuffer.");
-    }
-    
+    canvas.setupDepthData(SCR_WIDTH, SCR_HEIGHT);
+    canvas.setupCleaningProgram(cleaningComputeShader);
+    canvas.setupDepthDownsample(downsampleLevel, SCR_WIDTH, SCR_HEIGHT);
+    canvas.setupDownsamplingProgram(hizPyramidComputeShader);
+        
+    StorageBuffer pixelCountFramesBuffer(GL_SHADER_STORAGE_BUFFER, SCR_WIDTH*SCR_HEIGHT * sizeof(GLuint), 4, 
+        nullptr, GL_DYNAMIC_COPY);
+
+
     std::vector<glm::vec4> spheres = getScene(sphere_count);
     sphere_count = spheres.size(); 
     std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints = getCheckpoints(sphere_count, spheres);
     
-    std::vector<SphereContainer> visibleSpheres(spheres.size());    
-    #if !CPU_FRUSTUM_CULLING
-        frustumSpheres = sphere_count;
-        fillSpheresData(spheres, visibleSpheres);
-    #endif
+    std::vector<SphereContainer> visibleSpheres(sphere_count);    
     
-    StorageBuffer sphereBuffer(GL_SHADER_STORAGE_BUFFER);
-    sphereBuffer.generateBufferData(spheres.size() * sizeof(SphereContainer), 1, 
+    StorageBuffer sphereBuffer(GL_SHADER_STORAGE_BUFFER, sphere_count * sizeof(SphereContainer), 6, 
         visibleSpheres.data(), GL_STATIC_DRAW);
-    sphereBuffer.unbind();
     
-    Texture depthTexture(GL_TEXTURE_2D, GL_R32F, SCR_WIDTH, SCR_HEIGHT, 3);
-    Texture downsampledDepthTexture(GL_TEXTURE_2D, GL_R32F, SCR_WIDTH/(1 << downsampleLevel), SCR_HEIGHT/(1 << downsampleLevel), 4);
     // Framebuffer downsampleDepthFBO;
     // downsampleDepthFBO.attachTexture(GL_COLOR_ATTACHMENT0, downsampledDepthTexture);
     
-    std::vector<GLuint> visibilityFrames(2 * spheres.size(), 10);
-    StorageBuffer visibilityFramesBuffer(GL_SHADER_STORAGE_BUFFER);
-    visibilityFramesBuffer.generateBufferData(2 * spheres.size() * sizeof(GLuint), 5, 
-    visibilityFrames.data(), GL_DYNAMIC_COPY);
-    visibilityFramesBuffer.unbind();
+    std::vector<GLuint> visibilityFrames(2 * sphere_count, 10);
+    StorageBuffer visibilityFramesBuffer(GL_SHADER_STORAGE_BUFFER, 2 * sphere_count * sizeof(GLuint), 5, 
+        visibilityFrames.data(), GL_DYNAMIC_COPY);
     
-    std::vector<GLuint> pixelCountFrames(SCR_WIDTH*SCR_HEIGHT, 0);
-    StorageBuffer pixelCountFramesBuffer(GL_SHADER_STORAGE_BUFFER);
-    pixelCountFramesBuffer.generateBufferData(SCR_WIDTH*SCR_HEIGHT * sizeof(GLuint), 6, 
-    pixelCountFrames.data(), GL_DYNAMIC_COPY);
-    pixelCountFramesBuffer.unbind();
-    
-    StorageBuffer depthBuffer(GL_SHADER_STORAGE_BUFFER);
-    depthBuffer.generateBufferData(SCR_HEIGHT * SCR_WIDTH * sizeof(uint), 7, 
-        nullptr, GL_STATIC_DRAW);
-    depthBuffer.unbind();
-
     Benchmark benchmark(camera_controller, chkPoints);
     
-    #if CPU_FRUSTUM_CULLING
-        Profiler profiler(window, "media/off/fst_parallel/cpu_frame_times.off", "media/off/fst_parallel/cpu_process_times.off", sphere_count, 0);
-    #else
-        Profiler profiler(window, "media/off/fst_parallel/gpu_frame_times.off", "media/off/fst_parallel/gpu_process_times.off", sphere_count, 0);
-    #endif
+    Profiler profiler(window, "media/off/fst_parallel/cpu_frame_times.off", "media/off/fst_parallel/cpu_process_times.off", sphere_count, 0);
+
     window.setupSceneInfoGui("Scene Info", scene_data);
     window.setupCameraGui("Camera Info", &camera);
     window.setupInputInfoGui("General Input Info");
@@ -148,58 +125,22 @@ int main(int argc, char* argv[])
 
             if (window.getInput().isKeyDown(Key::T)) profiler.startSavingNextFrames(benchmark.getCheckpointID());
 
-            hizPyramidComputeShader.use();
-            downsampledDepthTexture.bindImage(GL_READ_WRITE, GL_R32F);
-            depthTexture.unbindImage(GL_READ_WRITE, GL_R32F);
-            depthTexture.bind();
-            glm::vec2 utexelDimensions = glm::vec2( 1.0f / (float)SCR_WIDTH, 1.0f / (float)SCR_HEIGHT );
-            hizPyramidComputeShader.setInt("depthTextureSampler", 2);
-            hizPyramidComputeShader.setVec2("utexelDimensions", utexelDimensions);
-            glDispatchCompute((SCR_WIDTH + downsampleWorkGroupSizeX - 1) / downsampleWorkGroupSizeX, (SCR_HEIGHT + downsampleWorkGroupSizeY - 1) / downsampleWorkGroupSizeY, 1);
-            glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+            canvas.downsampleCanvasDepth(downsampleWorkGroupSizeX, downsampleWorkGroupSizeY);
+            
+            canvas.cleanCanvasBuffers(workGroupSizeXPerPixel, workGroupSizeYPerPixel, camera.getFar());
 
-            depthTexture.bindImage(GL_READ_WRITE, GL_R32F);
-
-            cleaningComputeShader.use();
-            cleaningComputeShader.setFloat("far", camera.getFar());
-            cleaningComputeShader.setVec2I("screenResolution", screenResolution);
-            glDispatchCompute((SCR_WIDTH + workGroupSizeXPerPixel - 1) / workGroupSizeXPerPixel, 
-                (SCR_HEIGHT + workGroupSizeYPerPixel - 1) / workGroupSizeYPerPixel, 
-                1);
-            glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
-
-
-            downsampledDepthTexture.unbindImage(GL_READ_WRITE, GL_R32F);
-            downsampledDepthTexture.bind();
-
-            computeShader.use();
             Frustum frustum(camera);
-            #if CPU_FRUSTUM_CULLING
-                cullSpheres(spheres, visibleSpheres, frustum, frustumSpheres);
-                sphereBuffer.bind();
-                glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, frustumSpheres * sizeof(SphereContainer), visibleSpheres.data());
-                sphereBuffer.unbind();
-                numGroupsX = (frustumSpheres + workGroupSizeXPerSphere - 1) / workGroupSizeXPerSphere;
-                
-                computeShader.setInt("sphereCount", frustumSpheres); // visible sphere count given
-                #else
-                computeShader.setInt("sphereCount", sphere_count);
-                computeShader.setVec4("frustumTopFace", glm::vec4(frustum.topFace.normal, frustum.topFace.distance));
-                computeShader.setVec4("frustumBottomFace", glm::vec4(frustum.bottomFace.normal, frustum.bottomFace.distance));
-                computeShader.setVec4("frustumRightFace", glm::vec4(frustum.rightFace.normal, frustum.rightFace.distance));
-                computeShader.setVec4("frustumLeftFace", glm::vec4(frustum.leftFace.normal, frustum.leftFace.distance));
-                computeShader.setVec4("frustumFarFace", glm::vec4(frustum.farFace.normal, frustum.farFace.distance));
-                computeShader.setVec4("frustumNearFace", glm::vec4(frustum.nearFace.normal, frustum.nearFace.distance));
-            #endif
+            
+            computeShader.use();
+            cullSpheres(spheres, visibleSpheres, frustum, frustumSpheres);
+            sphereBuffer.bind();
+            glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, frustumSpheres * sizeof(SphereContainer), visibleSpheres.data());
+            sphereBuffer.unbind();
+            numGroupsX = (frustumSpheres + workGroupSizeXPerSphere - 1) / workGroupSizeXPerSphere;
+            computeShader.setInt("sphereCount", frustumSpheres); // visible sphere count given
+            computeShader.setUint("visibilityFrameBufferIndexOffset", 0);
             computeShader.setVec2I("screenResolution", screenResolution);
-            computeShader.setMat4("proj", camera.getProjection());
-            computeShader.setMat4("view", camera.getView());
-            computeShader.setVec3("up", camera.getUp());
-            computeShader.setVec3("front", camera.getFront());
-            computeShader.setVec3("right", camera.getRight());
-            computeShader.setVec3("cameraPos", camera.getPosition());
-            computeShader.setFloat("fov", camera.getFov()); // visible sphere count given
-
+            setCameraUniforms(computeShader, camera);
             glDispatchCompute(numGroupsX, numGroupsY, 1);
             glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
             
