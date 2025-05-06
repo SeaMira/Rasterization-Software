@@ -3,20 +3,18 @@
 layout(local_size_x = 256) in;
 layout(rgba8, binding = 0) uniform image2D outputImage;
 
-struct Sphere 
+layout(binding = 1, r32f) uniform image2D depthData;
+layout(binding = 2) uniform sampler2D downsampledDepthTexture; 
+
+layout(std430, binding = 3) buffer DepthBuffer 
 {
-    vec4 positionr;  // (x, y, z, r)
-    uint index;
-    int wasDrawn[3];
+    uint depthBuffer[];
 };
 
-layout(std430, binding = 1) buffer SphereBuffer 
+layout(std430, binding = 4) buffer PixelOwnershipBuffer 
 {
-    Sphere spheres[];
+    uint pixelOwnershipBuffer[];
 };
-
-layout(binding = 3, r32f) uniform image2D depthData;
-layout(binding = 4) uniform sampler2D downsampledDepthTexture; 
 
 struct FramePixelsCount
 {
@@ -30,26 +28,21 @@ layout(std430, binding = 5) buffer VisibilityFrameBuffer
     FramePixelsCount visibilityFrameBuffer[];
 };
 
-layout(std430, binding = 6) buffer PixelOwnershipBuffer 
+struct Sphere 
 {
-    uint pixelOwnershipBuffer[];
+    vec4 positionr;  // (x, y, z, r)
+    uint index;
+    int wasDrawn[3];
 };
 
-layout(std430, binding = 7) buffer DepthBuffer 
+layout(std430, binding = 6) buffer SphereBuffer 
 {
-    uint depthBuffer[];
+    Sphere spheres[];
 };
 
 
 uniform mat4 view;
 uniform mat4 proj;
-
-uniform vec4 frustumTopFace;
-uniform vec4 frustumBottomFace;
-uniform vec4 frustumRightFace;
-uniform vec4 frustumLeftFace;
-uniform vec4 frustumFarFace;
-uniform vec4 frustumNearFace;
 
 uniform vec3 front;
 uniform vec3 up;
@@ -60,9 +53,10 @@ uniform ivec2 screenResolution;
 uniform float fov;
 
 uniform int sphereCount;
+uniform uint visibilityFrameBufferIndexOffset;
 
-vec3 lightColor = vec3(0.01, 1.0, 0.05);
-float diffuseI = 0.9;
+const vec3 lightColor = vec3(0.01, 1.0, 0.05);
+const float diffuseI = 0.9;
 const int pixelsToCheck = 5;
 
 struct bboxCorners
@@ -72,6 +66,7 @@ struct bboxCorners
     vec2 maxCorner;
     
 };
+
 
 struct ScreenRayCasting
 {
@@ -104,25 +99,6 @@ ScreenRayCasting makeScreenRayCasting(float aspectRatio)
 
     return ScreenRayCasting(rayStart, dx, dy);
 }
-
-// frustum culling
-
-bool isOnOrForwardOfPlane(vec4 plane, vec4 sphere)
-{
-    return dot(vec3(plane), vec3(sphere)) - plane.w >= -sphere.w;
-}
-
-bool isSphereInside(Sphere sph)
-{
-    return isOnOrForwardOfPlane(frustumLeftFace, sph.positionr) &&
-           isOnOrForwardOfPlane(frustumRightFace, sph.positionr) &&
-           isOnOrForwardOfPlane(frustumFarFace, sph.positionr) &&
-           isOnOrForwardOfPlane(frustumNearFace, sph.positionr) &&
-           isOnOrForwardOfPlane(frustumTopFace, sph.positionr) &&
-           isOnOrForwardOfPlane(frustumBottomFace, sph.positionr);
-}
-
-// frustum culling
 
 uint vecToColor(vec3 lambertCos) {
     uint R = uint(lambertCos.r * 255.0);
@@ -219,13 +195,14 @@ void drawSphere(Sphere sphere)
     vec3 normCamSpaceSphere = normalize(cameraSpaceSphere);
     vec3 camImposPos = cameraSpaceSphere - normCamSpaceSphere * sphere.positionr.w;
 
+    
     bboxCorners sphereBbox = getSphereBbox(cameraSpaceSphere, camImposPos,
         normCamSpaceSphere, sphere.positionr.w);
     
     float aspectRatio = float(screenResolution.x) / float(screenResolution.y);
     ivec2 screenMin, screenMax;
 
-    screenMin.x = int( ((sphereBbox.minCorner.x) * 0.5f + 0.5f) * float(screenResolution.x));
+    screenMin.x = int(((sphereBbox.minCorner.x) * 0.5f + 0.5f) * float(screenResolution.x));
     screenMin.y = int((sphereBbox.minCorner.y * 0.5f + 0.5f) * float(screenResolution.y));
     screenMax.x = int(((sphereBbox.maxCorner.x) * 0.5f + 0.5f) * float(screenResolution.x));
     screenMax.y = int((sphereBbox.maxCorner.y * 0.5f + 0.5f) * float(screenResolution.y));
@@ -268,34 +245,34 @@ void drawSphere(Sphere sphere)
         onSphDepth(middleTop, int(mid_x), int(mid_y+dify*0.49f), sphere.positionr.xyz, sphere.positionr.w, rayStart, dx, dy),
         onSphDepth(middlePixelsVec, (screenMin.x + screenMax.x) / 2, (screenMin.y + screenMax.y) / 2, sphere.positionr.xyz, sphere.positionr.w, rayStart, dx, dy),
     };
+    
+    uint visFrameBufferId = visibilityFrameBufferIndexOffset + sphere.index;
 
     if (!isSphereBillboardVisible(xcoords, ycoords, pixelDepths))
     {
-        if (visibilityFrameBuffer[sphere.index].frames > 0 && 
-            visibilityFrameBuffer[sphere.index].pixels == 0) 
+        if (visibilityFrameBuffer[visFrameBufferId].frames > 0 && 
+            visibilityFrameBuffer[visFrameBufferId].pixels == 0) 
         {
-            visibilityFrameBuffer[sphere.index].frames -= 1;
+            visibilityFrameBuffer[visFrameBufferId].frames -= 1;
         }
-        else if (visibilityFrameBuffer[sphere.index].frames == 0 && 
-            visibilityFrameBuffer[sphere.index].pixels == 0) 
+        else if (visibilityFrameBuffer[visFrameBufferId].frames == 0 && 
+            visibilityFrameBuffer[visFrameBufferId].pixels == 0) 
         {
             spheres[gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_WorkGroupSize.x].wasDrawn[0] = 0;
             return;
         }
         else 
         {
-            visibilityFrameBuffer[sphere.index].frames = 10;
+            visibilityFrameBuffer[visFrameBufferId].frames = 10;
         }
     } else
     {
-        visibilityFrameBuffer[sphere.index].frames = 10;
+        visibilityFrameBuffer[visFrameBufferId].frames = 10;
     }
     spheres[gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_WorkGroupSize.x].wasDrawn[0] = 1;
-    
     for (int px = max(0, screenMin.x); px < min(screenMax.x, screenResolution.x); px++)
     {
         vec3 rayColStart = rayStart + float(px) * dx;
-        bool finishedLine = false;
         for (int py = max(0, screenMin.y); py < min(screenResolution.y, screenMax.y); py++)
         {
 
@@ -306,9 +283,7 @@ void drawSphere(Sphere sphere)
             // const bool showBbox = (px == screenMin.x || py == screenMin.y || px == screenMax.x - 1 || py == screenMax.y - 1);
             if (h > 0.0f) 
             {
-                if (!finishedLine) finishedLine = true;
                 // imageStore(outputImage, ivec2(px, py), vec4(1.0, 0.0, 0.0, 1.0));
-                // const int index = (screenResolution.y - py - 1) * screenResolution.x + px;
                 const vec3 hit = (rayColStart + float(py) * dy) * h;
                 const float depth = (hit.z * proj[2].z + proj[3].z) / -hit.z ;
                 const uint depthUint = floatBitsToUint(depth);
@@ -318,18 +293,14 @@ void drawSphere(Sphere sphere)
                 {
                     const vec3 normal = normalize( cameraPos + rd*h - sphere.positionr.xyz );
                     const float lambertCos = dot(normal, -normalize(rd*h));
-                    pixelOwnershipBuffer[index] = sphere.index;
+                    pixelOwnershipBuffer[index] = visFrameBufferId;
                     imageStore(depthData, ivec2(px, py), vec4(depth));
                     imageStore(outputImage, ivec2(px, py), vec4(lambertCos * lightColor * diffuseI, 1.0));
-                } 
-
-            } else if (finishedLine)
-            {
-                break;
-            }
+                }
+                
+            } 
         }
     }
-    
 }
 
 
@@ -344,7 +315,7 @@ void main()
 
     // Get sphere
     Sphere s = spheres[index];
-    if (isSphereInside(s)) drawSphere(s);
-    else spheres[index].wasDrawn[0] = 0;
-    visibilityFrameBuffer[s.index].pixels = 0;
+
+    drawSphere(s);
+    visibilityFrameBuffer[visibilityFrameBufferIndexOffset + s.index].pixels = 0;
 }

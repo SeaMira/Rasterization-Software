@@ -3,22 +3,18 @@
 layout(local_size_x = 256) in;
 layout(rgba8, binding = 0) uniform image2D outputImage;
 
-struct Cylinder 
+layout(binding = 1, r32f) uniform image2D depthData;
+layout(binding = 2) uniform sampler2D downsampledDepthTexture; 
+
+layout(std430, binding = 3) buffer DepthBuffer 
 {
-    vec4 pa_r;
-    vec4 pb_r;
-    int index;
-    int wasDrawn[3];
+    uint depthBuffer[];
 };
 
-layout(std430, binding = 2) buffer CylinderBuffer 
+layout(std430, binding = 4) buffer PixelOwnershipBuffer 
 {
-    Cylinder cylinders[];
+    uint pixelOwnershipBuffer[];
 };
-
-
-layout(binding = 3, r32f) uniform image2D depthData;
-layout(binding = 4) uniform sampler2D downsampledDepthTexture; 
 
 struct FramePixelsCount
 {
@@ -32,15 +28,17 @@ layout(std430, binding = 5) buffer VisibilityFrameBuffer
     FramePixelsCount visibilityFrameBuffer[];
 };
 
-layout(std430, binding = 6) buffer PixelOwnershipBuffer 
+struct Cylinder 
 {
-    uint pixelOwnershipBuffer[];
+    vec4 pa_r;
+    vec4 pb_r;
 };
 
-layout(std430, binding = 7) buffer DepthBuffer 
+layout(std430, binding = 7) buffer CylinderBuffer 
 {
-    uint depthBuffer[];
+    Cylinder cylinders[];
 };
+
 
 uniform mat4 view;
 uniform mat4 proj;
@@ -61,6 +59,7 @@ uniform ivec2 screenResolution;
 uniform float fov;
 
 uniform int cylinderCount;
+uniform uint visibilityFrameBufferIndexOffset;
 
 const vec3 lightColor = vec3(0.01, 1.0, 0.05);
 const float diffuseI = 0.9;
@@ -263,7 +262,7 @@ bool isBillboardVisible(int xcoords[pixelsToCheck], int ycoords[pixelsToCheck], 
     return false;
 }
 
-void drawCylinder(Cylinder cylinder)
+void drawCylinder(Cylinder cylinder, uint cylinderIndex)
 {
     vec3 pa = cylinder.pa_r.xyz;
     vec3 pb = cylinder.pb_r.xyz;
@@ -351,29 +350,27 @@ void drawCylinder(Cylinder cylinder)
         onCylDepth(closePb, closePbScreen.x, closePbScreen.y, pa, pb, ra, rayStart, dx, dy),
         onCylDepth(closeCenter, closeCenterScreen.x, closeCenterScreen.y, pa, pb, ra, rayStart, dx, dy),
     };
-
+    uint visFrameBufferId = visibilityFrameBufferIndexOffset + cylinderIndex;
     if (!isBillboardVisible(xcoords, ycoords, pixelDepths))
     {
-        if (visibilityFrameBuffer[cylinder.index].frames > 0 && 
-            visibilityFrameBuffer[cylinder.index].pixels == 0) 
+        if (visibilityFrameBuffer[visFrameBufferId].frames > 0 && 
+            visibilityFrameBuffer[visFrameBufferId].pixels == 0) 
         {
-            visibilityFrameBuffer[cylinder.index].frames -= 1;
+            visibilityFrameBuffer[visFrameBufferId].frames -= 1;
         }
-        else if (visibilityFrameBuffer[cylinder.index].frames == 0 && 
-            visibilityFrameBuffer[cylinder.index].pixels == 0) 
+        else if (visibilityFrameBuffer[visFrameBufferId].frames == 0 && 
+            visibilityFrameBuffer[visFrameBufferId].pixels == 0) 
         {
-            cylinders[gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_WorkGroupSize.x].wasDrawn[0] = 0;
             return;
         }
         else 
         {
-            visibilityFrameBuffer[cylinder.index].frames = 10;
+            visibilityFrameBuffer[visFrameBufferId].frames = 10;
         }
     } else
     {
-        visibilityFrameBuffer[cylinder.index].frames = 10;
+        visibilityFrameBuffer[visFrameBufferId].frames = 10;
     }
-    cylinders[gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_WorkGroupSize.x].wasDrawn[0] = 1;
     
     
     for (int py = min(screenResolution.y-1, maxY); py >= max(0, minY); --py)
@@ -431,7 +428,7 @@ void drawCylinder(Cylinder cylinder)
                     {
                         vec3  normal = normalize(vec3(tnor.y, tnor.z, tnor.w));
                         const float lambertCos = dot(normal, -normalize(t*rd));
-                        pixelOwnershipBuffer[index] = cylinder.index;
+                        pixelOwnershipBuffer[index] = visFrameBufferId;
                         imageStore(depthData, ivec2(px, py), vec4(depth));
                         imageStore(outputImage, ivec2(px, py), vec4(lambertCos * lightColor * diffuseI, 1.0));
                     }
@@ -456,7 +453,6 @@ void main()
     Cylinder c = cylinders[index];
 
     if (isCylinderInside(c.pa_r.xyz, c.pb_r.xyz, c.pa_r.w)) 
-        drawCylinder(c);
-    else cylinders[index].wasDrawn[0] = 0;
-    visibilityFrameBuffer[c.index].pixels = 0;
+        drawCylinder(c, index);
+    visibilityFrameBuffer[visibilityFrameBufferIndexOffset + index].pixels = 0;
 }
