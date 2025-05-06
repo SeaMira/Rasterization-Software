@@ -3,12 +3,12 @@
 #include "molecule_loader/basic_loader.h"
 
 // LOADED_SCENE or GRID_SCENE
-SceneType currentScene = SceneType::LOADED_SCENE;
+SceneType currentScene = SceneType::PACKAGE_SCENE;
 std::filesystem::path scene_path = "assets/molecules/1AGA.mmtf";
 
-int gridWidth = 100;
-int gridHeight = 1000;
-int gridDepth = 100;
+int gridWidth = 10;
+int gridHeight = 10;
+int gridDepth = 10;
 int interleaveW = 5;
 int interleaveH = 5;
 
@@ -164,7 +164,7 @@ std::vector<std::pair<glm::vec3, glm::vec3>> benchmark2_loaded_molecules(std::ve
     {
         for (auto& cylinder : cylinders)
         {
-            glm::vec3 cyl_center = glm::vec3(cylinder.pa + cylinder.pb) / 2.0f;
+            glm::vec3 cyl_center = glm::vec3(cylinder.pa_r + cylinder.pb_r) / 2.0f;
             mass_center += cyl_center;
             if (cyl_center.y < y_min) y_min = cyl_center.y;
             if (cyl_center.y > y_max) y_max = cyl_center.y;
