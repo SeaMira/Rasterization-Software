@@ -32,8 +32,8 @@ set(raster_includes
     ${CMAKE_SOURCE_DIR}/include/vis/gl/frame_buffer.h
     ${CMAKE_SOURCE_DIR}/include/vis/gl/texture.h
     ${CMAKE_SOURCE_DIR}/include/vis/gl/storage_buffer.h
-    ${CMAKE_SOURCE_DIR}/include/vis/gl/depth_pyramid.h
-    ${CMAKE_SOURCE_DIR}/include/vis/gl/depth_buffer.h
+    ${CMAKE_SOURCE_DIR}/include/vis/gl/depth_downsample.h
+    ${CMAKE_SOURCE_DIR}/include/vis/gl/depth_data.h
 
     ${CMAKE_SOURCE_DIR}/include/appSDLGL.h
     ${CMAKE_SOURCE_DIR}/include/appSDLRenderer.h
@@ -71,8 +71,8 @@ set(raster_includes
     ${CMAKE_SOURCE_DIR}/src/vis/gl/frame_buffer.cpp
     ${CMAKE_SOURCE_DIR}/src/vis/gl/texture.cpp
     ${CMAKE_SOURCE_DIR}/src/vis/gl/storage_buffer.cpp
-    ${CMAKE_SOURCE_DIR}/src/vis/gl/depth_pyramid.cpp
-    ${CMAKE_SOURCE_DIR}/src/vis/gl/depth_buffer.cpp
+    ${CMAKE_SOURCE_DIR}/src/vis/gl/depth_downsample.cpp
+    ${CMAKE_SOURCE_DIR}/src/vis/gl/depth_data.cpp
     
     ${CMAKE_SOURCE_DIR}/src/appSDLGL.cpp
     ${CMAKE_SOURCE_DIR}/src/appSDLRenderer.cpp
@@ -148,6 +148,7 @@ add_library(parallel_dependencies STATIC
 ${parallel_sources}
 ${parallel_includes}
 ${CMAKE_SOURCE_DIR}/extern/glm
+${OPENGL_INCLUDE_DIRS}
 )
 
 set_property(TARGET parallel_dependencies PROPERTY CXX_STANDARD 20)
