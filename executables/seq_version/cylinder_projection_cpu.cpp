@@ -34,7 +34,7 @@ int SCR_WIDTH = 1024;
 int SCR_HEIGHT = 1024;
 
 int sphere_count = 126;
-int cylinder_count = 126;
+int cylinder_count = 150;
 int frustumSpheres = 0;
 int visibleSpheres = 0;
 
@@ -98,7 +98,7 @@ void renderFrameWithOcclusionCulling(std::vector<uint32_t>& framebuffer,
         if (frustum.isCylinderInside(cylinders[i]))
         {
             bool wasDrawn = drawCylinderWithOcclusionCulling(proj, view, up, front, right, camPos, SCR_WIDTH, SCR_HEIGHT, 
-                cylinders[i].pa, cylinders[i].pb, cylinders[i].radius, 
+                cylinders[i].pa_r, cylinders[i].pb_r, cylinders[i].pb_r.w, 
                 fov, framebuffer, depthBuffer, hizPyramid, cylinderVisibilityFrameCache[i], pixelOwnership, i + sphere_count, ownedPixelsMap[i + sphere_count]);
             frustumCylindersCount++;
             if (wasDrawn)
@@ -180,7 +180,7 @@ void renderFrameWithoutOcclusionCulling(std::vector<uint32_t>& framebuffer,
         {
             frustumCylinders++;
             drawCylinder(proj, view, up, front, right, camPos, SCR_WIDTH, SCR_HEIGHT, 
-                 cylinders[i].pa, cylinders[i].pb, cylinders[i].radius, 
+                 cylinders[i].pa_r, cylinders[i].pb_r, cylinders[i].pb_r.w, 
                  fov, framebuffer, depthBuffer);
         } 
     }

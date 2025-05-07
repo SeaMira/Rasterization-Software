@@ -27,8 +27,8 @@ using uint = unsigned int;
 // Settings
 int SCR_WIDTH = 1024;
 int SCR_HEIGHT = 1024;
-int sphere_count = 1000;
-int cylinder_count = 1000;
+int sphere_count = 126;
+int cylinder_count = 150;
 
 std::string title = "Second Parallel Version"; 
 
@@ -144,7 +144,7 @@ int main(int argc, char* argv[])
     
 
     Benchmark benchmark(camera_controller, chkPoints);
-    Profiler profiler(window, "media/off/scnd_parallel/cpu_cull/frame_times.off", "media/off/scnd_parallel/cpu_cull/process_times.off", sphere_count, cylinder_count);
+    Profiler profiler(window, "media/off/scnd_parallel/gpu_cull/frame_times.off", "media/off/scnd_parallel/gpu_cull/process_times.off", sphere_count, cylinder_count);
     
     window.setupSceneInfoGui("Scene Info", scene_data);
     window.setupCameraGui("Camera Info", &camera);

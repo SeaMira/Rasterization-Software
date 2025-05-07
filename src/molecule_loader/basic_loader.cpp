@@ -50,7 +50,7 @@ void ChemFilesLoader::load(const std::filesystem::path & path)
                 // Obtén el radio del átomo (si está disponible)
                 float radius = SymbolRadius[atom.atomic_number().value_or( 0 )];
 
-                m_positions.push_back({position[0], position[1], position[2], radius});
+                m_positions.push_back({position[0], position[1], position[2], radius * 0.3f}); // Almacena la posición y el radio
             }
 
             for (const auto& bond : bonds) 

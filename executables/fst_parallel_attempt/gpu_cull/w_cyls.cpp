@@ -29,8 +29,8 @@ using uint = unsigned int;
 // Settings
 int SCR_WIDTH = 1024;
 int SCR_HEIGHT = 1024;
-int sphere_count = 1000;
-int cylinder_count = 1000;
+int sphere_count = 126;
+int cylinder_count = 150;
 
 std::string title = "First Parallel Version GPU culling: Spheres and Cylinders"; 
 

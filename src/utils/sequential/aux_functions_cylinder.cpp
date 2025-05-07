@@ -443,7 +443,7 @@ bool drawCylinderWithOcclusionCulling(const glm::mat4& proj, const glm::mat4& vi
 
     // Occlusion culling 
 
-    if (!cylinderOcclusionCulling(SCR_WIDTH, SCR_HEIGHT, cylRadius, pa, pb, center, proj,
+    if (!cylinderOcclusionCulling(SCR_WIDTH, SCR_HEIGHT, cylRadius, camImpPosA, camImpPosB, center, proj,
         hizPyramid, cylinderVisibilityFrameCache, pixelsOwned, computeRd, onSphDepth))
         return false;
     ////

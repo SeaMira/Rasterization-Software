@@ -3,7 +3,7 @@
 #include "molecule_loader/basic_loader.h"
 
 // LOADED_SCENE or GRID_SCENE
-SceneType currentScene = SceneType::PACKAGE_SCENE;
+SceneType currentScene = SceneType::LOADED_SCENE;
 std::filesystem::path scene_path = "assets/molecules/1AGA.mmtf";
 
 int gridWidth = 10;
