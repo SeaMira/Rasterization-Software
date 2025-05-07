@@ -3,30 +3,35 @@
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 layout(rgba8, binding = 0) uniform image2D outputImage;
 
-layout(binding = 4, r32f) uniform image2D depthData;
+layout(binding = 1, r32f) uniform image2D depthData;
 
-struct SphereBillboard 
+layout(std430, binding = 4) buffer PixelOwnershipBuffer 
 {
-    vec4 sphPosR;    // 16b - camera space position of the sphere and radius
-    vec2 minCorner;
-    vec2 maxCorner;
+    uint pixelOwnershipBuffer[];
+};
+
+struct CylinderBillboard 
+{
+    vec4 pa_r;   
+    vec4 pb_r;   
+    vec2 corner0;     
+    vec2 corner1;     
+    vec2 corner2;     
+    vec2 corner3;     
     uint index;
-    int padding1;
-    int padding2;
-    int padding3;
+    int padding1, padding2, padding3;
 }; 
 
-layout(std430, binding = 2) buffer SphereBillboardDataBuffer
+layout(std430, binding = 10) buffer CylinderBillboardDataBuffer
 {
-    SphereBillboard sphereBillboardData[];
+    CylinderBillboard cylinderBillboardData[];
 };
 
-layout(std430, binding = 7) buffer PixelOwnershipBuffer 
-{
-    int pixelOwnershipBuffer[];
+layout(binding = 8) buffer CounterBuffer {
+    uint cylinderCount;
 };
 
-shared SphereBillboard sharedSphereBillboards[1+ int(gl_WorkGroupSize.x * gl_WorkGroupSize.y * gl_WorkGroupSize.z)];
+shared CylinderBillboard sharedCylinderBillboards[1+ int(gl_WorkGroupSize.x * gl_WorkGroupSize.y * gl_WorkGroupSize.z)];
 
 uniform mat4 proj;
 uniform mat4 view;
@@ -37,7 +42,7 @@ uniform vec3 up;
 uniform vec3 right;
 
 uniform ivec2 screenResolution;
-uniform int sphereCount;
+
 uniform float far;
 uniform float fov;
 
@@ -76,14 +81,34 @@ ScreenRayCasting makeScreenRayCasting(float aspectRatio)
     return ScreenRayCasting(rayStart, dx, dy);
 }
 
-float iSphere(vec3 ro, vec3 rd, vec3 sph, float radius )
+vec4 iCylinder(vec3 ro, vec3 rd, vec3 pa, vec3 pb, float ra) 
 {
-    vec3 oc = ro - sph;
-	float b = dot( oc, rd );
-	float c = dot( oc, oc ) - radius*radius;
-	float h = b*b - c;
-	if( h<0.0 ) return -1.0;
-	return -b - sqrt( h );
+    vec3  ba = pb - pa;
+    vec3  oc = ro - pa;
+
+    float baba = dot(ba,ba);
+    float bard = dot(ba,rd);
+    float baoc = dot(ba,oc);
+    
+    float k2 = baba - bard*bard;
+    float k1 = baba*dot(oc,rd) - baoc*bard;
+    float k0 = baba*dot(oc,oc) - baoc*baoc - ra*ra*baba;
+    
+    
+    float h = k1*k1 - k2*k0;
+    if( h<0.0f ) return vec4(-1.0f);
+    h = sqrt(h);
+    float t = (-k1-h)/k2;
+
+    // body
+    float y = baoc + t*bard;
+    if( y>0.0f && y<baba ) return vec4( t, oc+t*rd - ba*y/baba );
+    
+    // caps
+    // t = ( ((y<0.0f) ? 0.0f : baba) - baoc)/bard;
+    // if( abs(k1+k2*t)<h ) return vec4( t, ba*sign(y)/sqrt(baba) );
+
+    return vec4(-1.0f);
 }
 
 vec3 computeRd(int px, int py, 
@@ -100,14 +125,14 @@ void main()
 
     const int localID = int(gl_LocalInvocationIndex);
     const int threadsPerWorkGroup = int(gl_WorkGroupSize.x * gl_WorkGroupSize.y * gl_WorkGroupSize.z);
-    const int batches = int((sphereCount-1) / threadsPerWorkGroup) + 1;
-    const int lastBatchAmount = sphereCount - (batches-1) * threadsPerWorkGroup;
+    const int batches = int((int(cylinderCount)-1) / threadsPerWorkGroup) + 1;
+    const int lastBatchAmount = int(cylinderCount) - (batches-1) * threadsPerWorkGroup;
     int count = threadsPerWorkGroup;
 
-    float minDepth = far;
+    float minDepth = imageLoad(depthData, coords).x;
     bool colorChanged = false;
     vec4 color = vec4(0.0);
-    uint sphereIndex = 0;
+    uint cylinderIndex = 0;
 
     float aspectRatio = float(screenResolution.x) / float(screenResolution.y);
     float fovRad = radians(fov);
@@ -127,9 +152,9 @@ void main()
     {
         int batchIndex = localID + batch * threadsPerWorkGroup;
         barrier();
-        if (batchIndex < sphereCount)
+        if (batchIndex < int(cylinderCount))
         {
-            sharedSphereBillboards[localID] = sphereBillboardData[batchIndex];
+            sharedCylinderBillboards[localID] = cylinderBillboardData[batchIndex];
         }
         barrier();
         
@@ -139,32 +164,62 @@ void main()
 
         for (int index = 0; index < count; index++)
         {
-            SphereBillboard sphereBillboard = sharedSphereBillboards[index];
-            if (sphereBillboard.padding1 == 1) continue;
+            CylinderBillboard cylinderBillboard = sharedCylinderBillboards[index];
+            vec2 corners[4] = vec2[](
+                cylinderBillboard.corner0,
+                cylinderBillboard.corner1,
+                cylinderBillboard.corner2,
+                cylinderBillboard.corner3
+            );
 
-            const ivec2 screenMin = ivec2(int(sphereBillboard.minCorner.x), int(sphereBillboard.minCorner.y));
-            const ivec2 screenMax = ivec2(int(sphereBillboard.maxCorner.x), int(sphereBillboard.maxCorner.y));
+            int minY = screenResolution.y;
+            int maxY = 0;
+            int minX = screenResolution.x;
+            int maxX = 0;
+            for (int i = 0; i < 4; i++) 
+            {
+                minY = min(minY, int(floor(corners[i].y))); 
+                maxY = max(maxY, int(ceil(corners[i].y)));
+                minX = min(minX, int(floor(corners[i].x))); 
+                maxX = max(maxX, int(ceil(corners[i].x)));
+            }
+
             // pixel not in the bounding box
-            if ( (screenMin.x > coords.x || coords.x > screenMax.x) || 
-                (screenMin.y > coords.y || coords.y > screenMax.y) ) 
+            if ( (minX > coords.x || coords.x > maxX) || 
+                (minY > coords.y || coords.y > maxY) ) 
                     continue;
 
+            float aspectRatio = float(screenResolution.x) / float(screenResolution.y);
+            float fovRad = radians(fov);
+            float fovTan = tan(fovRad * 0.5f);
+            float halfFovTan = fovTan * aspectRatio;
+
+            ScreenRayCasting screenRayCasting = makeScreenRayCasting(aspectRatio);
+
+            // Delta per pixel
+            vec3 dx = screenRayCasting.dx;
+            vec3 dy = screenRayCasting.dy;
+
+            // Start ray origin in world
+            vec3 rayStart = screenRayCasting.rayStart;
+
+            vec3 ray = rayStart + float(coords.y) * dy + float(coords.x) * dx;
 
             const vec3 rd = computeRd(coords.x, coords.y, fovTan, halfFovTan);
-            const float h = iSphere(cameraPos, rd, sphereBillboard.sphPosR.xyz, sphereBillboard.sphPosR.w);
+            vec4 tnor = iCylinder( cameraPos, rd, cylinderBillboard.pa_r.xyz, cylinderBillboard.pb_r.xyz, cylinderBillboard.pa_r.w);
 
             // imageStore(outputImage, coords, vec4(0.0));
-            if (h > 0.0f) 
+            if (tnor.x > 0.0f) 
             {
-                const vec3 hit = ray * h;
+                const vec3 hit = ray * tnor.x;
                 const float depth = (hit.z * proj[2].z + proj[3].z) / -hit.z ;
                 if (minDepth > depth) 
                 {
-                    const vec3 normal = normalize( cameraPos + rd*h - sphereBillboard.sphPosR.xyz );
-                    const float lambertCos = dot(normal, -normalize(rd*h));
+                    const vec3 normal = normalize(vec3(tnor.y, tnor.z, tnor.w));
+                    const float lambertCos = dot(normal, -normalize(rd*tnor.x));
                     minDepth = depth;
                     color = vec4(lambertCos * lightColor * diffuseI, 1.0);
-                    sphereIndex = sphereBillboard.index;
+                    cylinderIndex = cylinderBillboard.index;
                     if (!colorChanged) colorChanged = true;
                 }
                 
@@ -175,7 +230,7 @@ void main()
     }
     if (colorChanged) 
     {
-        pixelOwnershipBuffer[coords.x + screenResolution.x*coords.y] = int(sphereIndex); 
+        pixelOwnershipBuffer[coords.x + screenResolution.x*coords.y] = cylinderIndex; 
         imageStore(outputImage, coords, color);
         imageStore(depthData, coords, vec4(minDepth));
     }

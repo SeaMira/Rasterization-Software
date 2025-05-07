@@ -8,14 +8,14 @@ struct FramePixelsCount
     
 };
 
-layout(std430, binding = 6) buffer VisibilityFrameBuffer 
+layout(std430, binding = 5) buffer VisibilityFrameBuffer 
 {
     FramePixelsCount visibilityFrameBuffer[];
 };
 
-layout(std430, binding = 7) buffer PixelOwnershipBuffer 
+layout(std430, binding = 4) buffer PixelOwnershipBuffer 
 {
-    int pixelOwnershipBuffer[];
+    uint pixelOwnershipBuffer[];
 };
 
 uniform ivec2 screenResolution;
@@ -29,9 +29,9 @@ void main() {
     if (x >= screenResolution.x || y >= screenResolution.y) return;
 
     // Obtener el índice de la esfera desde la matriz
-    int index = pixelOwnershipBuffer[y * screenResolution.x + x];
+    uint index = pixelOwnershipBuffer[y * screenResolution.x + x];
 
     // Incrementar el contador correspondiente de forma segura
-    if (index != -1)
-        atomicAdd(visibilityFrameBuffer[index].pixels, 1);
+    atomicAdd(visibilityFrameBuffer[index].pixels, 1);
+    
 }

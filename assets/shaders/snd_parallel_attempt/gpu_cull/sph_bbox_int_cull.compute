@@ -3,7 +3,12 @@
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 layout(rgba8, binding = 0) uniform image2D outputImage;
 
-layout(binding = 4, r32f) uniform image2D depthData;
+layout(binding = 1, r32f) uniform image2D depthData;
+
+layout(std430, binding = 4) buffer PixelOwnershipBuffer 
+{
+    uint pixelOwnershipBuffer[];
+};
 
 struct SphereBillboard 
 {
@@ -16,19 +21,15 @@ struct SphereBillboard
     int padding3;
 };   
 
-layout(std430, binding = 2) buffer SphereBillboardDataBuffer
+layout(std430, binding = 7) buffer SphereBillboardDataBuffer
 {
     SphereBillboard sphereBillboardData[];
 };
 
-layout(binding = 3) buffer CounterBuffer {
+layout(binding = 8) buffer CounterBuffer {
     uint sphereCount;
 };
 
-layout(std430, binding = 7) buffer PixelOwnershipBuffer 
-{
-    int pixelOwnershipBuffer[];
-};
 
 shared SphereBillboard sharedSphereBillboards[1+ int(gl_WorkGroupSize.x * gl_WorkGroupSize.y * gl_WorkGroupSize.z)];
 
@@ -177,7 +178,7 @@ void main()
     }
     if (colorChanged) 
     {
-        pixelOwnershipBuffer[coords.x + screenResolution.x*coords.y] = int(sphereIndex); 
+        pixelOwnershipBuffer[coords.x + screenResolution.x*coords.y] = sphereIndex; 
         imageStore(outputImage, coords, color);
         imageStore(depthData, coords, vec4(minDepth));
     }

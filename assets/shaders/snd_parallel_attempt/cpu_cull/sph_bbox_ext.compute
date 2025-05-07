@@ -2,6 +2,20 @@
 
 layout(local_size_x = 256) in;
 
+layout(binding = 2) uniform sampler2D downsampledDepthTexture; 
+
+struct FramePixelsCount
+{
+    uint frames;
+    uint pixels;
+    
+};
+
+layout(std430, binding = 5) buffer VisibilityFrameBuffer 
+{
+    FramePixelsCount visibilityFrameBuffer[];
+};
+
 struct Sphere 
 {
     vec4 positionr;  // (x, y, z, r)
@@ -9,8 +23,7 @@ struct Sphere
     int wasDrawn[3];
 };
 
-
-layout(std430, binding = 1) buffer SphereBuffer 
+layout(std430, binding = 6) buffer SphereBuffer 
 {
     Sphere spheres[];
 };
@@ -26,38 +39,17 @@ struct SphereBillboard
     int padding3;
 }; 
 
-layout(std430, binding = 2) buffer SphereBillboardDataBuffer
+layout(std430, binding = 7) buffer SphereBillboardDataBuffer
 {
     SphereBillboard sphereBillboardData[];
 };
 
-layout(binding = 3) buffer CounterBuffer {
+layout(binding = 8) buffer CounterBuffer {
     uint counter;
-};
-
-layout(binding = 5) uniform sampler2D downsampledDepthTexture; 
-
-struct FramePixelsCount
-{
-    uint frames;
-    uint pixels;
-    
-};
-
-layout(std430, binding = 6) buffer VisibilityFrameBuffer 
-{
-    FramePixelsCount visibilityFrameBuffer[];
 };
 
 uniform mat4 view;
 uniform mat4 proj;
-
-uniform vec4 frustumTopFace;
-uniform vec4 frustumBottomFace;
-uniform vec4 frustumRightFace;
-uniform vec4 frustumLeftFace;
-uniform vec4 frustumFarFace;
-uniform vec4 frustumNearFace;
 
 uniform vec3 front;
 uniform vec3 up;
@@ -65,9 +57,10 @@ uniform vec3 right;
 uniform vec3 cameraPos;
 
 uniform ivec2 screenResolution;
+uniform float fov;
 
 uniform int sphereCount;
-uniform float fov;
+uniform uint visibilityFrameBufferIndexOffset;
 
 const int pixelsToCheck = 5;
 
@@ -111,26 +104,6 @@ ScreenRayCasting makeScreenRayCasting(float aspectRatio)
     return ScreenRayCasting(rayStart, dx, dy);
 }
 
-// frustum culling
-
-bool isOnOrForwardOfPlane(vec4 plane, vec4 sphere)
-{
-    return dot(vec3(plane.x, plane.y, plane.z), vec3(sphere.x, sphere.y, sphere.z)) - plane.w >= -sphere.w;
-}
-
-bool isSphereInside(Sphere sph)
-{
-    return isOnOrForwardOfPlane(frustumLeftFace, sph.positionr) &&
-           isOnOrForwardOfPlane(frustumRightFace, sph.positionr) &&
-           isOnOrForwardOfPlane(frustumFarFace, sph.positionr) &&
-           isOnOrForwardOfPlane(frustumNearFace, sph.positionr) &&
-           isOnOrForwardOfPlane(frustumTopFace, sph.positionr) &&
-           isOnOrForwardOfPlane(frustumBottomFace, sph.positionr);
-}
-
-// frustum culling
-
-
 
 bboxCorners getSphereBbox(const vec3 cameraSpaceSphere, const vec3 camImposPos, 
     const vec3 normCamSpaceSphere, const float sphRadius)
@@ -164,7 +137,6 @@ bboxCorners getSphereBbox(const vec3 cameraSpaceSphere, const vec3 camImposPos,
 
     return bboxCorners(minCorner, maxCorner); 
 }
-
 
 float iSphere(vec3 ro, vec3 rd, vec3 sph, float radius )
 {
@@ -214,7 +186,6 @@ bool isSphereBillboardVisible(int xcoords[pixelsToCheck], int ycoords[pixelsToCh
     }
     return false;
 }
-
 
 void storeSphereBBox(Sphere sphere)
 {
@@ -273,17 +244,13 @@ void storeSphereBBox(Sphere sphere)
         onSphDepth(middleTop, int(mid_x), int(mid_y+dify*0.49f), sphere.positionr.xyz, sphere.positionr.w, rayStart, dx, dy),
         onSphDepth(middlePixelsVec, (screenMin.x + screenMax.x) / 2, (screenMin.y + screenMax.y) / 2, sphere.positionr.xyz, sphere.positionr.w, rayStart, dx, dy),
     };
-
+    uint visFrameBufferId = visibilityFrameBufferIndexOffset + sphere.index;
     if (!isSphereBillboardVisible(xcoords, ycoords, pixelDepths))
     {
-        if (visibilityFrameBuffer[sphere.index].pixels > 5)
-        {
-            visibilityFrameBuffer[sphere.index].frames = 10;
-        }
-        else if (visibilityFrameBuffer[sphere.index].frames > 0) 
-        {
-            visibilityFrameBuffer[sphere.index].frames -= 1;
-        }
+        if (visibilityFrameBuffer[visFrameBufferId].pixels > 5)
+            visibilityFrameBuffer[visFrameBufferId].frames = 10;
+        else if (visibilityFrameBuffer[visFrameBufferId].frames > 0) 
+            visibilityFrameBuffer[visFrameBufferId].frames -= 1;
         else 
         {
             spheres[gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_WorkGroupSize.x].wasDrawn[0] = 0;
@@ -292,16 +259,17 @@ void storeSphereBBox(Sphere sphere)
         
         uint currentCounter = atomicAdd(counter, 1);
         sphereBillboardData[int(currentCounter)] =
-            SphereBillboard(sphere.positionr, screenMin, screenMax, sphere.index, 0, 0, 0);
+            SphereBillboard(sphere.positionr, screenMin, screenMax, visFrameBufferId, 0, 0, 0);
     } else
     {
-        visibilityFrameBuffer[sphere.index].frames = 10;
+        visibilityFrameBuffer[visFrameBufferId].frames = 10;
 
         uint currentCounter = atomicAdd(counter, 1);
         sphereBillboardData[int(currentCounter)] =
-            SphereBillboard(sphere.positionr, screenMin, screenMax, sphere.index, 0, 0, 0);
+            SphereBillboard(sphere.positionr, screenMin, screenMax, visFrameBufferId, 0, 0, 0);
     }
     spheres[gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_WorkGroupSize.x].wasDrawn[0] = 1;
+    
 }
 
 
@@ -316,13 +284,7 @@ void main()
 
     // Get sphere bbox
     Sphere s = spheres[index];
-    if (isSphereInside(s))
-    {
-        spheres[index].wasDrawn[1] = 1;
-        storeSphereBBox(s);
-    } else 
-    {
-        spheres[index].wasDrawn[1] = 0;
-    }
-    visibilityFrameBuffer[s.index].pixels = 0;
+    storeSphereBBox(s);
+    visibilityFrameBuffer[visibilityFrameBufferIndexOffset + s.index].pixels = 0;
+    
 }
