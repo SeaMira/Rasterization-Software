@@ -23,10 +23,13 @@ public:
      * @param window the window to be used for the profiler.
      * @param frame_times_file the file to save the frame times.
      * @param process_times_file the file to save the process times.
+     * @param sphere_count the amount of spheres on the scene.
+     * @param cylinder_count the amount of cylinders on the scene.
+     * @param topMipmapLevel the top mipmap level for the HiZ pyramid.
      * @param seconds_timer the time the saving of frame times takes.
      */
     Profiler(Window& window, std::string frame_times_file, 
-        std::string process_times_file, int sphere_count, int cylinder_count, double seconds_timer = 30.0);
+        std::string process_times_file, int sphere_count, int cylinder_count, int topMipmapLevel, double seconds_timer = 30.0);
 
     /**
      * @brief Copy constructor for the Profiler class.
@@ -112,6 +115,7 @@ private:
     int m_checkpoint; ///< the checkpoint to start saving the frames from.
     int m_spheres_on_scene; ///< the amount of spheres on the scene.
     int m_cylinders_on_scene; ///< the amount of cylinders on the scene.
+    int m_topMipmapLevel; ///< the top mipmap level of the hz pyramid.
 
     uint64_t m_frame_start_time; ///< the start time of saving frames.
     uint64_t m_frame_current_time; ///< the current time of the frame time saving.

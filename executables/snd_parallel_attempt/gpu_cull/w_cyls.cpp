@@ -33,6 +33,7 @@ int cylinder_count = 150;
 std::string title = "Second Parallel Version"; 
 
 bool shown = true;
+bool withOcclusionCulling = false;
 
 GLuint workGroupSizeXPerPixel = 16;  // Deifining threads-per-group (X)
 GLuint workGroupSizeYPerPixel = 16;  // Deifining threads-per-group (Y)
@@ -73,7 +74,24 @@ struct CylinderBillboard
     int padding1, padding2, padding3;
 }; 
 
+void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window);
+
+void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window);
+
 int main(int argc, char* argv[]) 
+{
+    AppOpenGL window { title, SCR_WIDTH, SCR_HEIGHT, shown };
+    Camera camera(SCR_WIDTH, SCR_HEIGHT);
+    camera.SetPosition(.0f, .0f, .0f);
+
+    withOcclusionCulling ? 
+        mainWithOcclusionCulling(camera, window) :
+        mainWithoutOcclusionCulling(camera, window);
+
+    return 0;
+}
+
+void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
 {
     std::unordered_map<std::string, int*> scene_data = {
         {"Screen width", &SCR_WIDTH},
@@ -83,9 +101,6 @@ int main(int argc, char* argv[])
         {"Drawn spheres", &notOccludedSpheresCount}
     };
 
-    AppOpenGL window { title, SCR_WIDTH, SCR_HEIGHT, shown };
-    Camera camera(SCR_WIDTH, SCR_HEIGHT);
-    camera.SetPosition(.0f, .0f, .0f);
     CameraController camera_controller(window, camera);
     
     ComputeShader cleaningComputeShader("assets/shaders/snd_parallel_attempt/cpu_cull/set_to_black.compute");
@@ -144,7 +159,14 @@ int main(int argc, char* argv[])
     
 
     Benchmark benchmark(camera_controller, chkPoints);
-    Profiler profiler(window, "media/off/scnd_parallel/gpu_cull/frame_times.off", "media/off/scnd_parallel/gpu_cull/process_times.off", sphere_count, cylinder_count);
+
+    std::string base_path = withOcclusionCulling ? "media/csv/scnd_parallel_w_cyl/occ_" : "media/csv/scnd_parallel_w_cyl/"; 
+    base_path += ((currentScene == SceneType::LOADED_SCENE) ? "loaded_scene_" : "packed_scene_");
+    std::string frame_times_path = base_path + "gpu_frame_times.csv";
+    std::string process_times_path = base_path + "gpu_frame_times.csv";
+    Profiler profiler(window, 
+        frame_times_path, 
+        process_times_path, sphere_count, cylinder_count, downsampleLevel);
     
     window.setupSceneInfoGui("Scene Info", scene_data);
     window.setupCameraGui("Camera Info", &camera);
@@ -279,9 +301,197 @@ int main(int argc, char* argv[])
     catch (const std::exception& e)
     {
         std::cerr << "Error: " << e.what() << std::endl;
-        return 1;
+        return ;
     }
+}
 
+void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
+{
+    std::unordered_map<std::string, int*> scene_data = {
+        {"Screen width", &SCR_WIDTH},
+        {"Screen height", &SCR_HEIGHT},
+        {"Sphere count", &sphere_count},
+        {"Spheres On Frustum", &visibleSpheresCount},
+        {"Drawn spheres", &notOccludedSpheresCount}
+    };
 
-    return 0;
+    CameraController camera_controller(window, camera);
+    
+    ComputeShader cleaningComputeShader("assets/shaders/snd_parallel_attempt/cpu_cull/set_to_black_no_occ.compute");
+    
+    ComputeShader sphBboxExtractionShader("assets/shaders/snd_parallel_attempt/gpu_cull/sph_bbox_ext_cull_no_occ.compute");
+    ComputeShader sphBboxIntersectionShader("assets/shaders/snd_parallel_attempt/gpu_cull/sph_bbox_int_cull_no_occ.compute");
+    
+    ComputeShader cylBboxExtractionShader("assets/shaders/snd_parallel_attempt/gpu_cull/cyl_bbox_ext_cull_no_occ.compute");
+    ComputeShader cylBboxIntersectionShader("assets/shaders/snd_parallel_attempt/gpu_cull/cyl_bbox_int_cull_no_occ.compute");
+
+    Canvas canvas(GL_TEXTURE_2D, GL_RGBA8, SCR_WIDTH, SCR_HEIGHT);
+    canvas.setFBO(GL_COLOR_ATTACHMENT0);
+    canvas.setupDepthData(SCR_WIDTH, SCR_HEIGHT);
+    canvas.setupCleaningProgram(cleaningComputeShader);
+
+    // SPHERES
+    std::vector<glm::vec4> spheres = getScene(sphere_count);
+    sphere_count = spheres.size(); 
+    std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints = getCheckpoints(sphere_count, spheres);
+
+    StorageBuffer sphereBuffer(GL_SHADER_STORAGE_BUFFER, sphere_count * sizeof(Sphere), 6, 
+    spheres.data(), GL_STATIC_DRAW);
+    
+    StorageBuffer sphereBillboardBuffer(GL_SHADER_STORAGE_BUFFER, sphere_count * sizeof(SphereBillboard), 7,
+        nullptr, GL_STATIC_DRAW);
+    //////////
+
+    // CYLINDERS
+    std::vector<Cylinder> cylinders = getCylinderScene(cylinder_count);
+    cylinder_count = cylinders.size();
+
+    StorageBuffer cylinderBuffer(GL_SHADER_STORAGE_BUFFER, cylinder_count * sizeof(Cylinder), 9,
+    cylinders.data(), GL_STATIC_DRAW);
+
+    StorageBuffer cylinderBillboardBuffer(GL_SHADER_STORAGE_BUFFER, cylinder_count * sizeof(CylinderBillboard), 10,
+        nullptr, GL_STATIC_DRAW);
+    //////////
+
+    GLuint zero = 0;
+    GLuint resetValue = 0;
+    StorageBuffer visibilityAtomicCounter(GL_SHADER_STORAGE_BUFFER, sizeof(GLuint), 8, 
+        &zero, GL_STATIC_DRAW);
+    
+
+    Benchmark benchmark(camera_controller, chkPoints);
+
+    std::string base_path = withOcclusionCulling ? "media/csv/scnd_parallel_w_cyl/occ_" : "media/csv/scnd_parallel_w_cyl/"; 
+    base_path += ((currentScene == SceneType::LOADED_SCENE) ? "loaded_scene_" : "packed_scene_");
+    std::string frame_times_path = base_path + "gpu_frame_times.csv";
+    std::string process_times_path = base_path + "gpu_frame_times.csv";
+    Profiler profiler(window, 
+        frame_times_path, 
+        process_times_path, sphere_count, cylinder_count, 0);
+    
+    window.setupSceneInfoGui("Scene Info", scene_data);
+    window.setupCameraGui("Camera Info", &camera);
+    window.setupInputInfoGui("General Input Info");
+    window.setupBenchmarkInfoGui("Benchmark", &benchmark);
+
+    // Calculating number of work groups (based on the number of threads and spheres)
+    GLuint numGroupsXSpheres = (sphere_count + workGroupSizeXPerSphere - 1) / workGroupSizeXPerSphere;
+    GLuint numGroupsXCylinders = (cylinder_count + workGroupSizeXPerCylinder - 1) / workGroupSizeXPerCylinder;
+    GLuint numGroupsY = 1;
+
+    canvas.bindTexture();
+    canvas.bindFBO();
+
+    glm::ivec2 screenResolution(SCR_WIDTH, SCR_HEIGHT);
+    try
+    {
+        bool isRunning = true;
+        while ( isRunning )
+        {
+            camera_controller.cameraUpdate();
+            benchmark.update();
+            profiler.updateProfiler(benchmark.getCheckpointID(), visibleSpheresCount, notOccludedSpheresCount, visibleCylindersCount, notOccludedCylindersCount);
+            
+            if (window.getInput().isKeyDown(Key::T)) profiler.startSavingNextFrames(benchmark.getCheckpointID());
+            
+            canvas.cleanCanvasBuffers(workGroupSizeXPerPixel, workGroupSizeYPerPixel, camera.getFar());
+
+            visibilityAtomicCounter.bind();
+            glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &resetValue);
+            visibilityAtomicCounter.unbind();
+
+            Frustum frustum(camera);
+
+            ///// SPHERES //////////
+            // bbox extraction shader
+            sphBboxExtractionShader.use();
+            sphBboxExtractionShader.setInt("sphereCount", sphere_count);
+            sphBboxExtractionShader.setVec2I("screenResolution", screenResolution);
+            setFrustumUniforms(sphBboxExtractionShader, frustum);
+            setCameraUniforms(sphBboxExtractionShader, camera);
+            glDispatchCompute(numGroupsXSpheres, numGroupsY, 1);
+            glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+            
+            // bbox intersection shader
+            sphBboxIntersectionShader.use();
+            sphBboxIntersectionShader.setFloat("far", camera.getFar());
+            sphBboxIntersectionShader.setVec2I("screenResolution", screenResolution);
+            setCameraUniforms(sphBboxIntersectionShader, camera);
+            glDispatchCompute((SCR_WIDTH + workGroupSizeXPerPixel - 1) / workGroupSizeXPerPixel, 
+                (SCR_HEIGHT + workGroupSizeYPerPixel - 1) / workGroupSizeYPerPixel, 
+                1);
+            glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
+
+            ///// SPHERES //////////
+
+            visibilityAtomicCounter.bind();
+            glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &resetValue);
+            visibilityAtomicCounter.unbind();
+
+            ///// CYLINDERS //////////
+            cylBboxExtractionShader.use();
+            cylBboxExtractionShader.setInt("cylinderCount", cylinder_count); // visible sphere count given
+            cylBboxExtractionShader.setVec2I("screenResolution", screenResolution);
+            setFrustumUniforms(cylBboxExtractionShader, frustum);
+            setCameraUniforms(cylBboxExtractionShader, camera);
+            glDispatchCompute(numGroupsXCylinders, numGroupsY, 1);
+            glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+            
+            // bbox intersection shader
+            cylBboxIntersectionShader.use();
+            cylBboxIntersectionShader.setFloat("far", camera.getFar());
+            cylBboxIntersectionShader.setVec2I("screenResolution", screenResolution);
+            setCameraUniforms(cylBboxIntersectionShader, camera);
+            glDispatchCompute((SCR_WIDTH + workGroupSizeXPerPixel - 1) / workGroupSizeXPerPixel, 
+                (SCR_HEIGHT + workGroupSizeYPerPixel - 1) / workGroupSizeYPerPixel, 
+                1);
+            glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
+            ///// CYLINDERS //////////
+
+            
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, canvas.getFramebuffer().getId());
+            isRunning = window.update();
+
+            if (window.getInput().isKeyDown(Key::F10)) 
+            {
+                std::string sshot_name  = "media/img/scnd_parallel/frame_" + std::to_string(benchmark.getCheckpointID()) + ".bmp";
+                canvas.takeScreenshot(sshot_name);
+            }
+
+            ////// checking drawn spheres ///////
+            
+            // sphereBuffer.bind();  // Primero aseguramos que el buffer está vinculado
+
+            // // mapping buffer on reading mode
+            // void* mappedData = glMapBufferRange(GL_SHADER_STORAGE_BUFFER, 
+            //                                     0, 
+            //                                     spheres.size() * sizeof(SphereContainer), 
+            //                                     GL_MAP_READ_BIT);
+
+            // // verifying correct mapping
+            // if (mappedData != nullptr) {
+            //     // Accessing mapped buffer
+            //     SphereContainer* spheresData = reinterpret_cast<SphereContainer*>(mappedData);
+            //     visibleSpheresCount = 0;
+            //     // looping on elements checking if drawn or not
+            //     for (size_t i = 0; i < sphere_count; ++i)
+            //         if (spheresData[i].wasDrawn[1]) 
+            //             visibleSpheresCount++;
+                
+            //     // unmapping buffer once finished
+            //     glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+            // } else {
+            //     std::cerr << "Failed to map the buffer!" << std::endl;
+            // }
+
+            // sphereBuffer.unbind();
+            
+            ////// END:: checking drawn spheres ///////
+        }
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return ;
+    }
 }

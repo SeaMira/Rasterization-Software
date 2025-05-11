@@ -1,52 +1,24 @@
-#version 430
+#version 460
 
 layout(local_size_x = 256) in;
+layout(rgba8, binding = 0) uniform image2D outputImage;
 
-layout(binding = 2) uniform sampler2D downsampledDepthTexture; 
-
-struct FramePixelsCount
+layout(std430, binding = 3) buffer DepthBuffer 
 {
-    uint frames;
-    uint pixels;
-    
-};
-
-layout(std430, binding = 5) buffer VisibilityFrameBuffer 
-{
-    FramePixelsCount visibilityFrameBuffer[];
+    uint depthBuffer[];
 };
 
 struct Cylinder 
 {
-    vec4 pa_r;  // (x, y, z, r)
-    vec4 pb_r;  // (x, y, z, r)
+    vec4 pa_r;
+    vec4 pb_r;
 };
 
-layout(std430, binding = 9) buffer CylinderBuffer 
+layout(std430, binding = 7) buffer CylinderBuffer 
 {
     Cylinder cylinders[];
 };
 
-struct CylinderBillboard 
-{
-    vec4 pa_r;   
-    vec4 pb_r;   
-    vec2 corner0;     
-    vec2 corner1;     
-    vec2 corner2;     
-    vec2 corner3;     
-    uint index;
-    int padding1, padding2, padding3;
-}; 
-
-layout(std430, binding = 10) buffer CylinderBillboardDataBuffer
-{
-    CylinderBillboard cylinderBillboardData[];
-};
-
-layout(binding = 8) buffer CounterBuffer {
-    uint counter;
-};
 
 uniform mat4 view;
 uniform mat4 proj;
@@ -67,9 +39,9 @@ uniform ivec2 screenResolution;
 uniform float fov;
 
 uniform int cylinderCount;
-uniform uint visibilityFrameBufferIndexOffset;
 
-const int pixelsToCheck = 3;
+const vec3 lightColor = vec3(0.01, 1.0, 0.05);
+const float diffuseI = 0.9;
 
 // frustum culling
 struct BBox3D
@@ -111,6 +83,7 @@ bool isCylinderInside(vec3 pa, vec3 pb, float radius)
 }
 // frustum culling
 
+
 struct ScreenRayCasting
 {
     vec3 rayStart; ///< Starting caster ray in world coordinates.
@@ -143,6 +116,12 @@ ScreenRayCasting makeScreenRayCasting(float aspectRatio)
     return ScreenRayCasting(rayStart, dx, dy);
 }
 
+uint vecToColor(vec3 lambertCos) {
+    uint R = uint(lambertCos.r * 255.0);
+    uint G = uint(lambertCos.g * 255.0);
+    uint B = uint(lambertCos.b * 255.0);
+    return (R << 0) | (G << 8) | (B << 16) | (0xFF << 24);
+}
 
 vec4 iCylinder(vec3 ro, vec3 rd, vec3 pa, vec3 pb, float ra) 
 {
@@ -234,27 +213,14 @@ float onCylDepth(vec3 rd, int px, int py, vec3 pa, vec3 pb, float r, vec3 raySta
     return depth;
 }
 
-bool isBillboardVisible(int xcoords[pixelsToCheck], int ycoords[pixelsToCheck], float pixelDepths[pixelsToCheck])
+float intersectX(vec2 a, vec2 b, float y) 
 {
-    ivec2 downsampledTexSize = textureSize(downsampledDepthTexture, 0);
-    const int ds_x = downsampledTexSize.x;
-    const int ds_y = downsampledTexSize.y;
-
-    float pixel1 = texelFetch(downsampledDepthTexture, ivec2(int(float(xcoords[0]*ds_x)/float(screenResolution.x)), int(float(ycoords[0]*ds_y)/float(screenResolution.y))), 0).r;
-    float pixel2 = texelFetch(downsampledDepthTexture, ivec2(int(float(xcoords[1]*ds_x)/float(screenResolution.x)), int(float(ycoords[1]*ds_y)/float(screenResolution.y))), 0).r;
-    float pixel3 = texelFetch(downsampledDepthTexture, ivec2(int(float(xcoords[2]*ds_x)/float(screenResolution.x)), int(float(ycoords[2]*ds_y)/float(screenResolution.y))), 0).r;
-
-    for (int i = 0; i < pixelsToCheck; i++)
-    {
-        if (pixelDepths[i] <= pixel1 || 
-            pixelDepths[i] <= pixel2 ||
-            pixelDepths[i] <= pixel3)
-            return true;
-    }
-    return false;
+    if (a.y == b.y) return a.x; // horizontal line
+    float t = (y - a.y) / (b.y - a.y);
+    return a.x + t * (b.x - a.x);
 }
 
-void storeCylinderBBox(Cylinder cylinder, uint cylinderIndex)
+void drawCylinder(Cylinder cylinder, uint cylinderIndex)
 {
     vec3 pa = cylinder.pa_r.xyz;
     vec3 pb = cylinder.pb_r.xyz;
@@ -280,10 +246,15 @@ void storeCylinderBBox(Cylinder cylinder, uint cylinderIndex)
     
     float aspectRatio = float(screenResolution.x) / float(screenResolution.y);
     
+    int minY = screenResolution.y;
+    int maxY = 0;
     for (int i = 0; i < 4; i++) 
     {
         projectedPoints[i].x = int((projectedPoints[i].x * 0.5f + 0.5f) * screenResolution.x);
         projectedPoints[i].y = int((projectedPoints[i].y * 0.5f + 0.5f) * screenResolution.y);
+
+        minY = min(minY, int(floor(projectedPoints[i].y))); 
+        maxY = max(maxY, int(ceil(projectedPoints[i].y)));
     }
 
     float fovRad = radians(fov);
@@ -298,76 +269,69 @@ void storeCylinderBBox(Cylinder cylinder, uint cylinderIndex)
 
     // Start ray origin in world
     vec3 rayStart = screenRayCasting.rayStart;
-
-
-    // Cylinder axis
-    const vec3 z = normalize(camImpPosB - camImpPosA);
-
-    // Find orthonormal x,y axes orthogonal to cylinder axis
-    vec3 x = normalize(cross(center, z));
-
-    const vec3 closePa1 = camImpPosA - x * ra;
-    const vec3 closePa2 = camImpPosA + x * ra;
-    vec3 closePa = closePa1.z < closePa2.z ? closePa1 : closePa2;
-    const vec4 closePaProj = proj * vec4(closePa, 1.0f);
-    closePa = vec3(closePaProj.x / closePaProj.w, closePaProj.y / closePaProj.w, closePaProj.z / closePaProj.w);
-    const ivec2 closePaScreen = ivec2((closePa.x * 0.5f + 0.5f) * screenResolution.x, (closePa.y * 0.5f + 0.5f) * screenResolution.y);
-    closePa = computeRd(closePaScreen.x, closePaScreen.y, fovTan, halfFovTan);
     
-    const vec3 closePb1 = camImpPosB - x * ra;
-    const vec3 closePb2 = camImpPosB + x * ra;
-    vec3 closePb = closePb1.z < closePb2.z ? closePb1 : closePb2;
-    const vec4 closePbProj = proj * vec4(closePb, 1.0f);
-    closePb = vec3(closePbProj.x / closePbProj.w, closePbProj.y / closePbProj.w, closePbProj.z / closePbProj.w);
-    const ivec2 closePbScreen = ivec2(int((closePb.x * 0.5f + 0.5f) * screenResolution.x), int((closePb.y * 0.5f + 0.5f) * screenResolution.y));
-    closePb = computeRd(closePbScreen.x, closePbScreen.y, fovTan, halfFovTan);
-    
-    const vec3 closeCenter1 = center - x * ra;
-    const vec3 closeCenter2 = center + x * ra;
-    vec3 closeCenter = closeCenter1.z < closeCenter2.z ? closeCenter1 : closeCenter2;
-    const vec4 closeCenterProj = proj * vec4(closeCenter, 1.0f);
-    closeCenter = vec3(closeCenterProj.x / closeCenterProj.w, closeCenterProj.y / closeCenterProj.w, closeCenterProj.z / closeCenterProj.w);
-    const ivec2 closeCenterScreen = ivec2(int((closeCenter.x * 0.5f + 0.5f) * screenResolution.x), int((closeCenter.y * 0.5f + 0.5f) * screenResolution.y));
-    closeCenter = computeRd(closeCenterScreen.x, closeCenterScreen.y, fovTan, halfFovTan);
-
-    int xcoords[pixelsToCheck] = {closePaScreen.x, closePbScreen.x, closeCenterScreen.x};
-    int ycoords[pixelsToCheck] = {closePaScreen.y, closePbScreen.y, closeCenterScreen.y};
-    float pixelDepths[pixelsToCheck] = {
-        onCylDepth(closePa, closePaScreen.x, closePaScreen.y, pa, pb, ra, rayStart, dx, dy),
-        onCylDepth(closePb, closePbScreen.x, closePbScreen.y, pa, pb, ra, rayStart, dx, dy),
-        onCylDepth(closeCenter, closeCenterScreen.x, closeCenterScreen.y, pa, pb, ra, rayStart, dx, dy),
-    };
-
-    uint visFrameBufferId = visibilityFrameBufferIndexOffset + cylinderIndex;
-    if (!isBillboardVisible(xcoords, ycoords, pixelDepths))
+    for (int py = min(screenResolution.y-1, maxY); py >= max(0, minY); --py)
     {
-        if (visibilityFrameBuffer[visFrameBufferId].pixels > 5)
-            visibilityFrameBuffer[visFrameBufferId].frames = 10;
-        else if (visibilityFrameBuffer[visFrameBufferId].frames > 0) 
-            visibilityFrameBuffer[visFrameBufferId].frames -= 1;
-        else 
+        float xIntersections[4];
+        int intersections = 0;
+
+        for (int i = 0; i < 4; ++i) 
         {
-            return;
-        }
-        
-        uint currentCounter = atomicAdd(counter, 1);
-        cylinderBillboardData[int(currentCounter)] =
-            CylinderBillboard(cylinder.pa_r, cylinder.pb_r, 
-                projectedPoints[0], projectedPoints[1], 
-                projectedPoints[2], projectedPoints[3], 
-                visFrameBufferId, 0, 0, 0);
-    } else
-    {
-        visibilityFrameBuffer[visFrameBufferId].frames = 10;
+            const vec2 a = projectedPoints[i];
+            const vec2 b = projectedPoints[(i + 1) % 4];
 
-        uint currentCounter = atomicAdd(counter, 1);
-        cylinderBillboardData[int(currentCounter)] =
-            CylinderBillboard(cylinder.pa_r, cylinder.pb_r, 
-                projectedPoints[0], projectedPoints[1], 
-                projectedPoints[2], projectedPoints[3], 
-                visFrameBufferId, 0, 0, 0);
+            if ((py >= a.y && py <= b.y) || (py >= b.y && py <= a.y)) 
+            {
+                float x = intersectX(a, b, py);
+                xIntersections[intersections] = x;
+                intersections++;
+            }
+        }
+
+        if (intersections >= 2)
+        {
+            float xMin = xIntersections[0];
+            float xMax = xIntersections[0];
+            for (int i = 1; i < intersections; ++i) 
+            {
+                xMin = min(xMin, xIntersections[i]);
+                xMax = max(xMax, xIntersections[i]);
+            }
+
+            vec3 rayColStart = rayStart + float(py) * dy;
+            for (int px = max(0, int(ceil(xMin))); px <= min(int(floor(xMax)), screenResolution.x -1); ++px) 
+            {
+                vec2 p = (-vec2(screenResolution.x, screenResolution.y) + 2.0f*vec2(px, py))/vec2(screenResolution.x, screenResolution.y);
+
+                // create view ray
+                vec3 rd = normalize( p.x*right* halfFovTan + p.y*up * fovTan + front );
+
+                vec4 tnor = iCylinder( cameraPos, rd, pa, pb, ra );
+                int index = px + screenResolution.x*py;
+                // int index = px + screenResolution.x*py;
+                // const bool showBbox = (px == min(int(floor(xMax)), screenResolution.x -1) || 
+                //     py == min(screenResolution.y-1, maxY) || 
+                //     px == max(0, int(ceil(xMin))) || 
+                //     py == max(0, minY));
+                // if (showBbox) imageStore(outputImage, ivec2(px, py), vec4(0.0));
+                if (tnor.x > 0.0f) 
+                {
+                    float t = tnor.x;
+                    const vec3  hit = (rayColStart + float(px) * dx) * t;
+                    const float depth = (hit.z * proj[2].z + proj[3].z) / -hit.z ;
+                    const uint depthUint = floatBitsToUint(depth);
+                    uint old = atomicMin(depthBuffer[index], depthUint);
+                    if (uintBitsToFloat(old) > depth)
+                    {
+                        vec3  normal = normalize(vec3(tnor.y, tnor.z, tnor.w));
+                        const float lambertCos = dot(normal, -normalize(t*rd));
+                        imageStore(outputImage, ivec2(px, py), vec4(lambertCos * lightColor * diffuseI, 1.0));
+                    }
+                }
+            }
+
+        }
     }
-    
 }
 
 
@@ -377,13 +341,12 @@ void main()
 
     // Check if the index is out of bounds
     if (index >= cylinderCount) {
-        return;  // If index is greater that the amount of cylinder, return
+        return;  // If index is greater that the amount of cylinders, return
     }
 
-    // Get cylinder bbox
+    // Get cylidner
     Cylinder c = cylinders[index];
-    if (isCylinderInside(c.pa_r.xyz, c.pb_r.xyz, c.pa_r.w))
-        storeCylinderBBox(c, index);
-    visibilityFrameBuffer[visibilityFrameBufferIndexOffset + index].pixels = 0;
-    
+
+    if (isCylinderInside(c.pa_r.xyz, c.pb_r.xyz, c.pa_r.w)) 
+        drawCylinder(c, index);
 }

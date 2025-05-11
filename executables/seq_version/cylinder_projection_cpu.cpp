@@ -34,7 +34,7 @@ int SCR_WIDTH = 1024;
 int SCR_HEIGHT = 1024;
 
 int sphere_count = 126;
-int cylinder_count = 150;
+int cylinder_count = 0;
 int frustumSpheres = 0;
 int visibleSpheres = 0;
 
@@ -47,7 +47,7 @@ bool shown = true;
 bool withOcclusionCulling = true;
 
 int topLevel = 4;
-int level = 3;
+int level = 4;
 bool showHiz = false;
 
 HierarchicalZBuffer hizPyramid;
@@ -222,15 +222,22 @@ int main(int argc, char* argv[])
     
    
     std::vector<Cylinder> cylinders = getCylinderScene(cylinder_count);
-    
+    cylinder_count = cylinders.size();
     std::vector<Sphere> spheres = getScene(sphere_count);
+    sphere_count = spheres.size();
 
     std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints = getCheckpoints(sphere_count, spheres, cylinders);
     
     Benchmark benchmark(camera_controller, chkPoints);
+    
+    std::string base_path = withOcclusionCulling ? "media/csv/seq_w_cyl/occ_" : "media/csv/seq_w_cyl/"; 
+    base_path += ((currentScene == SceneType::LOADED_SCENE) ? "loaded_scene_" : "packed_scene_");
+    std::string frame_times_path = base_path + "frame_times.csv";
+    std::string process_times_path = base_path + "process_times.csv";
     Profiler profiler(window, 
-        (withOcclusionCulling ? "media/off/seq_w_cyl/occ_frame_times.off" : "media/off/seq_w_cyl/frame_times.off"), 
-        (withOcclusionCulling ? "media/off/seq_w_cyl/occ_process_times.off": "media/off/seq_w_cyl/process_times.off"), sphere_count, cylinder_count);
+        frame_times_path, 
+        process_times_path, 
+        sphere_count, cylinder_count, (withOcclusionCulling ? topLevel : 0));
     
     window.setupSceneInfoGui("Scene Info", scene_data);
     window.setupCameraGui("Camera Info", &camera);

@@ -4,8 +4,8 @@
 #include "ux/profiler/profiler.h"
 
 Profiler::Profiler(Window& window, std::string frame_times_file, 
-    std::string process_times_file, int sphere_count, int cylinder_count, double seconds_timer) : 
-    m_window(&window), m_spheres_on_scene(sphere_count), m_cylinders_on_scene(cylinder_count), m_seconds_timer(seconds_timer),
+    std::string process_times_file, int sphere_count, int cylinder_count, int topMipmapLevel, double seconds_timer) : 
+    m_window(&window), m_spheres_on_scene(sphere_count), m_cylinders_on_scene(cylinder_count), m_topMipmapLevel(topMipmapLevel), m_seconds_timer(seconds_timer),
     m_frame_times_file(frame_times_file), m_process_times_file(process_times_file) 
 {
     m_frequency = SDL_GetPerformanceFrequency();
@@ -115,7 +115,8 @@ void Profiler::writeToFramesCounter_off()
             << m_visible_spheres[i] << ","
             << m_cylinders_on_scene << ","
             << m_cylinders_on_frustum[i] << ","
-            << m_visible_cylinders[i]
+            << m_visible_cylinders[i] << ","
+            << m_topMipmapLevel
             << "\n";
         }
     }

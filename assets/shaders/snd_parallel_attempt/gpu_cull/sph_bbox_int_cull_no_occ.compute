@@ -5,11 +5,6 @@ layout(rgba8, binding = 0) uniform image2D outputImage;
 
 layout(binding = 1, r32f) uniform image2D depthData;
 
-layout(std430, binding = 4) buffer PixelOwnershipBuffer 
-{
-    uint pixelOwnershipBuffer[];
-};
-
 struct SphereBillboard 
 {
     vec4 sphPosR;    // 16b - camera space position of the sphere and radius
@@ -19,7 +14,7 @@ struct SphereBillboard
     int padding1;
     int padding2;
     int padding3;
-}; 
+};   
 
 layout(std430, binding = 7) buffer SphereBillboardDataBuffer
 {
@@ -29,6 +24,7 @@ layout(std430, binding = 7) buffer SphereBillboardDataBuffer
 layout(binding = 8) buffer CounterBuffer {
     uint sphereCount;
 };
+
 
 shared SphereBillboard sharedSphereBillboards[1+ int(gl_WorkGroupSize.x * gl_WorkGroupSize.y * gl_WorkGroupSize.z)];
 
@@ -100,7 +96,7 @@ vec3 computeRd(int px, int py,
 void main()
 {
     const ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
-    if (coords.x >= screenResolution.x || coords.y >= screenResolution.y)  return;
+    if (coords.x + screenResolution.x * (screenResolution.y - coords.y - 1) > screenResolution.x*screenResolution.y) return;
 
     const int localID = int(gl_LocalInvocationIndex);
     const int threadsPerWorkGroup = int(gl_WorkGroupSize.x * gl_WorkGroupSize.y * gl_WorkGroupSize.z);
@@ -111,7 +107,6 @@ void main()
     float minDepth = imageLoad(depthData, coords).x;
     bool colorChanged = false;
     vec4 color = vec4(0.0);
-    uint sphereIndex = 0;
 
     float aspectRatio = float(screenResolution.x) / float(screenResolution.y);
     float fovRad = radians(fov);
@@ -136,7 +131,6 @@ void main()
             sharedSphereBillboards[localID] = sphereBillboardData[batchIndex];
         }
         barrier();
-        
 
         count = threadsPerWorkGroup;
         if (batch == batches - 1) count = min(threadsPerWorkGroup, lastBatchAmount);
@@ -144,20 +138,19 @@ void main()
         for (int index = 0; index < count; index++)
         {
             SphereBillboard sphereBillboard = sharedSphereBillboards[index];
-            if (sphereBillboard.padding1 == 1) continue;
 
             const ivec2 screenMin = ivec2(int(sphereBillboard.minCorner.x), int(sphereBillboard.minCorner.y));
             const ivec2 screenMax = ivec2(int(sphereBillboard.maxCorner.x), int(sphereBillboard.maxCorner.y));
             // pixel not in the bounding box
-            if ( (screenMin.x > coords.x || coords.x > screenMax.x) || 
-                (screenMin.y > coords.y || coords.y > screenMax.y) ) 
+            if ( !(screenMin.x <= coords.x && coords.x <= screenMax.x) || 
+                !(screenMin.y <= coords.y && coords.y <= screenMax.y) ) 
                     continue;
 
-
+            
             const vec3 rd = computeRd(coords.x, coords.y, fovTan, halfFovTan);
             const float h = iSphere(cameraPos, rd, sphereBillboard.sphPosR.xyz, sphereBillboard.sphPosR.w);
 
-            // imageStore(outputImage, coords, vec4(0.0));
+            // imageStore(outputImage, coords, vec4(1.0));
             if (h > 0.0f) 
             {
                 const vec3 hit = ray * h;
@@ -168,7 +161,6 @@ void main()
                     const float lambertCos = dot(normal, -normalize(rd*h));
                     minDepth = depth;
                     color = vec4(lambertCos * lightColor * diffuseI, 1.0);
-                    sphereIndex = sphereBillboard.index;
                     if (!colorChanged) colorChanged = true;
                 }
                 
@@ -179,7 +171,6 @@ void main()
     }
     if (colorChanged) 
     {
-        pixelOwnershipBuffer[coords.x + screenResolution.x*coords.y] = sphereIndex; 
         imageStore(outputImage, coords, color);
         imageStore(depthData, coords, vec4(minDepth));
     }

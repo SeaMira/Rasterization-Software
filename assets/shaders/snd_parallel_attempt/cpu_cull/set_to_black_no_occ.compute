@@ -1,0 +1,16 @@
+#version 430
+
+
+layout(local_size_x = 16, local_size_y = 16) in;
+layout(rgba8, binding = 0) uniform image2D outputImage;
+
+layout(binding = 1, r32f) uniform image2D depthData;
+
+uniform float far;
+uniform ivec2 screenResolution;
+
+void main() {
+    ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
+    imageStore(depthData, coords, vec4(far));
+    imageStore(outputImage, coords, vec4(1.0, 1.0, 0.0, 1.0)); 
+}
