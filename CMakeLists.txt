@@ -40,8 +40,6 @@ add_subproject(snd_cpu_w_cylinders "${CMAKE_SOURCE_DIR}/executables/snd_parallel
 add_subproject(snd_gpu "${CMAKE_SOURCE_DIR}/executables/snd_parallel_attempt/gpu_cull/sphs.cpp")
 add_subproject(snd_gpu_w_cylinders "${CMAKE_SOURCE_DIR}/executables/snd_parallel_attempt/gpu_cull/w_cyls.cpp")
 
-# Third parallel attempt define (same as second with parallel FC but without atomics)
-add_subproject(thrd_parallel "${CMAKE_SOURCE_DIR}/executables/thrd_parallel_attempt/thrd_parallel_attempt.cpp")
 
 target_link_libraries(brute_sequencial PUBLIC sequential_dependencies)
 target_link_libraries(cylinder_projection_cpu PUBLIC sequential_dependencies)
@@ -56,7 +54,6 @@ target_link_libraries(snd_cpu_w_cylinders PUBLIC parallel_dependencies)
 target_link_libraries(snd_gpu PUBLIC parallel_dependencies)
 target_link_libraries(snd_gpu_w_cylinders PUBLIC parallel_dependencies)
 
-target_link_libraries(thrd_parallel PUBLIC parallel_dependencies)
 
 
 add_custom_command(
@@ -67,15 +64,15 @@ add_custom_command(
 
 add_custom_target(copy_assets ALL DEPENDS "${CMAKE_BINARY_DIR}/assets")
 
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/off/seq)
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/off/seq_w_cyl)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/csv/seq)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/csv/seq_w_cyl)
 
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/off/fst_parallel)
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/off/fst_parallel_w_cyl)
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/off/scnd_parallel/cpu_cull)
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/off/scnd_parallel/gpu_cull)
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/off/scnd_parallel_w_cyl/cpu_cull)
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/off/scnd_parallel_w_cyl/gpu_cull)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/csv/fst_parallel)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/csv/fst_parallel_w_cyl)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/csv/scnd_parallel/cpu_cull)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/csv/scnd_parallel/gpu_cull)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/csv/scnd_parallel_w_cyl/cpu_cull)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/csv/scnd_parallel_w_cyl/gpu_cull)
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/img/seq)
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/img/seq_w_cyl)
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/img/fst_parallel)
