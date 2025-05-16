@@ -33,8 +33,8 @@
 int SCR_WIDTH = 1024;
 int SCR_HEIGHT = 1024;
 
-int sphere_count = 126;
-int cylinder_count = 0;
+int sphere_count = 0;
+int cylinder_count = 150;
 int frustumSpheres = 0;
 int visibleSpheres = 0;
 
@@ -46,8 +46,8 @@ std::string title = "Sequential Method: Spheres and Cylinders";
 bool shown = true;
 bool withOcclusionCulling = true;
 
-int topLevel = 4;
-int level = 4;
+int topLevel = 3;
+int level = 3;
 bool showHiz = false;
 
 HierarchicalZBuffer hizPyramid;
@@ -231,9 +231,9 @@ int main(int argc, char* argv[])
     Benchmark benchmark(camera_controller, chkPoints);
     
     std::string base_path = withOcclusionCulling ? "media/csv/seq_w_cyl/occ_" : "media/csv/seq_w_cyl/"; 
-    base_path += ((currentScene == SceneType::LOADED_SCENE) ? "loaded_scene_" : "packed_scene_");
-    std::string frame_times_path = base_path + "frame_times.csv";
-    std::string process_times_path = base_path + "process_times.csv";
+    base_path += ((currentScene == SceneType::LOADED_SCENE) ? ("loaded_scene_" + scene_file) : "packed_scene");
+    std::string frame_times_path = base_path + "_frame_times.csv";
+    std::string process_times_path = base_path + "_process_times.csv";
     Profiler profiler(window, 
         frame_times_path, 
         process_times_path, 

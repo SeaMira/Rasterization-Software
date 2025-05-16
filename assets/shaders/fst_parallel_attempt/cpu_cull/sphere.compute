@@ -40,6 +40,9 @@ layout(std430, binding = 6) buffer SphereBuffer
     Sphere spheres[];
 };
 
+layout(binding = 8) buffer CounterBuffer {
+    uint counter;
+};
 
 uniform mat4 view;
 uniform mat4 proj;
@@ -54,6 +57,7 @@ uniform float fov;
 
 uniform int sphereCount;
 uniform uint visibilityFrameBufferIndexOffset;
+uniform int benchmark;
 
 const vec3 lightColor = vec3(0.01, 1.0, 0.05);
 const float diffuseI = 0.9;
@@ -258,7 +262,6 @@ void drawSphere(Sphere sphere)
         else if (visibilityFrameBuffer[visFrameBufferId].frames == 0 && 
             visibilityFrameBuffer[visFrameBufferId].pixels == 0) 
         {
-            spheres[gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_WorkGroupSize.x].wasDrawn[0] = 0;
             return;
         }
         else 
@@ -269,7 +272,9 @@ void drawSphere(Sphere sphere)
     {
         visibilityFrameBuffer[visFrameBufferId].frames = 10;
     }
-    spheres[gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_WorkGroupSize.x].wasDrawn[0] = 1;
+
+    if (benchmark == 1) atomicAdd(counter, 1);
+
     for (int px = max(0, screenMin.x); px < min(screenMax.x, screenResolution.x); px++)
     {
         vec3 rayColStart = rayStart + float(px) * dx;

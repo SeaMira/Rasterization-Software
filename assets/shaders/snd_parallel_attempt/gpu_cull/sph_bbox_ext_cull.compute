@@ -45,6 +45,10 @@ layout(binding = 8) buffer CounterBuffer {
     uint counter;
 };
 
+layout(binding = 11) buffer frustumCounterBuffer {
+    uint frustCounter;
+};
+
 
 
 
@@ -310,6 +314,9 @@ void main()
     // Get sphere bbox
     Sphere s = spheres[index];
     if (isSphereInside(s))
+    {
+        atomicAdd(frustCounter, 1);
         storeSphereBBox(s, index);
+    }
     visibilityFrameBuffer[visibilityFrameBufferIndexOffset + index].pixels = 0;
 }

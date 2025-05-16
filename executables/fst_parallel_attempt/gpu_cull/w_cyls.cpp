@@ -29,8 +29,8 @@ using uint = unsigned int;
 // Settings
 int SCR_WIDTH = 1024;
 int SCR_HEIGHT = 1024;
-int sphere_count = 126;
-int cylinder_count = 150;
+int sphere_count = 100000000;
+int cylinder_count = 0;
 
 std::string title = "First Parallel Version GPU culling: Spheres and Cylinders"; 
 
@@ -134,13 +134,19 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
     StorageBuffer visibilityFramesBuffer(GL_SHADER_STORAGE_BUFFER, 2 * totalEntities * sizeof(GLuint), 5, 
         visibilityFrames.data(), GL_DYNAMIC_COPY);
     
+    GLuint zero = 0;
+    GLuint resetValue = 0;
+    StorageBuffer frustumAtomicCounter(GL_SHADER_STORAGE_BUFFER, sizeof(GLuint), 8, 
+        &zero, GL_STATIC_DRAW);
+    StorageBuffer occlusionAtomicCounter(GL_SHADER_STORAGE_BUFFER, sizeof(GLuint), 9, 
+        &zero, GL_STATIC_DRAW);
     
     Benchmark benchmark(camera_controller, chkPoints);
 
-    std::string base_path = withOcclusionCulling ? "media/csv/fst_parallel_w_cyl/occ_" : "media/csv/fst_parallel_w_cyl/"; 
-    base_path += ((currentScene == SceneType::LOADED_SCENE) ? "loaded_scene_" : "packed_scene_");
-    std::string frame_times_path = base_path + "gpu_frame_times.csv";
-    std::string process_times_path = base_path + "gpu_frame_times.csv";
+    std::string base_path = "media/csv/fst_parallel_w_cyl/occ_"; 
+    base_path += ((currentScene == SceneType::LOADED_SCENE) ? ("loaded_scene_" + scene_file) : "packed_scene");
+    std::string frame_times_path = base_path + "_gpu_frame_times.csv";
+    std::string process_times_path = base_path + "_gpu_frame_times.csv";
     Profiler profiler(window, 
         frame_times_path, 
         process_times_path, sphere_count, cylinder_count, downsampleLevel);
@@ -180,6 +186,21 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
             Frustum frustum(camera);
 
             spheresShader.use();
+            #if BENCHMARKING 
+                frustumAtomicCounter.bind();
+                glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &visibleCylindersCount);
+                glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &resetValue);
+                frustumAtomicCounter.unbind();
+
+                occlusionAtomicCounter.bind();
+                glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &notOccludedCylindersCount);
+                glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &resetValue);
+                occlusionAtomicCounter.unbind();
+
+                spheresShader.setInt("benchmark", 1); 
+            #else
+                spheresShader.setInt("benchmark", 0);
+            #endif
             spheresShader.setInt("sphereCount", sphere_count);
             spheresShader.setUint("visibilityFrameBufferIndexOffset", 0);
             spheresShader.setVec2I("screenResolution", screenResolution);
@@ -189,6 +210,21 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
             glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
             
             cylinderShader.use();
+            #if BENCHMARKING 
+                frustumAtomicCounter.bind();
+                glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &visibleSpheresCount);
+                glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &resetValue);
+                frustumAtomicCounter.unbind();
+
+                occlusionAtomicCounter.bind();
+                glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &notOccludedSpheresCount);
+                glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &resetValue);
+                occlusionAtomicCounter.unbind();
+                
+                cylinderShader.setInt("benchmark", 1); 
+            #else
+                cylinderShader.setInt("benchmark", 0);
+            #endif
             cylinderShader.setInt("cylinderCount", cylinder_count);
             cylinderShader.setUint("visibilityFrameBufferIndexOffset", sphere_count);
             cylinderShader.setVec2I("screenResolution", screenResolution);
@@ -220,34 +256,6 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
             //     isRunning = window.update(SCR_WIDTH/(1 << downsampleLevel), SCR_HEIGHT/(1 << downsampleLevel));
             // } 
             //// END:: if want mipmap check 
-
-            ////// checking drawn spheres ///////
-            
-            // sphereBuffer.bind();  // Primero aseguramos que el buffer está vinculado
-
-            // // mapping buffer on reading mode
-            // void* mappedData = glMapBufferRange(GL_SHADER_STORAGE_BUFFER, 
-            //                                     0, 
-            //                                     spheres.size() * sizeof(SphereContainer), 
-            //                                     GL_MAP_READ_BIT);
-
-            // // verifying correct mapping
-            // if (mappedData != nullptr) {
-            //     // Accessing mapped buffer
-            //     SphereContainer* spheresData = reinterpret_cast<SphereContainer*>(mappedData);
-            //     notOccludedSpheresCount = 0;
-            //     // looping on elements checking if drawn or not
-            //     for (size_t i = 0; i < visibleSpheresCount; ++i)
-            //         if (spheresData[i].wasDrawn[0] == 1) 
-            //             notOccludedSpheresCount++;
-                
-            //     // unmapping buffer once finished
-            //     glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
-            // } else {
-            //     std::cerr << "Failed to map the buffer!" << std::endl;
-            // }
-            
-            ////// END:: checking drawn spheres ///////
             
             if (window.getInput().isKeyDown(Key::F10)) 
             {
@@ -307,12 +315,18 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
     StorageBuffer cylinderBuffer(GL_SHADER_STORAGE_BUFFER, cylinder_count * sizeof(Cylinder), 7, 
         cylinders.data(), GL_STATIC_DRAW);
     
+
+    GLuint zero = 0;
+    GLuint resetValue = 0;
+    StorageBuffer frustumAtomicCounter(GL_SHADER_STORAGE_BUFFER, sizeof(GLuint), 8, 
+        &zero, GL_STATIC_DRAW);
+
     Benchmark benchmark(camera_controller, chkPoints);
 
-    std::string base_path = withOcclusionCulling ? "media/csv/fst_parallel_w_cyl/occ_" : "media/csv/fst_parallel_w_cyl/"; 
-    base_path += ((currentScene == SceneType::LOADED_SCENE) ? "loaded_scene_" : "packed_scene_");
-    std::string frame_times_path = base_path + "gpu_frame_times.csv";
-    std::string process_times_path = base_path + "gpu_frame_times.csv";
+    std::string base_path = "media/csv/fst_parallel_w_cyl/"; 
+    base_path += ((currentScene == SceneType::LOADED_SCENE) ? ("loaded_scene_" + scene_file) : "packed_scene");
+    std::string frame_times_path = base_path + "_gpu_frame_times.csv";
+    std::string process_times_path = base_path + "_gpu_frame_times.csv";
     Profiler profiler(window, 
         frame_times_path, 
         process_times_path, sphere_count, cylinder_count, 0);
@@ -349,6 +363,15 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
             Frustum frustum(camera);
 
             spheresShader.use();
+            #if BENCHMARKING 
+                frustumAtomicCounter.bind();
+                glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &notOccludedCylindersCount);
+                glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &resetValue);
+                frustumAtomicCounter.unbind();
+                spheresShader.setInt("benchmark", 1); 
+            #else
+                spheresShader.setInt("benchmark", 0);
+            #endif
             spheresShader.setInt("sphereCount", sphere_count);
             spheresShader.setVec2I("screenResolution", screenResolution);
             setFrustumUniforms(spheresShader, frustum);
@@ -357,6 +380,15 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
             glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
             
             cylinderShader.use();
+            #if BENCHMARKING 
+                frustumAtomicCounter.bind();
+                glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &notOccludedCylindersCount);
+                glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &resetValue);
+                frustumAtomicCounter.unbind();
+                cylinderShader.setInt("benchmark", 1); 
+            #else
+                cylinderShader.setInt("benchmark", 0);
+            #endif
             cylinderShader.setInt("cylinderCount", cylinder_count);
             cylinderShader.setVec2I("screenResolution", screenResolution);
             setFrustumUniforms(cylinderShader, frustum);

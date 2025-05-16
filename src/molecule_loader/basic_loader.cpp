@@ -31,7 +31,8 @@ void ChemFilesLoader::load(const std::filesystem::path & path)
         if (trajectory.nsteps() == 0) 
             throw std::runtime_error("Trajectory is empty");
         
-
+        int atoms_amount = 0;
+        int bounds_amount = 0;
         for (size_t i = 0; i < trajectory.nsteps(); ++i) 
         {
             chemfiles::Frame frame = trajectory.read();
@@ -44,6 +45,7 @@ void ChemFilesLoader::load(const std::filesystem::path & path)
             // Itera sobre todos los átomos en el frame
             for (size_t j = 0; j < frame.size(); ++j) 
             {
+                atoms_amount++;
                 auto position = positions[j];
                 auto atom = frame[j];
 
@@ -55,6 +57,7 @@ void ChemFilesLoader::load(const std::filesystem::path & path)
 
             for (const auto& bond : bonds) 
             {
+                bounds_amount++;
                 auto atom1 = bond[0];
                 auto atom2 = bond[1];
 
@@ -62,6 +65,8 @@ void ChemFilesLoader::load(const std::filesystem::path & path)
                 m_bonds.push_back({atom1, atom2});
             }
         }
+        std::cout << "Atoms amount: " << atoms_amount << std::endl;
+        std::cout << "Bonds amount: " << bounds_amount << std::endl;
 
     } 
     catch (const chemfiles::Error& e) 
@@ -74,6 +79,7 @@ void ChemFilesLoader::load(const std::filesystem::path & path)
 
 void ChemFilesLoader::prepareChemfiles()
 {
+    std::cout << "Chemfiles version: " << CHEMFILES_VERSION << std::endl;
     #ifndef NDEBUG
         chemfiles::warning_callback_t callback = [](const std::string & p_log) { std::cerr << "Warning: " << p_log << std::endl; };
     #else

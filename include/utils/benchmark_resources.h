@@ -22,13 +22,20 @@ enum class SceneType {
     PACKAGE_SCENE
 };
 
+#define BENCHMARKING 1
 
 /** 
  * @brief Global variable with the scene type to load.
  */
 extern SceneType currentScene;
+
 /** 
- * @brief Global variable with the file path to loada scene from.
+ * @brief Global variable with the file name to load a scene from.
+ */
+extern std::string scene_file;
+
+/** 
+ * @brief Global variable with the file path to load a scene from.
  */
 extern std::filesystem::path scene_path;
 

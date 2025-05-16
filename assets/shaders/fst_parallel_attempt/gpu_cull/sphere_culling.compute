@@ -39,7 +39,13 @@ layout(std430, binding = 6) buffer SphereBuffer
     Sphere spheres[];
 };
 
+layout(binding = 8) buffer FrustumCounterBuffer {
+    uint frustCullcounter;
+};
 
+layout(binding = 9) buffer OcclusionCounterBuffer {
+    uint occCullcounter;
+};
 
 uniform mat4 view;
 uniform mat4 proj;
@@ -61,6 +67,7 @@ uniform float fov;
 
 uniform int sphereCount;
 uniform uint visibilityFrameBufferIndexOffset;
+uniform int benchmark;
 
 vec3 lightColor = vec3(0.01, 1.0, 0.05);
 float diffuseI = 0.9;
@@ -284,6 +291,8 @@ void drawSphere(Sphere sphere, uint sphereIndex)
         
     } else visibilityFrameBuffer[visFrameBufferId].frames = 10;
     
+    if (benchmark == 1) atomicAdd(occCullcounter, 1);
+
     for (int px = max(0, screenMin.x); px < min(screenMax.x, screenResolution.x); px++)
     {
         vec3 rayColStart = rayStart + float(px) * dx;
@@ -336,6 +345,10 @@ void main()
 
     // Get sphere
     Sphere s = spheres[index];
-    if (isSphereInside(s)) drawSphere(s, index);
+    if (isSphereInside(s))
+    {
+        if (benchmark == 1) atomicAdd(frustCullcounter, 1);
+        drawSphere(s, index);
+    } 
     visibilityFrameBuffer[visibilityFrameBufferIndexOffset + index].pixels = 0;
 }

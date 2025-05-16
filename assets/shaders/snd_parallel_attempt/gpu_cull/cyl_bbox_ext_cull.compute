@@ -48,6 +48,10 @@ layout(binding = 8) buffer CounterBuffer {
     uint counter;
 };
 
+layout(binding = 11) buffer frustumCounterBuffer {
+    uint frustCounter;
+};
+
 uniform mat4 view;
 uniform mat4 proj;
 
@@ -383,7 +387,10 @@ void main()
     // Get cylinder bbox
     Cylinder c = cylinders[index];
     if (isCylinderInside(c.pa_r.xyz, c.pb_r.xyz, c.pa_r.w))
+    {
+        atomicAdd(frustCounter, 1);
         storeCylinderBBox(c, index);
+    }
     visibilityFrameBuffer[visibilityFrameBufferIndexOffset + index].pixels = 0;
     
 }

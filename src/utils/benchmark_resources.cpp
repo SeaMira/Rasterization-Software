@@ -3,19 +3,20 @@
 #include "molecule_loader/basic_loader.h"
 
 // LOADED_SCENE or GRID_SCENE
-SceneType currentScene = SceneType::LOADED_SCENE;
-std::filesystem::path scene_path = "assets/molecules/1AGA.mmtf";
+SceneType currentScene = SceneType::PACKAGE_SCENE;
+std::string scene_file = "8wql.cif";
+std::filesystem::path scene_path = std::filesystem::path("assets/molecules") / scene_file;
 
-int gridWidth = 10;
-int gridHeight = 10;
-int gridDepth = 10;
+int gridWidth = 100;
+int gridHeight = 1000;
+int gridDepth = 1000;
 int interleaveW = 5;
 int interleaveH = 5;
 
 int interleaveAngle = 10;
 int interleaveZ = 10;
 int interleaveY = 10;
-float radFactor = 2.5f;
+float radFactor = 2.0f;
 
 
 std::vector<glm::vec4> loaded_scene(std::filesystem::path& path, int sphere_count)

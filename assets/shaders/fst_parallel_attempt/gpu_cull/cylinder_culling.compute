@@ -39,6 +39,14 @@ layout(std430, binding = 7) buffer CylinderBuffer
     Cylinder cylinders[];
 };
 
+layout(binding = 8) buffer FrustumCounterBuffer {
+    uint frustCullcounter;
+};
+
+layout(binding = 9) buffer OcclusionCounterBuffer {
+    uint occCullcounter;
+};
+
 
 uniform mat4 view;
 uniform mat4 proj;
@@ -60,6 +68,7 @@ uniform float fov;
 
 uniform int cylinderCount;
 uniform uint visibilityFrameBufferIndexOffset;
+uniform int benchmark;
 
 const vec3 lightColor = vec3(0.01, 1.0, 0.05);
 const float diffuseI = 0.9;
@@ -372,6 +381,7 @@ void drawCylinder(Cylinder cylinder, uint cylinderIndex)
         visibilityFrameBuffer[visFrameBufferId].frames = 10;
     }
     
+    if (benchmark == 1) atomicAdd(occCullcounter, 1);
     
     for (int py = min(screenResolution.y-1, maxY); py >= max(0, minY); --py)
     {
@@ -452,7 +462,10 @@ void main()
     // Get cylidner
     Cylinder c = cylinders[index];
 
-    if (isCylinderInside(c.pa_r.xyz, c.pb_r.xyz, c.pa_r.w)) 
+    if (isCylinderInside(c.pa_r.xyz, c.pb_r.xyz, c.pa_r.w))
+    {
+        if (benchmark == 1) atomicAdd(frustCullcounter, 1);
         drawCylinder(c, index);
+    }
     visibilityFrameBuffer[visibilityFrameBufferIndexOffset + index].pixels = 0;
 }

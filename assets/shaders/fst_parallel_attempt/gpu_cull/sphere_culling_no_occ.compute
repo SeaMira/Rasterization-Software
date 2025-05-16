@@ -18,7 +18,9 @@ layout(std430, binding = 6) buffer SphereBuffer
     Sphere spheres[];
 };
 
-
+layout(binding = 8) buffer CounterBuffer {
+    uint counter;
+};
 
 uniform mat4 view;
 uniform mat4 proj;
@@ -39,6 +41,7 @@ uniform ivec2 screenResolution;
 uniform float fov;
 
 uniform int sphereCount;
+uniform int benchmark;
 
 vec3 lightColor = vec3(0.01, 1.0, 0.05);
 float diffuseI = 0.9;
@@ -253,5 +256,9 @@ void main()
 
     // Get sphere
     Sphere s = spheres[index];
-    if (isSphereInside(s)) drawSphere(s, index);
+    if (isSphereInside(s)) 
+    {
+        if (benchmark == 1) atomicAdd(counter, 1);
+        drawSphere(s, index);
+    }
 }
