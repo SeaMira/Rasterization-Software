@@ -1,5 +1,5 @@
-#ifndef COMPUTE_SHADER_H
-#define COMPUTE_SHADER_H
+#ifndef _SHADER_PROGRAM_H
+#define _SHADER_PROGRAM_H
 
 #include <glad/glad.h>
 #include <glm/glm.hpp>
@@ -10,33 +10,49 @@
 #include <iostream>
 
 /**
- * @class ComputeShader
+ * @class ShaderProgram
  * 
- * @brief Compiles compute shader programs.
+ * @brief Compiles shader programs.
  * 
- * It's in charge of loading and compiling compute shaders.
+ * It's in charge of loading and compiling general shaders.
  */
-class ComputeShader
+class ShaderProgram
 {
     public:
-        unsigned int ID; ///< Compute shader program ID
+        unsigned int ID; ///< Shader program ID
         
         /**
-         * @brief ComputeShader class constructor.
+         * @brief ShaderProgram class constructor.
          * 
-         * Recieves the name of a file with a compute shader and the constructor loads it, compiles, verifies
+         * Recieves the name of files with shaders and the constructor loads it, compiles, verifies
          * everything is correct and generates a program.
          * 
-         * @param computePath file name with compute shader.
+         * @param vertexPath file name with a vertex shader.
+         * @param fragmentPath file name with a fragment shader.
+         * @param geometryPath file name with a geometry shader.
          */
-        ComputeShader(const char* computePath);
+        ShaderProgram(const char* vertexPath = "", const char* fragmentPath = "", const char* geometryPath = "");
         
         /**
-         * @brief ComputeShader class destructor.
+         * @brief ShaderProgram class destructor.
          * 
          * Deletes the program.
          */
-        ~ComputeShader() { glDeleteProgram(ID); };
+        ~ShaderProgram() { glDeleteProgram(ID); };
+
+        /**
+         * @brief Compiles and attaches a shader to the program frome
+         * a source file.
+         * 
+         * @param shaderPath file name with a shader.
+         * @param shaderType type of the shader to be compiled.
+         */
+        void attachShader(const char* shaderPath, GLenum shaderType);
+
+        /**
+         * @brief Links the shaders program.
+         */
+        void linkProgram();
 
         /**
          * @brief sets this program to use.
@@ -219,4 +235,4 @@ class ComputeShader
         void checkCompileErrors(GLuint shader, std::string type);
 };
 
-#endif
+#endif // _SHADER_PROGRAM_H

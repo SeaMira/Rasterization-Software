@@ -6,6 +6,7 @@
 #include "algorithms/frustum_cull.h"
 #include "geometry/cylinder/cylinder.h"
 #include "vis/compute_shader_program.h"
+#include "vis/shader_program.h"
 #include "ux/camera.h"
 using Sphere = glm::vec4;
 
@@ -83,6 +84,16 @@ void fillCylindersData(std::vector<Cylinder>& cylinders, std::vector<CylinderCon
  * @param camera The camera to get the uniforms from.
  */
 void setCameraUniforms(ComputeShader& shader, Camera& camera);
+
+/**
+ * @brief Sets the camera uniforms on the shader.
+ * 
+ * Sets the camera uniforms on the shader, including projection and view matrices, up, front and right vectors, camera position and camera fov.
+ * 
+ * @param shader The shader to set the uniforms on.
+ * @param camera The camera to get the uniforms from.
+ */
+void setCameraUniforms(ShaderProgram& shader, Camera& camera);
 
 /**
  * @brief Sets the frustum uniforms on the shader.

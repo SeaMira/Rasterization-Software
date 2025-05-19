@@ -27,6 +27,7 @@ set(raster_includes
     ${CMAKE_SOURCE_DIR}/include/ux/profiler/profiler.h
     
     ${CMAKE_SOURCE_DIR}/include/vis/compute_shader_program.h
+    ${CMAKE_SOURCE_DIR}/include/vis/shader_program.h
     ${CMAKE_SOURCE_DIR}/include/vis/window.h
     ${CMAKE_SOURCE_DIR}/include/vis/canvas.h
     ${CMAKE_SOURCE_DIR}/include/vis/gl/frame_buffer.h
@@ -66,6 +67,7 @@ set(raster_includes
     ${CMAKE_SOURCE_DIR}/src/ux/profiler/profiler.cpp
     
     ${CMAKE_SOURCE_DIR}/src/vis/compute_shader_program.cpp
+    ${CMAKE_SOURCE_DIR}/src/vis/shader_program.cpp
     ${CMAKE_SOURCE_DIR}/src/vis/window.cpp
     ${CMAKE_SOURCE_DIR}/src/vis/canvas.cpp
     ${CMAKE_SOURCE_DIR}/src/vis/gl/frame_buffer.cpp

@@ -16,7 +16,7 @@ Texture::Texture(GLenum target, GLenum internalFormat, GLsizei width, GLsizei he
     glBindTexture(target, 0);
 }
 
-Texture::Texture(GLenum target, GLenum internalFormat, GLsizei width, GLsizei height, GLuint unit) 
+Texture::Texture(GLenum target, GLenum internalFormat, GLsizei width, GLsizei height, GLuint unit, GLuint mipLevels) 
 : m_target(target), m_unit(unit) {
     glCreateTextures(target, 1, &m_id);
 
@@ -31,7 +31,7 @@ Texture::Texture(GLenum target, GLenum internalFormat, GLsizei width, GLsizei he
     glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexStorage2D(target, 1, internalFormat, width, height);
+    glTexStorage2D(target, mipLevels, internalFormat, width, height);
     glBindImageTexture(unit, m_id, 0, GL_FALSE, 0, GL_WRITE_ONLY, internalFormat);
     glBindTexture(target, 0);
 }

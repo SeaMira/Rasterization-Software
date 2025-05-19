@@ -50,6 +50,17 @@ void setCameraUniforms(ComputeShader& shader, Camera& camera)
     shader.setFloat("fov", camera.getFov());
 }
 
+void setCameraUniforms(ShaderProgram& shader, Camera& camera)
+{
+    shader.setMat4("proj", camera.getProjection());
+    shader.setMat4("view", camera.getView());
+    shader.setVec3("up", camera.getUp());
+    shader.setVec3("front", camera.getFront());
+    shader.setVec3("right", camera.getRight());
+    shader.setVec3("cameraPos", camera.getPosition());
+    shader.setFloat("fov", camera.getFov());
+}
+
 void setFrustumUniforms(ComputeShader& shader, Frustum& frustum)
 {
     shader.setVec4("frustumTopFace", glm::vec4(frustum.topFace.normal, frustum.topFace.distance));

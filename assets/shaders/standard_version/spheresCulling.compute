@@ -1,0 +1,70 @@
+#version 460
+
+layout(local_size_x = 256) in;
+
+struct Sphere
+{
+    vec3  pos;
+    float rad;
+};
+
+layout(std430, binding = 0) buffer SphereBuffer 
+{
+    Sphere spheres[];
+};
+
+layout(std430, binding = 1) buffer VisibleSphereIndexes 
+{
+    uint visibilityIndex[];
+};
+
+layout(binding = 2) buffer FrustumCounterBuffer {
+    uint frustCullcounter;
+};
+
+uniform vec4 frustumTopFace;
+uniform vec4 frustumBottomFace;
+uniform vec4 frustumRightFace;
+uniform vec4 frustumLeftFace;
+uniform vec4 frustumFarFace;
+uniform vec4 frustumNearFace;
+
+uniform int sphereCount;
+
+// frustum culling
+
+bool isOnOrForwardOfPlane(vec4 plane, vec3 spherePos, float sphereRadius)
+{
+    return dot(vec3(plane), spherePos) - plane.w >= -sphereRadius;
+}
+
+bool isSphereInside(Sphere sph)
+{
+    return isOnOrForwardOfPlane(frustumLeftFace, sph.pos, sph.rad) &&
+           isOnOrForwardOfPlane(frustumRightFace, sph.pos, sph.rad) &&
+           isOnOrForwardOfPlane(frustumFarFace, sph.pos, sph.rad) &&
+           isOnOrForwardOfPlane(frustumNearFace, sph.pos, sph.rad) &&
+           isOnOrForwardOfPlane(frustumTopFace, sph.pos, sph.rad) &&
+           isOnOrForwardOfPlane(frustumBottomFace, sph.pos, sph.rad);
+}
+
+// frustum culling
+
+
+void main()
+{
+    uint index = gl_GlobalInvocationID.x;
+
+    // Check if the index is out of bounds
+    if (index >= sphereCount) {
+        return;  // If index is greater that the amount of spheres, return
+    }
+
+    // Get sphere
+    Sphere s = spheres[index];
+    if (isSphereInside(s))
+    {
+        uint oldIndex = atomicAdd(frustCullcounter, 1);
+        visibilityIndex[oldIndex] = index;
+    } 
+}

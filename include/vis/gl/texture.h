@@ -52,7 +52,7 @@ public:
      * More info on
      * <a href="https://registry.khronos.org/OpenGL-Refpages/es3.0/html/glTexStorage2D.xhtml">glTexStorage2D</a>
      */
-    Texture(GLenum target, GLenum internalFormat, GLsizei width, GLsizei height, GLuint unit);
+    Texture(GLenum target, GLenum internalFormat, GLsizei width, GLsizei height, GLuint unit, GLuint mipLevels = 1);
     
     /**
      * @brief Texture class constructor.
