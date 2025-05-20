@@ -78,10 +78,11 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
         {"Screen width", &SCR_WIDTH},
         {"Screen height", &SCR_HEIGHT},
         {"Sphere count", &sphere_count},
-        {"Cylinder count", &cylinder_count},
         {"Spheres On Frustum", &visibleSpheresCount},
+        {"Drawn spheres", &notOccludedSpheresCount},
+        {"Cylinder count", &cylinder_count},
         {"Cylinders On Frustum", &visibleCylindersCount},
-        {"Drawn spheres", &notOccludedSpheresCount}
+        {"Drawn cylinders", &notOccludedCylindersCount}
     };
 
     CameraController camera_controller(window, camera);
@@ -111,14 +112,9 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
 
     std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints = getCheckpoints(sphere_count, spheres, cylinders);
     
-    std::vector<SphereContainer> visibleSpheres(sphere_count);    
-    std::vector<CylinderContainer> visibleCylinders(cylinder_count);  
-
     visibleSpheresCount = sphere_count;
-    // fillSpheresData(spheres, visibleSpheres);
     
     visibleCylindersCount = cylinder_count;
-    // fillCylindersData(cylinders, visibleCylinders, sphere_count);
     
     StorageBuffer sphereBuffer(GL_SHADER_STORAGE_BUFFER, sphere_count * sizeof(Sphere), 6, 
         spheres.data(), GL_STATIC_DRAW);

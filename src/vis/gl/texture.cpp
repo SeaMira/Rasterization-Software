@@ -32,7 +32,16 @@ Texture::Texture(GLenum target, GLenum internalFormat, GLsizei width, GLsizei he
     glTexParameteri(target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexStorage2D(target, mipLevels, internalFormat, width, height);
-    glBindImageTexture(unit, m_id, 0, GL_FALSE, 0, GL_WRITE_ONLY, internalFormat);
+
+    if (internalFormat != GL_DEPTH_COMPONENT &&
+        internalFormat != GL_DEPTH_COMPONENT16 &&
+        internalFormat != GL_DEPTH_COMPONENT24 && 
+        internalFormat != GL_DEPTH_COMPONENT32 && 
+        internalFormat != GL_DEPTH_COMPONENT32F && 
+        internalFormat != GL_DEPTH_STENCIL
+    )
+        glBindImageTexture(unit, m_id, 0, GL_FALSE, 0, GL_WRITE_ONLY, internalFormat);
+    
     glBindTexture(target, 0);
 }
 

@@ -6,12 +6,12 @@ struct Sphere
     float rad;
 };
 
-layout(std430, binding = 0) buffer SphereBuffer 
+layout(std430, binding = 1) buffer SphereBuffer 
 {
     Sphere spheres[];
 };
 
-layout(std430, binding = 1) buffer VisibleSphereIndexes 
+layout(std430, binding = 2) buffer VisibleSphereIndexes 
 {
     uint visibilityIndex[];
 };
@@ -30,11 +30,11 @@ flat out uint  id;
 
 void main()
 {
-    Sphere sphere = spheres[visibilityIndex[gl_VertexID]];
+    id = visibilityIndex[gl_VertexID];
+    Sphere sphere = spheres[id];
     spherePos = sphere.pos;
     sphereRad = sphere.rad;
     sphereCamPos = vec3( view * vec4( sphere.pos, 1. ) );
-    id = visibilityIndex[gl_VertexID];
 
     vec3 normSphViewPos = normalize(sphereCamPos);
     vec3 camImposPos = sphereCamPos - sphereRad*normSphViewPos;

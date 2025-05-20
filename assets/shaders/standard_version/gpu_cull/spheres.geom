@@ -46,4 +46,6 @@ void main()
     f_impCamPos = v4;
     gl_Position = proj * vec4( f_impCamPos, 1.f );
 	EmitVertex();
+
+    EndPrimitive();
 }

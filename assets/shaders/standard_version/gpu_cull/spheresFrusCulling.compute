@@ -8,17 +8,17 @@ struct Sphere
     float rad;
 };
 
-layout(std430, binding = 0) buffer SphereBuffer 
+layout(std430, binding = 1) buffer SphereBuffer 
 {
     Sphere spheres[];
 };
 
-layout(std430, binding = 1) buffer VisibleSphereIndexes 
+layout(std430, binding = 2) buffer VisibleSphereIndexes 
 {
     uint visibilityIndex[];
 };
 
-layout(binding = 2) buffer FrustumCounterBuffer {
+layout(binding = 3) buffer FrustumCounterBuffer {
     uint frustCullcounter;
 };
 
@@ -35,7 +35,7 @@ uniform int sphereCount;
 
 bool isOnOrForwardOfPlane(vec4 plane, vec3 spherePos, float sphereRadius)
 {
-    return dot(vec3(plane), spherePos) - plane.w >= -sphereRadius;
+    return dot(plane.xyz, spherePos) - plane.w >= -sphereRadius;
 }
 
 bool isSphereInside(Sphere sph)
@@ -61,8 +61,7 @@ void main()
     }
 
     // Get sphere
-    Sphere s = spheres[index];
-    if (isSphereInside(s))
+    if (isSphereInside(spheres[index]))
     {
         uint oldIndex = atomicAdd(frustCullcounter, 1);
         visibilityIndex[oldIndex] = index;

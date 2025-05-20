@@ -1,6 +1,6 @@
 #version 460
 
-layout (depth_greater) out float gl_FragDepth;
+layout (depth_less) out float gl_FragDepth;
 
 flat in vec3	f_spherePos; // Sphere position.
 flat in vec3	f_sphereCamPos; // Sphere position in view space.
@@ -35,5 +35,5 @@ void main()
 
         const float lambertCos = dot(normal, -normalize(hit));
         FragColor = vec4(lambertCos * lightColor * diffuseI, 1.0);
-    }
+    } else discard;
 }

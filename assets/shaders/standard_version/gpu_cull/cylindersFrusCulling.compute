@@ -1,0 +1,92 @@
+#version 460
+
+layout(local_size_x = 256) in;
+
+struct Cylinder 
+{
+    vec4 pa_r;
+    vec4 pb_r;
+};
+
+layout(std430, binding = 4) buffer CylinderBuffer 
+{
+    Cylinder cylinders[];
+};
+
+layout(std430, binding = 5) buffer VisibleCylinderIndexes 
+{
+    uint visibilityIndex[];
+};
+
+layout(binding = 3) buffer FrustumCounterBuffer {
+    uint frustCullcounter;
+};
+
+uniform vec4 frustumTopFace;
+uniform vec4 frustumBottomFace;
+uniform vec4 frustumRightFace;
+uniform vec4 frustumLeftFace;
+uniform vec4 frustumFarFace;
+uniform vec4 frustumNearFace;
+
+uniform int cylinderCount;
+
+// frustum culling
+struct BBox3D
+{
+    vec3 mMin;
+    vec3 mMax;
+};
+
+bool isOnOrForwardPlaneAABB(vec4 plane, BBox3D bbox) 
+{
+    vec3 negativeVertex = bbox.mMin;
+    vec3 normal = plane.xyz;
+    float distance = plane.w;
+
+    if (normal.x >= 0) negativeVertex.x = bbox.mMax.x;
+        else negativeVertex.x = bbox.mMin.x;
+
+    if (normal.y >= 0) negativeVertex.y = bbox.mMax.y;
+        else negativeVertex.y = bbox.mMin.y;
+
+    if (normal.z >= 0) negativeVertex.z = bbox.mMax.z;
+        else negativeVertex.z = bbox.mMin.z;
+
+    return dot(normal, negativeVertex) - distance >= 0;
+}
+
+bool isCylinderInside(vec3 pa, vec3 pb, float radius)
+{
+    vec3 a = pb - pa;
+    vec3 e = radius*sqrt( 1.0f - a*a/dot(a,a) );
+    BBox3D bbox3d = BBox3D(min( pa - e, pb - e ), max( pa + e, pb + e ));
+
+    return isOnOrForwardPlaneAABB(frustumLeftFace, bbox3d) &&
+           isOnOrForwardPlaneAABB(frustumRightFace, bbox3d) &&
+           isOnOrForwardPlaneAABB(frustumFarFace, bbox3d) &&
+           isOnOrForwardPlaneAABB(frustumNearFace, bbox3d) &&
+           isOnOrForwardPlaneAABB(frustumTopFace, bbox3d) &&
+           isOnOrForwardPlaneAABB(frustumBottomFace, bbox3d);
+}
+// frustum culling
+
+
+void main()
+{
+    uint index = gl_GlobalInvocationID.x;
+
+    // Check if the index is out of bounds
+    if (index >= cylinderCount) {
+        return;  // If index is greater that the amount of cylinders, return
+    }
+
+    // Get cylinder
+    Cylinder c = cylinders[index];
+
+    if (isCylinderInside(c.pa_r.xyz, c.pb_r.xyz, c.pa_r.w))
+    {
+        uint oldIndex = atomicAdd(frustCullcounter, 1);
+        visibilityIndex[oldIndex] = index;
+    } 
+}
