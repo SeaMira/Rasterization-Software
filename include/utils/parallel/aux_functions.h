@@ -36,6 +36,19 @@ struct CylinderContainer
  * @param visibleSpheresCount The number of spheres that are on the camera frustum.
  * @param indexOffset The offset to be added to the index of the spheres in the visibleSpheres vector.
  */
+void cullSimpleSpheres(std::vector<Sphere>& spheres, std::vector<Sphere>& visibleSpheres, Frustum& frustum, int& visibleSpheresCount, int indexOffset = 0);
+
+/**
+ * @brief Filters spheres that are actually on the camera frustum.
+ * 
+ * Takes a list of spheres and filters the ones that are actually on the camera frustum, storing them in another sphere container (sphere related info, like index and multipurpose padding) vector. It also stores how many spheres are in this second vector.
+ * 
+ * @param spheres The list of spheres to be filtered.
+ * @param visibleSpheres The list of spheres and its info that are actually on the camera frustum.
+ * @param frustum The camera frustum.
+ * @param visibleSpheresCount The number of spheres that are on the camera frustum.
+ * @param indexOffset The offset to be added to the index of the spheres in the visibleSpheres vector.
+ */
 void cullSpheres(std::vector<Sphere>& spheres, std::vector<SphereContainer>& visibleSpheres, Frustum& frustum, int& visibleSpheresCount, int indexOffset = 0);
 
 /**
@@ -57,6 +70,19 @@ void fillSpheresData(std::vector<glm::vec4>& spheres, std::vector<SphereContaine
  * 
  * @param cylinders The list of cylinders to be filtered.
  * @param visibleCylinders The list of cylinders that are actually on the camera frustum.
+ * @param frustum The camera frustum.
+ * @param visibleCylindersCount The number of cylinders that are on the camera frustum.
+ * @param indexOffset The offset to be added to the index of the cylinders in the visibleCylinders vector.
+ */
+void cullSimpleCylinders(std::vector<Cylinder>& cylinders, std::vector<Cylinder>& visibleCylinders, Frustum& frustum, int& visibleCylindersCount, int indexOffset = 0);
+
+/**
+ * @brief Filters cylinders that are actually on the camera frustum.
+ * 
+ * Takes a list of cylinders and filters the ones that are actually on the camera frustum, storing them in another cylinders  container (cylinder related info, like index and multipurpose padding) vector. It also stores how many cylinders are in this second vector.
+ * 
+ * @param cylinders The list of cylinders to be filtered.
+ * @param visibleCylinders The list of cylinders and its info that are actually on the camera frustum.
  * @param frustum The camera frustum.
  * @param visibleCylindersCount The number of cylinders that are on the camera frustum.
  * @param indexOffset The offset to be added to the index of the cylinders in the visibleCylinders vector.

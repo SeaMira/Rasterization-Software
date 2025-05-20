@@ -28,8 +28,8 @@ using uint = unsigned int;
 // Settings
 int SCR_WIDTH = 1024;
 int SCR_HEIGHT = 1024;
-int sphere_count = 1000000;
-int cylinder_count = 0;
+int sphere_count = 1000;
+int cylinder_count = 1000;
 
 std::string title = "Standard OpenGL Version: Spheres and Cylinders"; 
 
@@ -97,16 +97,14 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
 
     // FBO
 
-    ComputeShader spheresCullingShader("assets/shaders/standard_version/gpu_cull/spheresFrusCulling.compute");
-    ShaderProgram spheresShader("assets/shaders/standard_version/gpu_cull/spheres.vert", 
-                                "assets/shaders/standard_version/gpu_cull/spheres.frag",
-                                "assets/shaders/standard_version/gpu_cull/spheres.geom");
+    ShaderProgram spheresShader("assets/shaders/standard_version/cpu_cull/spheres.vert", 
+                                "assets/shaders/standard_version/cpu_cull/spheres.frag",
+                                "assets/shaders/standard_version/cpu_cull/spheres.geom");
     spheresShader.linkProgram();
     
-    ComputeShader cylindersCullingShader("assets/shaders/standard_version/gpu_cull/cylindersFrusCulling.compute");
-    ShaderProgram cylindersShader("assets/shaders/standard_version/gpu_cull/cylinders.vert", 
-                                "assets/shaders/standard_version/gpu_cull/cylinders.frag",
-                                "assets/shaders/standard_version/gpu_cull/cylinders.geom");
+    ShaderProgram cylindersShader("assets/shaders/standard_version/cpu_cull/cylinders.vert", 
+                                  "assets/shaders/standard_version/cpu_cull/cylinders.frag",
+                                  "assets/shaders/standard_version/cpu_cull/cylinders.geom");
     cylindersShader.linkProgram();
 
     std::vector<Sphere> spheres = getScene(sphere_count);
@@ -125,22 +123,12 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
     StorageBuffer sphereBuffer(GL_SHADER_STORAGE_BUFFER, sphere_count * sizeof(Sphere), 1, 
         spheres.data(), GL_STATIC_DRAW);
     
-    std::cout << "Sphere indexes buffer " << std::endl;
-    std::vector<GLuint> visibleSpheres(sphere_count, 0);
-    StorageBuffer visibleSpheresBuffer(GL_SHADER_STORAGE_BUFFER, sphere_count * sizeof(GLuint), 2, 
-        visibleSpheres.data(), GL_STATIC_DRAW);
-
-    GLuint zero = 0;
-    GLuint resetValue = 0;
-    StorageBuffer visibleEntitiesAtomicCounter(GL_SHADER_STORAGE_BUFFER, sizeof(GLuint), 3, 
-    &zero, GL_STATIC_DRAW);
-        
-    StorageBuffer cylinderBuffer(GL_SHADER_STORAGE_BUFFER, cylinder_count * sizeof(Cylinder), 4, 
+    std::vector<Sphere> visibleSpheres(sphere_count);
+    
+    StorageBuffer cylinderBuffer(GL_SHADER_STORAGE_BUFFER, cylinder_count * sizeof(Cylinder), 2, 
         cylinders.data(), GL_STATIC_DRAW);
 
-    std::vector<GLuint> visibleCylinders(cylinder_count, 0);
-    StorageBuffer visibleCylindersBuffer(GL_SHADER_STORAGE_BUFFER, cylinder_count * sizeof(GLuint), 5, 
-        visibleCylinders.data(), GL_STATIC_DRAW);
+    std::vector<Cylinder> visibleCylinders(cylinder_count);
 
     GLuint emptyVAO;
     glCreateVertexArrays(1, &emptyVAO);
@@ -198,16 +186,10 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
             Frustum frustum(camera);
 
             /// Spheres drawing
-            spheresCullingShader.use();
-            spheresCullingShader.setInt("sphereCount", sphere_count);
-            setFrustumUniforms(spheresCullingShader, frustum);
-            glDispatchCompute(numGroupsXSpheres, numGroupsY, 1);
-            glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
-            
-            visibleEntitiesAtomicCounter.bind();
-            glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &visibleSpheresCount);
-            glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &resetValue);
-            visibleEntitiesAtomicCounter.unbind();
+            cullSimpleSpheres(spheres, visibleSpheres, frustum, visibleSpheresCount);
+            sphereBuffer.bind();
+            glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, visibleSpheresCount * sizeof(Sphere), visibleSpheres.data());
+            sphereBuffer.unbind();
 
             spheresShader.use();
             spheresShader.setVec2I("screenResolution", screenResolution);
@@ -216,17 +198,11 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
             glDrawArrays(GL_POINTS, 0, visibleSpheresCount);
             
             /// Cylinder drawing
-            cylindersCullingShader.use();
-            cylindersCullingShader.setInt("cylinderCount", cylinder_count);
-            setFrustumUniforms(cylindersCullingShader, frustum);
-            glDispatchCompute(numGroupsXCylinders, numGroupsY, 1);
-            glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
+            cullSimpleCylinders(cylinders, visibleCylinders, frustum, visibleCylindersCount);
+            cylinderBuffer.bind();
+            glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, visibleCylindersCount * sizeof(Cylinder), visibleCylinders.data());
+            cylinderBuffer.unbind();
             
-            visibleEntitiesAtomicCounter.bind();
-            glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &visibleCylindersCount);
-            glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &resetValue);
-            visibleEntitiesAtomicCounter.unbind();
-
             cylindersShader.use();
             cylindersShader.setVec2I("screenResolution", screenResolution);
             setCameraUniforms(cylindersShader, camera);

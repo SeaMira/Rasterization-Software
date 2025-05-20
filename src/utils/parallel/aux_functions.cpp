@@ -8,12 +8,28 @@ void cullSpheres(std::vector<Sphere>& spheres, std::vector<SphereContainer>& vis
             visibleSpheres[visibleSpheresCount++] = {spheres[i], i + indexOffset, {0, 0, 0}};    
 }
 
+void cullSimpleSpheres(std::vector<Sphere>& spheres, std::vector<Sphere>& visibleSpheres, Frustum& frustum, int& visibleSpheresCount, int indexOffset)
+{
+    visibleSpheresCount = 0;
+    for (int i = 0 ; i < spheres.size(); i++)
+        if (frustum.isSphereInside(spheres[i]))
+            visibleSpheres[visibleSpheresCount++] = spheres[i];    
+}
+
 void fillSpheresData(std::vector<Sphere>& spheres, std::vector<SphereContainer>& visibleSpheres, int indexOffset)
 {
     for (int i = 0 ; i < spheres.size(); i++)
         visibleSpheres[i] = {spheres[i], i + indexOffset, {0, 0, 0}};    
 }
 
+
+void cullSimpleCylinders(std::vector<Cylinder>& cylinders, std::vector<Cylinder>& visibleCylinders, Frustum& frustum, int& visibleCylindersCount, int indexOffset)
+{
+    visibleCylindersCount = 0;
+    for (int i = 0 ; i < cylinders.size(); i++)
+        if (frustum.isCylinderInside(cylinders[i]))
+            visibleCylinders[visibleCylindersCount++] = cylinders[i];    
+}
 
 void cullCylinders(std::vector<Cylinder>& cylinders, std::vector<CylinderContainer>& visibleCylinders, Frustum& frustum, int& visibleCylindersCount, int indexOffset)
 {

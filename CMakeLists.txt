@@ -42,6 +42,7 @@ add_subproject(snd_gpu_w_cylinders "${CMAKE_SOURCE_DIR}/executables/snd_parallel
 
 # Standard pipeline version
 add_subproject(standard_pipeline "${CMAKE_SOURCE_DIR}/executables/standard_version/gpu_cull/standard_version.cpp")
+add_subproject(standard_pipeline_cpu_cull "${CMAKE_SOURCE_DIR}/executables/standard_version/cpu_cull/standard_version.cpp")
 
 target_link_libraries(brute_sequencial PUBLIC sequential_dependencies)
 target_link_libraries(cylinder_projection_cpu PUBLIC sequential_dependencies)
@@ -57,6 +58,7 @@ target_link_libraries(snd_gpu PUBLIC parallel_dependencies)
 target_link_libraries(snd_gpu_w_cylinders PUBLIC parallel_dependencies)
 
 target_link_libraries(standard_pipeline PUBLIC parallel_dependencies)
+target_link_libraries(standard_pipeline_cpu_cull PUBLIC parallel_dependencies)
 
 
 add_custom_command(
