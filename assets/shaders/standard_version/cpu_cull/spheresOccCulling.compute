@@ -1,0 +1,272 @@
+#version 460
+
+layout(local_size_x = 256) in;
+
+layout(binding = 0) uniform sampler2D downsampledDepthTexture;
+
+struct Sphere 
+{
+    vec3 pos;  // (x, y, z)
+    float rad;
+    uint index;
+    int wasDrawn[3];
+};
+
+layout(std430, binding = 1) buffer SphereBuffer 
+{
+    Sphere spheres[];
+};
+
+layout(std430, binding = 4) buffer VisibleSphereIndexes 
+{
+    uint visibilityIndex[];
+};
+
+layout(binding = 3) buffer FrustumCounterBuffer {
+    uint frustCullcounter;
+};
+
+struct FramePixelsCount
+{
+    uint frames;
+    uint pixels;
+    
+};
+
+layout(std430, binding = 6) buffer VisibilityFrameBuffer 
+{
+    FramePixelsCount visibilityFrameBuffer[];
+};
+
+uniform mat4 view;
+uniform mat4 proj;
+
+uniform int sphereCount;
+uniform int mipmapLevels;
+uniform uint indexOffset;
+
+uniform vec3 front;
+uniform vec3 up;
+uniform vec3 right;
+uniform vec3 cameraPos;
+
+uniform ivec2 screenResolution;
+uniform float fov;
+
+const int pixelsToCheck = 5;
+
+
+struct bboxCorners
+{
+    // screen space
+    vec2 minCorner;
+    vec2 maxCorner;
+    
+};
+
+struct ScreenRayCasting
+{
+    vec3 rayStart; ///< Starting caster ray in world coordinates.
+    vec3 dx; ///< Per pixel delta direction vector for the x-axis.
+    vec3 dy; ///< Per pixel delta direction vector for the y-axis.
+};
+
+ScreenRayCasting makeScreenRayCasting(float aspectRatio)
+{
+    float fovRad = radians(fov);
+    float fovTan = tan(fovRad * 0.5f);
+    float halfFovTan = fovTan * aspectRatio;
+
+    // View-space ray directions for screen corners
+    vec3 corner00 = normalize((-1.0f * halfFovTan) * right + (-1.0f * fovTan) * up + front); // bottom-left
+    vec3 corner10 = normalize(( 1.0f * halfFovTan) * right + (-1.0f * fovTan) * up + front); // bottom-right
+    vec3 corner01 = normalize((-1.0f * halfFovTan) * right + ( 1.0f * fovTan) * up + front); // top-left
+
+    // Transform to world space only once
+    vec3 wCorner00 = mat3(view) * corner00;
+    vec3 wCorner10 = mat3(view) * corner10;
+    vec3 wCorner01 = mat3(view) * corner01;
+
+    // Delta per pixel
+    vec3 dx = (wCorner10 - wCorner00) / float(screenResolution.x);
+    vec3 dy = (wCorner01 - wCorner00) / float(screenResolution.y);
+
+    vec3 rayStart = wCorner00;
+
+    return ScreenRayCasting(rayStart, dx, dy);
+}
+
+float iSphere(vec3 ro, vec3 rd, vec3 sph, float radius )
+{
+    vec3 oc = ro - sph;
+	float b = dot( oc, rd );
+	float c = dot( oc, oc ) - radius*radius;
+	float h = b*b - c;
+	if( h<0.0 ) return -1.0;
+	return -b - sqrt( h );
+}
+
+vec3 computeRd(int px, int py, 
+                float fovTan, float halfFovTan)
+{
+    vec2 p = (-vec2(screenResolution.x, screenResolution.y) + 2.0f*vec2(px, py))/vec2(screenResolution.x, screenResolution.y);
+    return normalize( p.x*right* halfFovTan + p.y*up * fovTan + front );
+}
+
+float onSphDepth(vec3 rd, int px, int py, vec3 spherePos, float r, vec3 rayStart, vec3 dx, vec3 dy)
+{
+    const float h = iSphere(cameraPos, rd, spherePos, r);
+    const vec3 hit = (rayStart + float(px) * dx + float(py) * dy) * h;
+    const float depth = (hit.z * proj[2].z + proj[3].z) / -hit.z;
+    return depth;
+}
+
+bboxCorners getSphereBbox(const vec3 cameraSpaceSphere, const vec3 camImposPos, 
+    const vec3 normCamSpaceSphere, const float sphRadius)
+{
+    const float sinAngle = sphRadius / (length(cameraSpaceSphere) + 1e-6f);
+    const float tanAngle = tan(asin(sinAngle));
+    const float quadScale = tanAngle * length(camImposPos);
+
+    vec3 impU = normalize(cross(normCamSpaceSphere, up));
+    vec3 impV = cross(impU, normCamSpaceSphere) * quadScale;
+    impU *= quadScale;
+
+    const vec3 upRightCorner = camImposPos + impU + impV;
+    const vec3 upLeftCorner = camImposPos - impU + impV;
+    const vec3 downRightCorner = camImposPos + impU - impV;
+    const vec3 downLeftCorner = camImposPos - impU - impV;
+
+    const vec4 upRight = proj * vec4(upRightCorner, 1.0f);
+    const vec4 upLeft = proj * vec4(upLeftCorner, 1.0f);
+    const vec4 downRight = proj * vec4(downRightCorner, 1.0f);
+    const vec4 downLeft = proj * vec4(downLeftCorner, 1.0f);
+    
+    const vec3 ndcUpRight = vec3(upRight.x / upRight.w, upRight.y / upRight.w, upRight.z / upRight.w);
+    const vec3 ndcUpLeft = vec3(upLeft.x / upLeft.w, upLeft.y / upLeft.w, upLeft.z / upLeft.w);
+    const vec3 ndcDownRight = vec3(downRight.x / downRight.w, downRight.y / downRight.w, downRight.z / downRight.w);
+    const vec3 ndcDownLeft = vec3(downLeft.x / downLeft.w, downLeft.y / downLeft.w, downLeft.z / downLeft.w);
+
+    vec2 minCorner = min(min(ndcUpRight.xy, ndcUpLeft.xy), min(ndcDownRight.xy, ndcDownLeft.xy));
+    vec2 maxCorner = max(max(ndcUpRight.xy, ndcUpLeft.xy), max(ndcDownRight.xy, ndcDownLeft.xy));
+
+
+    return bboxCorners(minCorner, maxCorner); 
+}
+
+bool isSphereBillboardVisible(int xcoords[pixelsToCheck], int ycoords[pixelsToCheck], float pixelDepths[pixelsToCheck], float lod)
+{
+    
+
+    float pixel1 = textureLod(downsampledDepthTexture, vec2(float(xcoords[0])/float(screenResolution.x), float(ycoords[0])/float(screenResolution.y)), lod).r;
+    float pixel2 = textureLod(downsampledDepthTexture, vec2(float(xcoords[1])/float(screenResolution.x), float(ycoords[1])/float(screenResolution.y)), lod).r;
+    float pixel3 = textureLod(downsampledDepthTexture, vec2(float(xcoords[2])/float(screenResolution.x), float(ycoords[2])/float(screenResolution.y)), lod).r;
+    float pixel4 = textureLod(downsampledDepthTexture, vec2(float(xcoords[3])/float(screenResolution.x), float(ycoords[3])/float(screenResolution.y)), lod).r;
+    float pixel5 = textureLod(downsampledDepthTexture, vec2(float(xcoords[4])/float(screenResolution.x), float(ycoords[4])/float(screenResolution.y)), lod).r;
+
+    for (int i = 0; i < pixelsToCheck; i++)
+    {
+        if (pixelDepths[i] <= pixel1 || 
+            pixelDepths[i] <= pixel2 || 
+            pixelDepths[i] <= pixel3 || 
+            pixelDepths[i] <= pixel4 || 
+            pixelDepths[i] <= pixel5)
+            return true;
+    }
+    return false;
+}
+
+void main()
+{
+    uint index = gl_GlobalInvocationID.x;
+
+    // Check if the index is out of bounds
+    if (index >= sphereCount) {
+        return;  // If index is greater that the amount of spheres, return
+    }
+
+    vec3 spherePos = spheres[index].pos;
+    float sphereRadius = spheres[index].rad;
+
+    vec3 cameraSpaceSphere = vec3(view * vec4(spherePos, 1.0f));
+    vec3 normCamSpaceSphere = normalize(cameraSpaceSphere);
+    vec3 camImposPos = cameraSpaceSphere - normCamSpaceSphere * sphereRadius;
+
+    bboxCorners sphereBbox = getSphereBbox(cameraSpaceSphere, camImposPos,
+        normCamSpaceSphere, sphereRadius);
+
+    float aspectRatio = float(screenResolution.x) / float(screenResolution.y);
+    ivec2 screenMin, screenMax;
+
+    screenMin.x = int( ((sphereBbox.minCorner.x) * 0.5f + 0.5f) * float(screenResolution.x));
+    screenMin.y = int((sphereBbox.minCorner.y * 0.5f + 0.5f) * float(screenResolution.y));
+    screenMax.x = int(((sphereBbox.maxCorner.x) * 0.5f + 0.5f) * float(screenResolution.x));
+    screenMax.y = int((sphereBbox.maxCorner.y * 0.5f + 0.5f) * float(screenResolution.y));
+
+    const float difx = screenMax.x - screenMin.x;
+    const float dify = screenMax.y - screenMin.y;
+
+    if (difx * dify <= 2) return;
+
+    float fovRad = radians(fov);
+    float fovTan = tan(fovRad * 0.5f);
+    float halfFovTan = fovTan * aspectRatio;
+
+    ScreenRayCasting screenRayCasting = makeScreenRayCasting(aspectRatio);
+
+    // Delta per pixel
+    vec3 dx = screenRayCasting.dx;
+    vec3 dy = screenRayCasting.dy;
+
+    // Start ray origin in world
+    vec3 rayStart = screenRayCasting.rayStart;
+
+
+    float mid_x = min(max((screenMin.x + screenMax.x)/2, 0), screenResolution.x);
+    float mid_y = min(max((screenMin.y + screenMax.y)/2, 0), screenResolution.y);
+
+    vec3 middleLeft = computeRd(int(mid_x-difx*0.49f), int(mid_y), fovTan, halfFovTan);
+    vec3 middleRight = computeRd(int(mid_x+difx*0.49f), int(mid_y), fovTan, halfFovTan);
+    vec3 middleBottom = computeRd(int(mid_x), int(mid_y-dify*0.49f), fovTan, halfFovTan);
+    vec3 middleTop = computeRd(int(mid_x), int(mid_y+dify*0.49f), fovTan, halfFovTan);
+    vec3 middlePixelsVec = computeRd((screenMin.x + screenMax.x) / 2, (screenMin.y + screenMax.y) / 2, fovTan, halfFovTan);
+    
+
+    int xcoords[pixelsToCheck] = {int(mid_x-difx*0.49f), int(mid_x+difx*0.49f), int(mid_x), int(mid_x), (screenMin.x + screenMax.x) / 2};
+    int ycoords[pixelsToCheck] = {int(mid_y), int(mid_y), int(mid_y-dify*0.49f), int(mid_y+dify*0.49f), (screenMin.y + screenMax.y) / 2};
+    float pixelDepths[pixelsToCheck] = {
+        onSphDepth(middleLeft, int(mid_x-difx*0.49f), int(mid_y), spherePos, sphereRadius, rayStart, dx, dy),
+        onSphDepth(middleRight, int(mid_x+difx*0.49f), int(mid_y), spherePos, sphereRadius, rayStart, dx, dy),
+        onSphDepth(middleBottom, int(mid_x), int(mid_y-dify*0.49f), spherePos, sphereRadius, rayStart, dx, dy),
+        onSphDepth(middleTop, int(mid_x), int(mid_y+dify*0.49f), spherePos, sphereRadius, rayStart, dx, dy),
+        onSphDepth(middlePixelsVec, (screenMin.x + screenMax.x) / 2, (screenMin.y + screenMax.y) / 2, spherePos, sphereRadius, rayStart, dx, dy),
+    };
+    uint visFrameBufferId = indexOffset + spheres[index].index;
+
+    
+    // Estimate projected size of the sphere on screen (in pixels)
+    float projectedRadius = sphereRadius / -cameraSpaceSphere.z * proj[1][1];
+    float screenSize = projectedRadius * screenResolution.y;
+    float maxResolution = max(float(screenResolution.x), float(screenResolution.y));
+    float lod = log2(maxResolution / screenSize);
+    lod = clamp(lod, 0.0, float(mipmapLevels)); // assuming max 10 mip levels
+
+    if (!isSphereBillboardVisible(xcoords, ycoords, pixelDepths, lod))
+    {
+        if (visibilityFrameBuffer[visFrameBufferId].frames > 0 && 
+            visibilityFrameBuffer[visFrameBufferId].pixels == 0) 
+        {
+            visibilityFrameBuffer[visFrameBufferId].frames -= 1;
+        }
+        else if (visibilityFrameBuffer[visFrameBufferId].frames == 0 && 
+            visibilityFrameBuffer[visFrameBufferId].pixels == 0) return;
+        
+        else visibilityFrameBuffer[visFrameBufferId].frames = 10;
+        
+    } else visibilityFrameBuffer[visFrameBufferId].frames = 10;
+
+    uint oldIndex = atomicAdd(frustCullcounter, 1);
+    visibilityIndex[oldIndex] = index;
+     
+    visibilityFrameBuffer[visFrameBufferId].pixels = 0;
+}

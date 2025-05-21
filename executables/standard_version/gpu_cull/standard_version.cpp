@@ -28,8 +28,8 @@ using uint = unsigned int;
 // Settings
 int SCR_WIDTH = 1024;
 int SCR_HEIGHT = 1024;
-int sphere_count = 100000000;
-int cylinder_count = 0;
+int sphere_count = 1000;
+int cylinder_count = 1000;
 
 std::string title = "Standard OpenGL Version: Spheres and Cylinders"; 
 
@@ -47,11 +47,6 @@ int notOccludedSpheresCount = 0;
 
 int visibleCylindersCount = 0;
 int notOccludedCylindersCount = 0;
-
-// downsample settings
-int downsampleLevel = 4;
-int downsampleWorkGroupSizeX = 16/downsampleLevel;
-int downsampleWorkGroupSizeY = 16/downsampleLevel;
 
 void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window);
 void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window);
@@ -200,9 +195,9 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
             glClearColor(1.0f, 1.0f, 0.0f, 1.0f);   // amarillo, por ejemplo
 
             // 4. Crlean depth and color buffers.
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            
             glGenerateTextureMipmap(canvasDepthTexture.getId());
+            
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             
             glEnable(GL_DEPTH_TEST);
             ////////////////

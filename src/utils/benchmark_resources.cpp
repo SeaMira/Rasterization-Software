@@ -7,9 +7,9 @@ SceneType currentScene = SceneType::PACKAGE_SCENE;
 std::string scene_file = "8wql.cif";
 std::filesystem::path scene_path = std::filesystem::path("assets/molecules") / scene_file;
 
-int gridWidth = 100;
-int gridHeight = 1000;
-int gridDepth = 1000;
+int gridWidth = 10;
+int gridHeight = 10;
+int gridDepth = 10;
 int interleaveW = 5;
 int interleaveH = 5;
 
