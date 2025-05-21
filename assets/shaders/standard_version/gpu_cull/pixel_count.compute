@@ -1,0 +1,34 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16) in;  
+
+layout(binding = 0, r32ui) uniform uimage2D IDImage;
+
+struct FramePixelsCount
+{
+    uint frames;
+    uint pixels;
+    
+};
+
+layout(std430, binding = 6) buffer VisibilityFrameBuffer 
+{
+    FramePixelsCount visibilityFrameBuffer[];
+};
+
+
+uniform ivec2 screenResolution;
+
+void main() {
+    // Obtener la posición del píxel en la matriz
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+
+    // Verificar que esté dentro de los límites
+    if (coord.x >= screenResolution.x || coord.y >= screenResolution.y) return;
+
+    // Obtener el índice de la esfera desde la matriz
+    uint index = imageLoad(IDImage, coord).r;
+
+    // Incrementar el contador correspondiente de forma segura
+    visibilityFrameBuffer[index].pixels += 1;
+    
+}
