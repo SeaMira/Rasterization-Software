@@ -10,6 +10,14 @@
 #include "ux/camera.h"
 using Sphere = glm::vec4;
 
+/**
+ * @struct SphereContainer
+ * @brief Represents a sphere in 3D space.
+ * 
+ * The sphere is defined by its position (center) and radius. But it also stores
+ * the index of the sphere in the original vector and a padding integers array
+ * to be used on the SSBO.
+ */
 struct SphereContainer
 {
     glm::vec4 positionr;
@@ -17,6 +25,14 @@ struct SphereContainer
     int wasDrawn[3];
 };
 
+/**
+ * @struct CylinderContainer
+ * @brief Represents a cylinder in 3D space.
+ * 
+ * The cylinder is defined by its two endpoints (pa and pb) and radius. But it also stores
+ * the index of the cylinder in the original vector and a padding integers array
+ * to be used on the SSBO.
+ */
 struct CylinderContainer
 {
     glm::vec4 pa_r;

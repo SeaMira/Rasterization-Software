@@ -31,7 +31,7 @@ int SCR_HEIGHT = 1024;
 int sphere_count = 1000;
 int cylinder_count = 1000;
 
-std::string title = "Standard OpenGL Version: Spheres and Cylinders"; 
+std::string title = "Standard OpenGL Version: Spheres and Cylinders - CPU Frustum Culling"; 
 
 bool shown = true;
 bool withOcclusionCulling = true;
@@ -58,7 +58,7 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window);
 
 int main(int argc, char* argv[]) 
 {
-    AppOpenGL window { title, SCR_WIDTH, SCR_HEIGHT, shown };
+    AppOpenGL window { title + (withOcclusionCulling ? " - With Occlusion Culling" : " - Without Occlusion Culling"), SCR_WIDTH, SCR_HEIGHT, shown };
 
     Camera camera(SCR_WIDTH, SCR_HEIGHT);
     camera.SetPosition(.0f, .0f, .0f);

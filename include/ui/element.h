@@ -80,7 +80,7 @@ public:
     /// Renders the slider using ImGui with a dynamic maximum value.
     void render() override 
     {
-    ImGui::SliderFloat(label.c_str(), value, minValue, *maxValue);
+        ImGui::SliderFloat(label.c_str(), value, minValue, *maxValue);
     }
 private:
     std::string label; ///< string: The label of the slider.
@@ -111,7 +111,7 @@ public:
     /// Renders the slider using ImGui with a dynamic maximum value.
     void render() override 
     {
-    ImGui::SliderInt(label.c_str(), value, minValue, *maxValue);
+        ImGui::SliderInt(label.c_str(), value, minValue, *maxValue);
     }
 private:
     std::string label; ///< string: The label of the slider.
@@ -142,7 +142,7 @@ public:
     /// Renders the slider using ImGui with a dynamic minimum value.
     void render() override 
     {
-    ImGui::SliderFloat(label.c_str(), value, *minValue, maxValue);
+        ImGui::SliderFloat(label.c_str(), value, *minValue, maxValue);
     }
 private:
     std::string label; ///< The label of the slider.
@@ -173,7 +173,7 @@ public:
     /// Renders the slider using ImGui with a dynamic minimum value.
     void render() override 
     {
-    ImGui::SliderInt(label.c_str(), value, *minValue, maxValue);
+        ImGui::SliderInt(label.c_str(), value, *minValue, maxValue);
     }
 private:
     std::string label; ///< The label of the slider.

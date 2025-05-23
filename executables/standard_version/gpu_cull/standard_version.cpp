@@ -31,7 +31,7 @@ int SCR_HEIGHT = 1024;
 int sphere_count = 1000;
 int cylinder_count = 1000;
 
-std::string title = "Standard OpenGL Version: Spheres and Cylinders"; 
+std::string title = "Standard OpenGL Version: Spheres and Cylinders - GPU Frustum Culling"; 
 
 bool shown = true;
 bool withOcclusionCulling = true;
@@ -53,7 +53,7 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window);
 
 int main(int argc, char* argv[]) 
 {
-    AppOpenGL window { title, SCR_WIDTH, SCR_HEIGHT, shown };
+    AppOpenGL window { title + (withOcclusionCulling ? " - With Occlusion Culling" : " - Without Occlusion Culling"), SCR_WIDTH, SCR_HEIGHT, shown };
 
     Camera camera(SCR_WIDTH, SCR_HEIGHT);
     camera.SetPosition(.0f, .0f, .0f);
@@ -161,7 +161,7 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
 
     Benchmark benchmark(camera_controller, chkPoints);
 
-    std::string base_path = "media/csv/standard_version/gpu_cull/"; 
+    std::string base_path = "media/csv/standard_version/gpu_cull/occ_"; 
     base_path += ((currentScene == SceneType::LOADED_SCENE) ? ("loaded_scene_" + scene_file) : "packed_scene");
     std::string frame_times_path = base_path + "_frame_times.csv";
     std::string process_times_path = base_path + "_process_times.csv";

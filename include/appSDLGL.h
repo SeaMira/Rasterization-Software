@@ -86,6 +86,19 @@ public:
         return running;
     }
 
+    /** 
+     * @brief Frame renderer.
+     * 
+     * @copydoc Window::update
+     * 
+     * While inheriting parents update and input checker it also includes
+     * frame render for the main app and the UI for a specific windows size.
+     * 
+     * @param width New width of the window.
+     * @param height New height of the window.
+     * 
+     * @see Window::update For the base frame updater.
+     */
     bool update(int width, int height)
     {
         bool running = true;
@@ -217,6 +230,18 @@ protected:
         glBlitFramebuffer(0, 0, m_width, m_height, 0, 0, m_width, m_height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
     }
     
+    /** 
+     * @brief function for rendering new frame.
+     * 
+     * @copydoc Window::renderFrame
+     * 
+     * Updates info on the frambuffer of the viewport for a specific window size.
+     * 
+     * @param width New width of the window.
+     * @param height New height of the window.
+     * 
+     * @see Window::renderFrame
+     */
     void renderFrame(int width, int height) 
     {
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);

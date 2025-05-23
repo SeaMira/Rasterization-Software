@@ -47,8 +47,8 @@ public:
     inline std::string& getName() { return m_name; }
 
 protected:
-std::string m_name; ///< The name of the component.
-std::vector<std::unique_ptr<Element>> elements; ///< The list of UI elements associated with the component.
+    std::string m_name; ///< The name of the component.
+    std::vector<std::unique_ptr<Element>> elements; ///< The list of UI elements associated with the component.
 };
 
 #endif // _COMPONENT_H_

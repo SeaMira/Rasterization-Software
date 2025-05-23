@@ -100,7 +100,19 @@ public:
      */
     std::vector<std::pair<int, int>> & getBondsInfo();
 
-    inline int getBondsAmount() { return m_bonds.size(); } /**< Returns the amount of bonds. */
+    /**
+     * @brief Returns the number of bonds in the loaded data.
+     * @return The number of bonds.
+     * 
+     * This function returns the number of bonds loaded from the chemical file.
+     */
+    inline int getBondsAmount() { return m_bonds.size(); } 
+
+    /**
+     * @brief Returns the extremes of the bond/cylinder at the given index.
+     * @param index The index of the bond/cylinder.
+     * @return A pair of glm::vec4 containing the extremes of the bond/cylinder.
+     */
     std::pair<glm::vec4, glm::vec4> getBond(int index) const { return {m_positions[m_bonds[index].first], m_positions[m_bonds[index].second]}; } /**< Returns the cilinder at the given index. */
 
 private:

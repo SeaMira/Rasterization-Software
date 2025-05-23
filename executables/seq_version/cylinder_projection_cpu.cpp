@@ -41,7 +41,7 @@ int visibleSpheres = 0;
 int frustumCylinders = 0;
 int visibleCylinders = 0;
 
-std::string title = "Sequential Method: Spheres and Cylinders"; 
+std::string title = "Sequential Method: Spheres and Cylinders - CPU Frustum Culling"; 
 
 bool shown = true;
 bool withOcclusionCulling = true;
@@ -212,7 +212,7 @@ int main(int argc, char* argv[])
         {"Visible Cylinders", &visibleCylinders},
     };
 
-    AppRenderer window { title, SCR_WIDTH, SCR_HEIGHT, shown };
+    AppRenderer window { title + (withOcclusionCulling ? " - With Occlusion Culling" : " - Without Occlusion Culling"), SCR_WIDTH, SCR_HEIGHT, shown };
     Camera camera(SCR_WIDTH, SCR_HEIGHT);
     camera.SetPosition(.0f, .0f, .0f);
     CameraController camera_controller(window, camera);

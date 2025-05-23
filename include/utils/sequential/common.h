@@ -11,23 +11,53 @@
 
 using Sphere = glm::vec4; ///< Sphere type defined as a 4D vector (x, y, z, radius).
 
+
+/**
+ * @struct BBox3D
+ * @brief Represents a 3D bounding box.
+ */
 struct BBox3D
 {
     glm::vec3 mMin;
     glm::vec3 mMax;
 };
 
-
-
+/**
+ * Global component for scene illuminance.
+ */
 const glm::vec3 lightColor(0.01f, 1.0f, 0.05f);
+
+/**
+ * Global component for scene ambient light.
+ */
 const float diffuseI = 0.9f;
 
+/**
+ * @struct ScreenRayCasting
+ * @brief Represents a screen ray casting setup.
+ * 
+ * This struct is used to calculate the ray direction for each pixel on the screen based on the camera's
+ * view and projection matrices. It contains the starting point of the ray and the delta direction vectors
+ * for the x and y axes.
+ */
 struct ScreenRayCasting
 {
     glm::vec3 rayStart; ///< Starting caster ray in world coordinates.
     glm::vec3 dx; ///< Per pixel delta direction vector for the x-axis.
     glm::vec3 dy; ///< Per pixel delta direction vector for the y-axis.
 
+    /**
+     * @brief Constructs a ScreenRayCasting object.
+     * 
+     * @param fov Field of view in degrees.
+     * @param aspectRatio Aspect ratio of the screen (width / height).
+     * @param SCR_WIDTH Screen width in pixels.
+     * @param SCR_HEIGHT Screen height in pixels.
+     * @param right Right camera orientation vector.
+     * @param up Up camera orientation vector.
+     * @param front Front camera orientation vector.
+     * @param view View matrix of the camera.
+     */
     ScreenRayCasting(const float& fov, const float& aspectRatio, 
         const int& SCR_WIDTH, const int& SCR_HEIGHT,
         const glm::vec3& right, const glm::vec3& up, const glm::vec3& front,

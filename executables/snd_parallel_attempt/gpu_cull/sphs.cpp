@@ -29,7 +29,7 @@ int SCR_WIDTH = 1024;
 int SCR_HEIGHT = 1024;
 int sphere_count = 1000;
 
-std::string title = "Second Parallel Version"; 
+std::string title = "Second Parallel Version: Spheres - GPU Frustum Culling"; 
 
 bool shown = true;
 

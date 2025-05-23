@@ -30,7 +30,7 @@ int SCR_HEIGHT = 1024;
 int sphere_count = 0;
 int cylinder_count = 150;
 
-std::string title = "Second Parallel Version"; 
+std::string title = "Second Parallel Version: Spheres and Cylinders - GPU Frustum Culling"; 
 
 bool shown = true;
 bool withOcclusionCulling = true;
@@ -80,7 +80,7 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window);
 
 int main(int argc, char* argv[]) 
 {
-    AppOpenGL window { title, SCR_WIDTH, SCR_HEIGHT, shown };
+    AppOpenGL window { title + (withOcclusionCulling ? " - With Occlusion Culling" : " - Without Occlusion Culling"), SCR_WIDTH, SCR_HEIGHT, shown };
     Camera camera(SCR_WIDTH, SCR_HEIGHT);
     camera.SetPosition(.0f, .0f, .0f);
 
@@ -165,10 +165,10 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
 
     Benchmark benchmark(camera_controller, chkPoints);
 
-    std::string base_path = "media/csv/scnd_parallel_w_cyl/occ_"; 
+    std::string base_path = "media/csv/scnd_parallel_w_cyl/gpu_cull/occ_"; 
     base_path += ((currentScene == SceneType::LOADED_SCENE) ? ("loaded_scene_" + scene_file) : "packed_scene");
-    std::string frame_times_path = base_path + "_gpu_frame_times.csv";
-    std::string process_times_path = base_path + "_gpu_frame_times.csv";
+    std::string frame_times_path = base_path + "_frame_times.csv";
+    std::string process_times_path = base_path + "_process_times.csv";
     Profiler profiler(window, 
         frame_times_path, 
         process_times_path, sphere_count, cylinder_count, downsampleLevel);
@@ -383,8 +383,8 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
 
     std::string base_path = "media/csv/scnd_parallel_w_cyl/"; 
     base_path += ((currentScene == SceneType::LOADED_SCENE) ? ("loaded_scene_" + scene_file) : "packed_scene");
-    std::string frame_times_path = base_path + "_gpu_frame_times.csv";
-    std::string process_times_path = base_path + "_gpu_frame_times.csv";
+    std::string frame_times_path = base_path + "_frame_times.csv";
+    std::string process_times_path = base_path + "_process_times.csv";
     Profiler profiler(window, 
         frame_times_path, 
         process_times_path, sphere_count, cylinder_count, 0);

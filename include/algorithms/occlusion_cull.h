@@ -64,6 +64,11 @@ struct DepthBuffer
         return data[(m_height - y - 1) * m_width + x];
     }
 
+    /**
+     * @brief Gets the maximum depth value stored in the depth buffer.
+     * 
+     * @return The maximum depth value stored in the depth buffer.
+     */
     float getMaxDepthStored()
     {
         float max = 0.0f;
@@ -77,7 +82,12 @@ struct DepthBuffer
         if (max == 0.0f) return 0.001f;
         return max;
     }
-    
+
+    /**
+     * @brief Gets the minimum depth value stored in the depth buffer.
+     * 
+     * @return The minimum depth value stored in the depth buffer.
+     */
     float getMinDepthStored()
     {
         float min = 1.0f;

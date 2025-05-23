@@ -72,17 +72,31 @@ add_custom_target(copy_assets ALL DEPENDS "${CMAKE_BINARY_DIR}/assets")
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/csv/seq)
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/csv/seq_w_cyl)
 
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/csv/fst_parallel)
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/csv/fst_parallel_w_cyl)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/csv/fst_parallel/cpu_cull)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/csv/fst_parallel/gpu_cull)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/csv/fst_parallel_w_cyl/cpu_cull)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/csv/fst_parallel_w_cyl/gpu_cull)
+
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/csv/scnd_parallel/cpu_cull)
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/csv/scnd_parallel/gpu_cull)
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/csv/scnd_parallel_w_cyl/cpu_cull)
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/csv/scnd_parallel_w_cyl/gpu_cull)
+
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/csv/standard_version/cpu_cull)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/csv/standard_version/gpu_cull)
+
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/img/seq)
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/img/seq_w_cyl)
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/img/fst_parallel)
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/img/fst_parallel_w_cyl)
+
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/img/fst_parallel/cpu_cull)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/img/fst_parallel/gpu_cull)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/img/fst_parallel_w_cyl/cpu_cull)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/img/fst_parallel_w_cyl/gpu_cull)
+
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/img/scnd_parallel/cpu_cull)
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/img/scnd_parallel/gpu_cull)
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/img/scnd_parallel_w_cyl/cpu_cull)
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/img/scnd_parallel_w_cyl/gpu_cull)
+
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/img/standard_version/cpu_cull)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/img/standard_version/gpu_cull)

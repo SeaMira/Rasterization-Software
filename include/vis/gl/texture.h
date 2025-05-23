@@ -48,6 +48,7 @@ public:
      * @param width width of the texture.
      * @param height height of the texture.
      * @param unit index of image unit to which bind the texture.
+     * @param mipLevels number of mipmap levels to generate. Default is 1.
      * 
      * More info on
      * <a href="https://registry.khronos.org/OpenGL-Refpages/es3.0/html/glTexStorage2D.xhtml">glTexStorage2D</a>
@@ -107,7 +108,7 @@ public:
      * @param format format of the pixel data.
      * @param type data type of the pixel.
      * @param unit index of image unit to which bind the texture.
-     * @param data pointer to the image data in memory.
+     * @param data pointer to the image data in memory. Default is nullptr.
      * 
      * More info on
      * <a href="https://registry.khronos.org/OpenGL-Refpages/gl4/html/glTexImage2D.xhtml">glTexImage2D</a>
