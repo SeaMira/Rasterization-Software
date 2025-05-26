@@ -22,7 +22,7 @@ enum class SceneType {
     PACKAGE_SCENE
 };
 
-#define BENCHMARKING 0
+#define BENCHMARKING 1
 
 /** 
  * @brief Global variable with the scene type to load.

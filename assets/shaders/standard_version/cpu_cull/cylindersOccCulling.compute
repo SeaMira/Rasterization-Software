@@ -42,7 +42,6 @@ uniform mat4 view;
 uniform mat4 proj;
 
 uniform int cylinderCount;
-uniform int mipmapLevels;
 uniform uint indexOffset;
 
 uniform vec3 front;
@@ -177,12 +176,15 @@ float onCylDepth(vec3 rd, int px, int py, vec3 pa, vec3 pb, float r, vec3 raySta
     return depth;
 }
 
-bool isBillboardVisible(int xcoords[pixelsToCheck], int ycoords[pixelsToCheck], float pixelDepths[pixelsToCheck], float lod)
+bool isBillboardVisible(int xcoords[pixelsToCheck], int ycoords[pixelsToCheck], float pixelDepths[pixelsToCheck])
 {
+    ivec2 downsampledTexSize = textureSize(downsampledDepthTexture, 0);
+    const int ds_x = downsampledTexSize.x;
+    const int ds_y = downsampledTexSize.y;
 
-    float pixel1 = textureLod(downsampledDepthTexture, vec2(float(xcoords[0])/float(screenResolution.x), float(ycoords[0])/float(screenResolution.y)), lod).r;
-    float pixel2 = textureLod(downsampledDepthTexture, vec2(float(xcoords[1])/float(screenResolution.x), float(ycoords[1])/float(screenResolution.y)), lod).r;
-    float pixel3 = textureLod(downsampledDepthTexture, vec2(float(xcoords[2])/float(screenResolution.x), float(ycoords[2])/float(screenResolution.y)), lod).r;
+    float pixel1 = texelFetch(downsampledDepthTexture, ivec2(int(float(xcoords[0]*ds_x)/float(screenResolution.x)), int(float(ycoords[0]*ds_y)/float(screenResolution.y))), 0).r;
+    float pixel2 = texelFetch(downsampledDepthTexture, ivec2(int(float(xcoords[1]*ds_x)/float(screenResolution.x)), int(float(ycoords[1]*ds_y)/float(screenResolution.y))), 0).r;
+    float pixel3 = texelFetch(downsampledDepthTexture, ivec2(int(float(xcoords[2]*ds_x)/float(screenResolution.x)), int(float(ycoords[2]*ds_y)/float(screenResolution.y))), 0).r;
 
     for (int i = 0; i < pixelsToCheck; i++)
     {
@@ -295,15 +297,8 @@ void main()
     };
     uint visFrameBufferId = indexOffset + c.index;
 
-    // Estimate projected size of the sphere on screen (in pixels)
-    float projectedRadius = length(camImpPosB - camImpPosA) / -center.z * proj[1][1];
-    float screenSize = projectedRadius * screenResolution.y;
 
-    float maxResolution = max(float(screenResolution.x), float(screenResolution.y));
-    float lod = log2(maxResolution / screenSize);
-    lod = clamp(lod, 0.0, float(mipmapLevels));
-
-    if (!isBillboardVisible(xcoords, ycoords, pixelDepths, lod))
+    if (!isBillboardVisible(xcoords, ycoords, pixelDepths))
     {
         if (visibilityFrameBuffer[visFrameBufferId].frames > 0 && 
             visibilityFrameBuffer[visFrameBufferId].pixels == 0) 

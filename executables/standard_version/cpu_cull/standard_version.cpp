@@ -28,8 +28,8 @@ using uint = unsigned int;
 // Settings
 int SCR_WIDTH = 1024;
 int SCR_HEIGHT = 1024;
-int sphere_count = 1000;
-int cylinder_count = 1000;
+int sphere_count = 126;
+int cylinder_count = 142;
 
 std::string title = "Standard OpenGL Version: Spheres and Cylinders - CPU Frustum Culling"; 
 
@@ -88,11 +88,10 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
     CameraController camera_controller(window, camera);
 
     // FBO
-    const int mipLevels = 1 + static_cast<int>(std::floor(std::log2(std::max(SCR_WIDTH, SCR_HEIGHT))));
     Texture canvasImageTexture(GL_TEXTURE_2D, GL_RGBA8, SCR_WIDTH, SCR_HEIGHT, 0);
     Texture canvasPixelIdTexture(GL_TEXTURE_2D, GL_R32UI, SCR_WIDTH, SCR_HEIGHT, GL_RED_INTEGER, GL_UNSIGNED_INT, 0, nullptr);
-    Texture canvasDepthTexture(GL_TEXTURE_2D, GL_DEPTH_COMPONENT32F, SCR_WIDTH, SCR_HEIGHT, 0, mipLevels);
-    
+    Texture canvasDepthTexture(GL_TEXTURE_2D, GL_DEPTH_COMPONENT32F, SCR_WIDTH, SCR_HEIGHT, 0);
+    Texture downsSampledDepthTexture(GL_TEXTURE_2D, GL_R32F, SCR_WIDTH/(1 << downsampleLevel), SCR_HEIGHT/(1 << downsampleLevel), 1, downsampleLevel);
 
     Framebuffer canvasFBO;
     canvasFBO.attachTexture(GL_COLOR_ATTACHMENT0, canvasImageTexture);
@@ -105,6 +104,7 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
     // FBO
 
     ComputeShader pixelCountShader("assets/shaders/standard_version/cpu_cull/pixel_count.compute");
+    ComputeShader hizPyramidComputeShader("assets/shaders/standard_version/gpu_cull/mipmap_gen.compute");
 
     ComputeShader spheresCullingShader("assets/shaders/standard_version/cpu_cull/spheresOccCulling.compute");
     ShaderProgram spheresShader("assets/shaders/standard_version/cpu_cull/spheresOccCulling.vert", 
@@ -173,7 +173,7 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
     std::string process_times_path = base_path + "_process_times.csv";
     Profiler profiler(window, 
         frame_times_path, 
-        process_times_path, sphere_count, 0, 0);
+        process_times_path, sphere_count, cylinder_count, downsampleLevel);
 
     window.setupSceneInfoGui("Scene Info", scene_data);
     window.setupCameraGui("Camera Info", &camera);
@@ -201,8 +201,20 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
             //    (RGBA en el rango 0.0 – 1.0)
             glClearColor(1.0f, 1.0f, 0.0f, 1.0f);   // amarillo, por ejemplo
 
-            // 4. Limpiar color y profundidad
-            glGenerateTextureMipmap(canvasDepthTexture.getId());
+            // 4. Crlean depth and color buffers.
+            canvasDepthTexture.bind();
+            downsSampledDepthTexture.bindImage(GL_READ_WRITE, GL_R32F);
+
+            hizPyramidComputeShader.use();
+            glm::vec2 utexelDimensions = glm::vec2( 1.0f / (float)SCR_WIDTH, 1.0f / (float)SCR_HEIGHT );
+            hizPyramidComputeShader.setVec2("utexelDimensions", utexelDimensions);
+            glDispatchCompute((SCR_WIDTH + downsampleWorkGroupSizeX - 1) / downsampleWorkGroupSizeX, 
+            (SCR_HEIGHT + downsampleWorkGroupSizeY - 1) / downsampleWorkGroupSizeY, 
+            1);
+            glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+            canvasDepthTexture.unbind();
+            downsSampledDepthTexture.unbindImage(GL_READ_WRITE, GL_R32F);
+
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             
             
@@ -211,11 +223,13 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
             
             camera_controller.cameraUpdate();
             benchmark.update();
-            profiler.updateProfiler(benchmark.getCheckpointID(), visibleSpheresCount, notOccludedSpheresCount, 0, 0);
+            profiler.updateProfiler(benchmark.getCheckpointID(), visibleSpheresCount, notOccludedSpheresCount, visibleCylindersCount, notOccludedCylindersCount);
 
             if (window.getInput().isKeyDown(Key::T)) profiler.startSavingNextFrames(benchmark.getCheckpointID());
             
             Frustum frustum(camera);
+
+            glBindTextureUnit(0, downsSampledDepthTexture.getId());
 
             /// Spheres drawing
             cullSpheres(spheres, visibleSpheres, frustum, visibleSpheresCount);
@@ -223,17 +237,14 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
             glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, visibleSpheresCount * sizeof(SphereContainer), visibleSpheres.data());
             sphereBuffer.unbind();
 
-            glBindTextureUnit(0, canvasDepthTexture.getId());
             spheresCullingShader.use();
             spheresCullingShader.setInt("sphereCount", visibleSpheresCount);
-            spheresCullingShader.setInt("mipmapLevels", mipLevels);
             spheresCullingShader.setUint("indexOffset", 0);
             spheresCullingShader.setVec2I("screenResolution", screenResolution);
             setCameraUniforms(spheresCullingShader, camera);
             numGroupsXSpheres = (visibleSpheresCount + workGroupSizeXPerSphere - 1) / workGroupSizeXPerSphere;
             glDispatchCompute(numGroupsXSpheres, numGroupsY, 1);
             glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
-            glBindTextureUnit(0, 0);
 
             visibleEntitiesAtomicCounter.bind();
             glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &notOccludedSpheresCount);
@@ -253,17 +264,14 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
             glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, visibleCylindersCount * sizeof(CylinderContainer), visibleCylinders.data());
             cylinderBuffer.unbind();
 
-            glBindTextureUnit(0, canvasDepthTexture.getId());
             cylindersCullingShader.use();
             cylindersCullingShader.setInt("cylinderCount", visibleCylindersCount);
-            cylindersCullingShader.setInt("mipmapLevels", mipLevels);
             cylindersCullingShader.setUint("indexOffset", sphere_count);
             cylindersCullingShader.setVec2I("screenResolution", screenResolution);
             setCameraUniforms(cylindersCullingShader, camera);
             numGroupsXCylinders = (visibleCylindersCount + workGroupSizeXPerCylinder - 1) / workGroupSizeXPerCylinder;
             glDispatchCompute(numGroupsXCylinders, numGroupsY, 1);
             glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
-            glBindTextureUnit(0, 0);
 
             visibleEntitiesAtomicCounter.bind();
             glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &notOccludedCylindersCount);
@@ -276,6 +284,8 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
             setCameraUniforms(cylindersShader, camera);
             glBindVertexArray(emptyVAO);
             glDrawArrays(GL_POINTS, 0, notOccludedCylindersCount);
+            
+            glBindTextureUnit(0, 0);
 
             canvasPixelIdTexture.bindImage(GL_READ_ONLY, GL_R32UI);
             pixelCountShader.use();
@@ -370,7 +380,7 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
     std::string process_times_path = base_path + "_process_times.csv";
     Profiler profiler(window, 
         frame_times_path, 
-        process_times_path, sphere_count, 0, 0);
+        process_times_path, sphere_count, cylinder_count, 0);
 
     window.setupSceneInfoGui("Scene Info", scene_data);
     window.setupCameraGui("Camera Info", &camera);
@@ -408,7 +418,7 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
             
             camera_controller.cameraUpdate();
             benchmark.update();
-            profiler.updateProfiler(benchmark.getCheckpointID(), visibleSpheresCount, notOccludedSpheresCount, 0, 0);
+            profiler.updateProfiler(benchmark.getCheckpointID(), visibleSpheresCount, notOccludedSpheresCount, visibleCylindersCount, notOccludedCylindersCount);
 
             if (window.getInput().isKeyDown(Key::T)) profiler.startSavingNextFrames(benchmark.getCheckpointID());
             
@@ -419,6 +429,7 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
             sphereBuffer.bind();
             glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, visibleSpheresCount * sizeof(Sphere), visibleSpheres.data());
             sphereBuffer.unbind();
+            notOccludedSpheresCount = visibleSpheresCount;
 
             spheresShader.use();
             spheresShader.setVec2I("screenResolution", screenResolution);
@@ -431,6 +442,7 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
             cylinderBuffer.bind();
             glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, visibleCylindersCount * sizeof(Cylinder), visibleCylinders.data());
             cylinderBuffer.unbind();
+            notOccludedCylindersCount = visibleCylindersCount;
             
             cylindersShader.use();
             cylindersShader.setVec2I("screenResolution", screenResolution);

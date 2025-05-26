@@ -20,8 +20,8 @@ layout(std430, binding = 2) buffer VisibleSphereIndexes
     uint visibilityIndex[];
 };
 
-layout(binding = 3) buffer FrustumCounterBuffer {
-    uint frustCullcounter;
+layout(binding = 3) buffer OcclusionCounterBuffer {
+    uint occCullcounter;
 };
 
 struct FramePixelsCount
@@ -36,6 +36,10 @@ layout(std430, binding = 6) buffer VisibilityFrameBuffer
     FramePixelsCount visibilityFrameBuffer[];
 };
 
+layout(binding = 7) buffer FrustumCounterBuffer {
+    uint frustCullcounter;
+};
+
 uniform mat4 view;
 uniform mat4 proj;
 
@@ -47,7 +51,7 @@ uniform vec4 frustumFarFace;
 uniform vec4 frustumNearFace;
 
 uniform int sphereCount;
-uniform int mipmapLevels;
+uniform int benchmark;
 uniform uint indexOffset;
 
 uniform vec3 front;
@@ -177,15 +181,17 @@ bboxCorners getSphereBbox(const vec3 cameraSpaceSphere, const vec3 camImposPos,
     return bboxCorners(minCorner, maxCorner); 
 }
 
-bool isSphereBillboardVisible(int xcoords[pixelsToCheck], int ycoords[pixelsToCheck], float pixelDepths[pixelsToCheck], float lod)
+bool isSphereBillboardVisible(int xcoords[pixelsToCheck], int ycoords[pixelsToCheck], float pixelDepths[pixelsToCheck])
 {
-    
+    ivec2 downsampledTexSize = textureSize(downsampledDepthTexture, 0);
+    const int ds_x = downsampledTexSize.x;
+    const int ds_y = downsampledTexSize.y;
 
-    float pixel1 = textureLod(downsampledDepthTexture, vec2(float(xcoords[0])/float(screenResolution.x), float(ycoords[0])/float(screenResolution.y)), lod).r;
-    float pixel2 = textureLod(downsampledDepthTexture, vec2(float(xcoords[1])/float(screenResolution.x), float(ycoords[1])/float(screenResolution.y)), lod).r;
-    float pixel3 = textureLod(downsampledDepthTexture, vec2(float(xcoords[2])/float(screenResolution.x), float(ycoords[2])/float(screenResolution.y)), lod).r;
-    float pixel4 = textureLod(downsampledDepthTexture, vec2(float(xcoords[3])/float(screenResolution.x), float(ycoords[3])/float(screenResolution.y)), lod).r;
-    float pixel5 = textureLod(downsampledDepthTexture, vec2(float(xcoords[4])/float(screenResolution.x), float(ycoords[4])/float(screenResolution.y)), lod).r;
+    float pixel1 = texelFetch(downsampledDepthTexture, ivec2(int(float(xcoords[0]*ds_x)/float(screenResolution.x)), int(float(ycoords[0]*ds_y)/float(screenResolution.y))), 0).r;
+    float pixel2 = texelFetch(downsampledDepthTexture, ivec2(int(float(xcoords[1]*ds_x)/float(screenResolution.x)), int(float(ycoords[1]*ds_y)/float(screenResolution.y))), 0).r;
+    float pixel3 = texelFetch(downsampledDepthTexture, ivec2(int(float(xcoords[2]*ds_x)/float(screenResolution.x)), int(float(ycoords[2]*ds_y)/float(screenResolution.y))), 0).r;
+    float pixel4 = texelFetch(downsampledDepthTexture, ivec2(int(float(xcoords[3]*ds_x)/float(screenResolution.x)), int(float(ycoords[3]*ds_y)/float(screenResolution.y))), 0).r;
+    float pixel5 = texelFetch(downsampledDepthTexture, ivec2(int(float(xcoords[4]*ds_x)/float(screenResolution.x)), int(float(ycoords[4]*ds_y)/float(screenResolution.y))), 0).r;
 
     for (int i = 0; i < pixelsToCheck; i++)
     {
@@ -211,6 +217,10 @@ void main()
     // Get sphere
     if (isSphereInside(spheres[index]))
     {
+        if (benchmark == 1)
+            atomicAdd(frustCullcounter, 1);
+
+
         vec3 spherePos = spheres[index].pos;
         float sphereRadius = spheres[index].rad;
 
@@ -269,15 +279,8 @@ void main()
         };
         uint visFrameBufferId = indexOffset + index;
 
-        // Estimate projected size of the sphere on screen (in pixels)
-        float projectedRadius = sphereRadius / -cameraSpaceSphere.z * proj[1][1];
-        float screenSize = projectedRadius * screenResolution.y;
 
-        float maxResolution = max(float(screenResolution.x), float(screenResolution.y));
-        float lod = log2(maxResolution / screenSize);
-        lod = clamp(lod, 0.0, float(mipmapLevels)); // assuming max 10 mip levels
-
-        if (!isSphereBillboardVisible(xcoords, ycoords, pixelDepths, lod))
+        if (!isSphereBillboardVisible(xcoords, ycoords, pixelDepths))
         {
             if (visibilityFrameBuffer[visFrameBufferId].frames > 0 && 
                 visibilityFrameBuffer[visFrameBufferId].pixels == 0) 
@@ -291,7 +294,7 @@ void main()
             
         } else visibilityFrameBuffer[visFrameBufferId].frames = 10;
 
-        uint oldIndex = atomicAdd(frustCullcounter, 1);
+        uint oldIndex = atomicAdd(occCullcounter, 1);
         visibilityIndex[oldIndex] = index;
     } 
     visibilityFrameBuffer[indexOffset + index].pixels = 0;
