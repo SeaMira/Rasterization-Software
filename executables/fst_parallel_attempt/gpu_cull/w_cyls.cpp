@@ -29,13 +29,13 @@ using uint = unsigned int;
 // Settings
 int SCR_WIDTH = 1024;
 int SCR_HEIGHT = 1024;
-int sphere_count = 100000000;
-int cylinder_count = 0;
+int sphere_count = 4000000;
+int cylinder_count = 4000000;
 
 std::string title = "First Parallel Version: Spheres and Cylinders - GPU Frustum Culling"; 
 
 bool shown = true;
-bool withOcclusionCulling = false;
+bool withOcclusionCulling = true;
 
 GLuint workGroupSizeXPerPixel = 16;  // Deifining threads-per-group (X)
 GLuint workGroupSizeYPerPixel = 16;  // Deifining threads-per-group (Y)
@@ -276,10 +276,11 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
         {"Screen width", &SCR_WIDTH},
         {"Screen height", &SCR_HEIGHT},
         {"Sphere count", &sphere_count},
-        {"Cylinder count", &cylinder_count},
         {"Spheres On Frustum", &visibleSpheresCount},
+        {"Drawn spheres", &notOccludedSpheresCount},
+        {"Cylinder count", &cylinder_count},
         {"Cylinders On Frustum", &visibleCylindersCount},
-        {"Drawn spheres", &notOccludedSpheresCount}
+        {"Drawn cylinders", &notOccludedCylindersCount}
     };
 
     CameraController camera_controller(window, camera);
@@ -361,9 +362,10 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
             spheresShader.use();
             #if BENCHMARKING 
                 frustumAtomicCounter.bind();
-                glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &notOccludedCylindersCount);
+                glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &visibleCylindersCount);
                 glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &resetValue);
                 frustumAtomicCounter.unbind();
+                notOccludedCylindersCount = visibleCylindersCount;
                 spheresShader.setInt("benchmark", 1); 
             #else
                 spheresShader.setInt("benchmark", 0);
@@ -378,9 +380,10 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
             cylinderShader.use();
             #if BENCHMARKING 
                 frustumAtomicCounter.bind();
-                glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &notOccludedCylindersCount);
+                glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &visibleSpheresCount);
                 glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &resetValue);
                 frustumAtomicCounter.unbind();
+                notOccludedSpheresCount = visibleSpheresCount;
                 cylinderShader.setInt("benchmark", 1); 
             #else
                 cylinderShader.setInt("benchmark", 0);

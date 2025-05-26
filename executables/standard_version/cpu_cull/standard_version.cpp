@@ -28,8 +28,8 @@ using uint = unsigned int;
 // Settings
 int SCR_WIDTH = 1024;
 int SCR_HEIGHT = 1024;
-int sphere_count = 126;
-int cylinder_count = 142;
+int sphere_count = 1000000;
+int cylinder_count = 1000000;
 
 std::string title = "Standard OpenGL Version: Spheres and Cylinders - CPU Frustum Culling"; 
 

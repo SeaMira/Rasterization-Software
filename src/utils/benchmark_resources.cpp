@@ -4,7 +4,7 @@
 
 // LOADED_SCENE or GRID_SCENE
 SceneType currentScene = SceneType::LOADED_SCENE;
-std::string scene_file = "1AGA.mmtf";
+std::string scene_file = "9mjn.cif";
 std::filesystem::path scene_path = std::filesystem::path("assets/molecules") / scene_file;
 
 int gridWidth = 10;
