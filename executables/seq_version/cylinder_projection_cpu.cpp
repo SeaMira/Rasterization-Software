@@ -1,4 +1,6 @@
 #include <iostream>
+#include <fstream>
+
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -33,8 +35,8 @@
 int SCR_WIDTH = 1024;
 int SCR_HEIGHT = 1024;
 
-int sphere_count = 0;
-int cylinder_count = 150;
+int sphere_count = 4000000;
+int cylinder_count = 4000000;
 int frustumSpheres = 0;
 int visibleSpheres = 0;
 
@@ -44,7 +46,7 @@ int visibleCylinders = 0;
 std::string title = "Sequential Method: Spheres and Cylinders - CPU Frustum Culling"; 
 
 bool shown = true;
-bool withOcclusionCulling = true;
+bool withOcclusionCulling = false;
 
 int topLevel = 3;
 int level = 3;
@@ -60,6 +62,7 @@ std::vector<uint8_t> cylinderVisibilityFrameCache(cylinder_count, 10);
 
 std::vector<int> pixelOwnership(SCR_WIDTH*SCR_HEIGHT, -1);
 
+std::chrono::steady_clock::time_point startTime = std::chrono::high_resolution_clock::now();
 
 std::unordered_map<int, int> buildPixelCount(const std::vector<int>& pixelOwnership) 
 {
@@ -201,6 +204,7 @@ void renderFrameWithoutOcclusionCulling(std::vector<uint32_t>& framebuffer,
 
 int main(int argc, char* argv[]) 
 {
+    startTime = std::chrono::high_resolution_clock::now();
     std::unordered_map<std::string, int*> scene_data = {
         {"Screen width", &SCR_WIDTH},
         {"Screen height", &SCR_HEIGHT},
@@ -237,12 +241,20 @@ int main(int argc, char* argv[])
     Profiler profiler(window, 
         frame_times_path, 
         process_times_path, 
-        sphere_count, cylinder_count, (withOcclusionCulling ? topLevel : 0));
+        sphere_count, cylinder_count, (withOcclusionCulling ? topLevel : 0), 48.0f);
     
     window.setupSceneInfoGui("Scene Info", scene_data);
     window.setupCameraGui("Camera Info", &camera);
     window.setupInputInfoGui("General Input Info");
     window.setupBenchmarkInfoGui("Benchmark", &benchmark);
+
+    std::chrono::steady_clock::time_point endTime = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed_seconds = endTime - startTime;
+    std::ofstream logFile("C:\\Users\\Sebatian\\Desktop\\XLIM\\Memoria_per_frame\\log.txt", std::ios::out);
+    logFile << title << std::endl;
+    logFile << "Elapsed time: " << elapsed_seconds.count() << " seconds" << std::endl;
+    logFile << "With occlusion culling: " << withOcclusionCulling << std::endl;
+    logFile.close();
 
     std::fill(depthBuffer.begin(), depthBuffer.end(), FLT_MAX);
     hizPyramid = generateHiZPyramid(DepthBuffer{SCR_WIDTH, SCR_HEIGHT, camera.getFar(), depthBuffer}, topLevel);

@@ -1,4 +1,6 @@
 #include <iostream>
+#include <fstream>
+
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -29,13 +31,13 @@ using uint = unsigned int;
 // Settings
 int SCR_WIDTH = 1024;
 int SCR_HEIGHT = 1024;
-int sphere_count = 4000000;
-int cylinder_count = 4000000;
+int sphere_count = 4000;
+int cylinder_count = 4000;
 
 std::string title = "First Parallel Version: Spheres and Cylinders - GPU Frustum Culling"; 
 
 bool shown = true;
-bool withOcclusionCulling = true;
+bool withOcclusionCulling = false;
 
 GLuint workGroupSizeXPerPixel = 16;  // Deifining threads-per-group (X)
 GLuint workGroupSizeYPerPixel = 16;  // Deifining threads-per-group (Y)
@@ -54,12 +56,15 @@ int downsampleLevel = 4;
 int downsampleWorkGroupSizeX = 16/downsampleLevel;
 int downsampleWorkGroupSizeY = 16/downsampleLevel;
 
+std::chrono::steady_clock::time_point startTime = std::chrono::high_resolution_clock::now();
+
 void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window);
 
 void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window);
 
 int main(int argc, char* argv[]) 
 {
+    startTime = std::chrono::high_resolution_clock::now();
     AppOpenGL window { title + (withOcclusionCulling ? " - With Occlusion Culling" : " - Without Occlusion Culling"), SCR_WIDTH, SCR_HEIGHT, shown };
 
     Camera camera(SCR_WIDTH, SCR_HEIGHT);
@@ -87,12 +92,12 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
 
     CameraController camera_controller(window, camera);
     
-    ComputeShader spheresShader("assets/shaders/fst_parallel_attempt/gpu_cull/sphere_culling.compute");
-    ComputeShader cylinderShader("assets/shaders/fst_parallel_attempt/gpu_cull/cylinder_culling.compute");
-    
-    ComputeShader cleaningComputeShader("assets/shaders/fst_parallel_attempt/gpu_cull/set_to_black.compute");
-    ComputeShader hizPyramidComputeShader("assets/shaders/fst_parallel_attempt/gpu_cull/mipmap_gen.compute");
-    ComputeShader pixelCountComputeShader("assets/shaders/fst_parallel_attempt/gpu_cull/pixel_count.compute");
+    ComputeShader spheresShader("assets/shaders/fst_parallel_attempt/gpu_cull/sphere_culling.compute", "Spheres Shader");
+    ComputeShader cylinderShader("assets/shaders/fst_parallel_attempt/gpu_cull/cylinder_culling.compute", "Cylinders Shader");
+
+    ComputeShader cleaningComputeShader("assets/shaders/fst_parallel_attempt/gpu_cull/set_to_black.compute", "Cleaning Shader");
+    ComputeShader hizPyramidComputeShader("assets/shaders/fst_parallel_attempt/gpu_cull/mipmap_gen.compute", "Hiz Pyramid Shader");
+    ComputeShader pixelCountComputeShader("assets/shaders/fst_parallel_attempt/gpu_cull/pixel_count.compute", "Pixel Count Shader");
 
     Canvas canvas(GL_TEXTURE_2D, GL_RGBA8, SCR_WIDTH, SCR_HEIGHT);
     canvas.setFBO(GL_COLOR_ATTACHMENT0);
@@ -115,7 +120,9 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
     visibleSpheresCount = sphere_count;
     
     visibleCylindersCount = cylinder_count;
-    
+    GLint maxSSBOsize = 0;
+    glGetIntegerv(GL_MAX_SHADER_STORAGE_BLOCK_SIZE, &maxSSBOsize);
+    std::cout << "Max SSBO size: " << maxSSBOsize << std::endl;
     StorageBuffer sphereBuffer(GL_SHADER_STORAGE_BUFFER, sphere_count * sizeof(Sphere), 6, 
         spheres.data(), GL_STATIC_DRAW);
     
@@ -145,7 +152,7 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
     std::string process_times_path = base_path + "_process_times.csv";
     Profiler profiler(window, 
         frame_times_path, 
-        process_times_path, sphere_count, cylinder_count, downsampleLevel);
+        process_times_path, sphere_count, cylinder_count, downsampleLevel, 48.0f);
 
     window.setupSceneInfoGui("Scene Info", scene_data);
     window.setupCameraGui("Camera Info", &camera);
@@ -162,7 +169,13 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
 
     glm::ivec2 screenResolution(SCR_WIDTH, SCR_HEIGHT);
 
-    
+    std::chrono::steady_clock::time_point endTime = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed_seconds = endTime - startTime;
+    std::ofstream logFile("C:\\Users\\Sebatian\\Desktop\\XLIM\\Memoria_per_frame\\log.txt", std::ios::out);
+    logFile << title << std::endl;
+    logFile << "Elapsed time: " << elapsed_seconds.count() << " seconds" << std::endl;
+    logFile << "With occlusion culling: " << withOcclusionCulling << std::endl;
+    logFile.close();
     try
     {
         bool fbo1o2 = false;
@@ -285,10 +298,10 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
 
     CameraController camera_controller(window, camera);
     
-    ComputeShader spheresShader("assets/shaders/fst_parallel_attempt/gpu_cull/sphere_culling_no_occ.compute");
-    ComputeShader cylinderShader("assets/shaders/fst_parallel_attempt/gpu_cull/cylinder_culling_no_occ.compute");
-    ComputeShader cleaningComputeShader("assets/shaders/fst_parallel_attempt/gpu_cull/set_to_black_no_occ.compute");
-    
+    ComputeShader spheresShader("assets/shaders/fst_parallel_attempt/gpu_cull/sphere_culling_no_occ.compute", "Spheres Shader");
+    ComputeShader cylinderShader("assets/shaders/fst_parallel_attempt/gpu_cull/cylinder_culling_no_occ.compute", "Cylinders Shader");
+    ComputeShader cleaningComputeShader("assets/shaders/fst_parallel_attempt/gpu_cull/set_to_black_no_occ.compute", "Cleaning Shader");
+
     Canvas canvas(GL_TEXTURE_2D, GL_RGBA8, SCR_WIDTH, SCR_HEIGHT);
     canvas.setFBO(GL_COLOR_ATTACHMENT0);
     canvas.setupDepthData(SCR_WIDTH, SCR_HEIGHT);
@@ -326,7 +339,7 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
     std::string process_times_path = base_path + "_process_times.csv";
     Profiler profiler(window, 
         frame_times_path, 
-        process_times_path, sphere_count, cylinder_count, 0);
+        process_times_path, sphere_count, cylinder_count, 0, 48.0f);
 
     window.setupSceneInfoGui("Scene Info", scene_data);
     window.setupCameraGui("Camera Info", &camera);
@@ -342,6 +355,13 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
     canvas.bindFBO();
 
     glm::ivec2 screenResolution(SCR_WIDTH, SCR_HEIGHT);
+    std::chrono::steady_clock::time_point endTime = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed_seconds = endTime - startTime;
+    std::ofstream logFile("C:\\Users\\Sebatian\\Desktop\\XLIM\\Memoria_per_frame\\log.txt", std::ios::out);
+    logFile << title << std::endl;
+    logFile << "Elapsed time: " << elapsed_seconds.count() << " seconds" << std::endl;
+    logFile << "With occlusion culling: " << withOcclusionCulling << std::endl;
+    logFile.close();
 
     
     try

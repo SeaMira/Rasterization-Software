@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <string>
 #include <glm/glm.hpp>
+#include <chrono>
 
 #include "geometry/cylinder/cylinder.h"
 

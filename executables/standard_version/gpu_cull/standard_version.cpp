@@ -1,4 +1,5 @@
 #include <iostream>
+#include <fstream>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -34,7 +35,7 @@ int cylinder_count = 4000000;
 std::string title = "Standard OpenGL Version: Spheres and Cylinders - GPU Frustum Culling"; 
 
 bool shown = true;
-bool withOcclusionCulling = true;
+bool withOcclusionCulling = false;
 
 GLuint workGroupSizeXPerPixel = 16;  // Deifining threads-per-group (X)
 GLuint workGroupSizeYPerPixel = 16;  // Deifining threads-per-group (Y)
@@ -55,8 +56,12 @@ int downsampleWorkGroupSizeY = 16/downsampleLevel;
 void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window);
 void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window);
 
+std::chrono::steady_clock::time_point startTime = std::chrono::high_resolution_clock::now();
+
 int main(int argc, char* argv[]) 
 {
+    
+    startTime = std::chrono::high_resolution_clock::now();
     AppOpenGL window { title + (withOcclusionCulling ? " - With Occlusion Culling" : " - Without Occlusion Culling"), SCR_WIDTH, SCR_HEIGHT, shown };
 
     Camera camera(SCR_WIDTH, SCR_HEIGHT);
@@ -174,7 +179,7 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
     std::string process_times_path = base_path + "_process_times.csv";
     Profiler profiler(window, 
         frame_times_path, 
-        process_times_path, sphere_count, cylinder_count, downsampleLevel);
+        process_times_path, sphere_count, cylinder_count, downsampleLevel, 48.0f);
 
     window.setupSceneInfoGui("Scene Info", scene_data);
     window.setupCameraGui("Camera Info", &camera);
@@ -187,6 +192,13 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
 
     glm::ivec2 screenResolution(SCR_WIDTH, SCR_HEIGHT);
 
+    std::chrono::steady_clock::time_point endTime = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed_seconds = endTime - startTime;
+    std::ofstream logFile("C:\\Users\\Sebatian\\Desktop\\XLIM\\Memoria_per_frame\\log.txt", std::ios::out);
+    logFile << title << std::endl;
+    logFile << "Elapsed time: " << elapsed_seconds.count() << " seconds" << std::endl;
+    logFile << "With occlusion culling: " << withOcclusionCulling << std::endl;
+    logFile.close();
     try
     {
        bool isRunning = true;
@@ -425,7 +437,7 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
     std::string process_times_path = base_path + "_process_times.csv";
     Profiler profiler(window, 
         frame_times_path, 
-        process_times_path, sphere_count, cylinder_count, 0);
+        process_times_path, sphere_count, cylinder_count, 0, 48.0f);
 
     window.setupSceneInfoGui("Scene Info", scene_data);
     window.setupCameraGui("Camera Info", &camera);
@@ -437,6 +449,14 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
     GLuint numGroupsY = 1;
 
     glm::ivec2 screenResolution(SCR_WIDTH, SCR_HEIGHT);
+
+    std::chrono::steady_clock::time_point endTime = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed_seconds = endTime - startTime;
+    std::ofstream logFile("C:\\Users\\Sebatian\\Desktop\\XLIM\\Memoria_per_frame\\log.txt", std::ios::out);
+    logFile << title << std::endl;
+    logFile << "Elapsed time: " << elapsed_seconds.count() << " seconds" << std::endl;
+    logFile << "With occlusion culling: " << withOcclusionCulling << std::endl;
+    logFile.close();
 
     try
     {

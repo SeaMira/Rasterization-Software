@@ -3,8 +3,8 @@
 #include "molecule_loader/basic_loader.h"
 
 // LOADED_SCENE or GRID_SCENE
-SceneType currentScene = SceneType::LOADED_SCENE;
-std::string scene_file = "9mjn.cif";
+SceneType currentScene = SceneType::PACKAGE_SCENE;
+std::string scene_file = "8wql.cif";
 std::filesystem::path scene_path = std::filesystem::path("assets/molecules") / scene_file;
 
 int gridWidth = 10;
@@ -13,9 +13,9 @@ int gridDepth = 10;
 int interleaveW = 5;
 int interleaveH = 5;
 
-int interleaveAngle = 10;
-int interleaveZ = 10;
-int interleaveY = 10;
+int interleaveAngle = 8;
+int interleaveZ = 5;
+int interleaveY = 5;
 float radFactor = 2.0f;
 
 
@@ -182,19 +182,19 @@ std::vector<std::pair<glm::vec3, glm::vec3>> benchmark2_loaded_molecules(std::ve
 
     std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints;
     
-    for (int i = 0; i < interleaveAngle; i++)
+    for (int i = 1; i <= interleaveZ; i++)
     {
-        for (int j = 1; j < interleaveZ; j++)
+        float d = (float)i * d_radius;
+        for (int j = 0; j < interleaveAngle; j++)
         {
             for (int k = 0; k <= interleaveY; k++)
             {
-                float d = (float)j * d_radius;
                 chkPoints.push_back(
                     {
                         mass_center +
-                        glm::vec3(d*cos(glm::radians((float)i*d_theta)), 
+                        glm::vec3(d*cos(glm::radians((float)j*d_theta)), 
                         y_min + (float)k*d_height, 
-                        d*sin(glm::radians((float)i*d_theta))), 
+                        d*sin(glm::radians((float)j*d_theta))), 
                         glm::vec3(mass_center.x, y_min + (float)k*d_height, mass_center.z)
                     }
                 );

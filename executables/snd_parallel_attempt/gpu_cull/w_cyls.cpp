@@ -1,4 +1,6 @@
 #include <iostream>
+#include <fstream>
+
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -27,13 +29,13 @@ using uint = unsigned int;
 // Settings
 int SCR_WIDTH = 1024;
 int SCR_HEIGHT = 1024;
-int sphere_count = 0;
-int cylinder_count = 150;
+int sphere_count = 4000000;
+int cylinder_count = 4000000;
 
 std::string title = "Second Parallel Version: Spheres and Cylinders - GPU Frustum Culling"; 
 
 bool shown = true;
-bool withOcclusionCulling = true;
+bool withOcclusionCulling = false;
 
 GLuint workGroupSizeXPerPixel = 16;  // Deifining threads-per-group (X)
 GLuint workGroupSizeYPerPixel = 16;  // Deifining threads-per-group (Y)
@@ -74,12 +76,15 @@ struct CylinderBillboard
     int padding1, padding2, padding3;
 }; 
 
+std::chrono::steady_clock::time_point startTime = std::chrono::high_resolution_clock::now();
+
 void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window);
 
 void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window);
 
 int main(int argc, char* argv[]) 
 {
+    startTime = std::chrono::high_resolution_clock::now();
     AppOpenGL window { title + (withOcclusionCulling ? " - With Occlusion Culling" : " - Without Occlusion Culling"), SCR_WIDTH, SCR_HEIGHT, shown };
     Camera camera(SCR_WIDTH, SCR_HEIGHT);
     camera.SetPosition(.0f, .0f, .0f);
@@ -171,7 +176,7 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
     std::string process_times_path = base_path + "_process_times.csv";
     Profiler profiler(window, 
         frame_times_path, 
-        process_times_path, sphere_count, cylinder_count, downsampleLevel);
+        process_times_path, sphere_count, cylinder_count, downsampleLevel, 48.0f);
     
     window.setupSceneInfoGui("Scene Info", scene_data);
     window.setupCameraGui("Camera Info", &camera);
@@ -187,6 +192,13 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
     canvas.bindFBO();
 
     glm::ivec2 screenResolution(SCR_WIDTH, SCR_HEIGHT);
+    std::chrono::steady_clock::time_point endTime = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed_seconds = endTime - startTime;
+    std::ofstream logFile("C:\\Users\\Sebatian\\Desktop\\XLIM\\Memoria_per_frame\\log.txt", std::ios::out);
+    logFile << title << std::endl;
+    logFile << "Elapsed time: " << elapsed_seconds.count() << " seconds" << std::endl;
+    logFile << "With occlusion culling: " << withOcclusionCulling << std::endl;
+    logFile.close();
     try
     {
         bool isRunning = true;
@@ -381,13 +393,13 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
 
     Benchmark benchmark(camera_controller, chkPoints);
 
-    std::string base_path = "media/csv/scnd_parallel_w_cyl/"; 
+    std::string base_path = "media/csv/scnd_parallel_w_cyl/gpu_cull/"; 
     base_path += ((currentScene == SceneType::LOADED_SCENE) ? ("loaded_scene_" + scene_file) : "packed_scene");
     std::string frame_times_path = base_path + "_frame_times.csv";
     std::string process_times_path = base_path + "_process_times.csv";
     Profiler profiler(window, 
         frame_times_path, 
-        process_times_path, sphere_count, cylinder_count, 0);
+        process_times_path, sphere_count, cylinder_count, 0, 48.0f);
     
     window.setupSceneInfoGui("Scene Info", scene_data);
     window.setupCameraGui("Camera Info", &camera);
@@ -403,6 +415,13 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
     canvas.bindFBO();
 
     glm::ivec2 screenResolution(SCR_WIDTH, SCR_HEIGHT);
+    std::chrono::steady_clock::time_point endTime = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed_seconds = endTime - startTime;
+    std::ofstream logFile("C:\\Users\\Sebatian\\Desktop\\XLIM\\Memoria_per_frame\\log.txt", std::ios::out);
+    logFile << title << std::endl;
+    logFile << "Elapsed time: " << elapsed_seconds.count() << " seconds" << std::endl;
+    logFile << "With occlusion culling: " << withOcclusionCulling << std::endl;
+    logFile.close();
     try
     {
         bool isRunning = true;

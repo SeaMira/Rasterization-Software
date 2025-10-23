@@ -20,6 +20,7 @@ class ComputeShader
 {
     public:
         unsigned int ID; ///< Compute shader program ID
+        std::string m_computeName; ///< Compute shader name
         
         /**
          * @brief ComputeShader class constructor.
@@ -29,7 +30,7 @@ class ComputeShader
          * 
          * @param computePath file name with compute shader.
          */
-        ComputeShader(const char* computePath);
+        ComputeShader(const char* computePath, const char* computeName);
         
         /**
          * @brief ComputeShader class destructor.

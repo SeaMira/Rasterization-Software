@@ -3,8 +3,9 @@
 
 // constructor generates the shader on the fly
 // ------------------------------------------------------------------------
-ComputeShader::ComputeShader(const char* computePath)
+ComputeShader::ComputeShader(const char* computePath, const char* computeName)
 {
+    m_computeName = computeName;
     // 1. retrieve the vertex/fragment source code from filePath
     std::string computeCode;
     std::ifstream cShaderFile;
@@ -46,6 +47,7 @@ ComputeShader::ComputeShader(const char* computePath)
 }
 void ComputeShader::use() 
 { 
+    glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, m_computeName.c_str());
     glUseProgram(ID); 
 }
 
