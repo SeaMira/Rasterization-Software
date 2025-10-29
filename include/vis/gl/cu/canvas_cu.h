@@ -254,12 +254,14 @@ public:
 
 private:
     Texture m_canvas; ///< texture used as a canvas to draw pixels.
+    TextureCUDAWrapper m_canvasTexWrapper; ///< texture used as a canvas to draw pixels.
+    
     Framebuffer m_fbo; ///< framebuffer object associated to texture.
     GLsizei m_width; ///< width of the canvas.
     GLsizei m_height; ///< height of the canvas.
     
-    DepthData m_depthData; ///< depth data object associated to canvas.
-    DepthDownsample m_depthDownsample; ///< depth downsample object associated to canvas.
+    DepthDataCUDA m_depthData; ///< depth data object associated to canvas.
+    DepthDownsampleCUDA m_depthDownsample; ///< depth downsample object associated to canvas.
 
     bool m_isCleaningProgramSetup = false; ///< canvas cleaning program setup flag.
     bool m_isDownsampleProgramSetup = false; ///< depth downsample program setup flag.
