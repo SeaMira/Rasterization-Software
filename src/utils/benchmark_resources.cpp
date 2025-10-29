@@ -3,7 +3,7 @@
 #include "molecule_loader/basic_loader.h"
 
 // LOADED_SCENE or GRID_SCENE
-SceneType currentScene = SceneType::PACKAGE_SCENE;
+SceneType currentScene = SceneType::LOADED_SCENE;
 std::string scene_file = "8wql.cif";
 std::filesystem::path scene_path = std::filesystem::path("assets/molecules") / scene_file;
 

@@ -1,9 +1,19 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(compute_shaders_project LANGUAGES CXX C)
+project(compute_shaders_project LANGUAGES CXX C CUDA)
 set(CXX_STANDARD 20)
+set(CMAKE_CUDA_STANDARD 17)
+
+set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(OpenGL REQUIRED)
+
+# ===============================
+# Arch GPU para CUDA
+# ===============================
+find_package(CUDA REQUIRED)
+set(CUDA_ARCH "75;86;89") # ajusta según tus tarjetas
 
 add_subdirectory(src)
 add_subdirectory(extern)
@@ -50,7 +60,16 @@ target_link_libraries(cylinder_projection_cpu PUBLIC sequential_dependencies)
 target_link_libraries(fst_cpu PUBLIC parallel_dependencies)
 target_link_libraries(fst_cpu_w_cylinders PUBLIC parallel_dependencies)
 target_link_libraries(fst_gpu PUBLIC parallel_dependencies)
-target_link_libraries(fst_gpu_w_cylinders PUBLIC parallel_dependencies)
+
+target_compile_options(fst_gpu_w_cylinders PRIVATE 
+        $<$<COMPILE_LANGUAGE:CUDA>:-allow-unsupported-compiler>
+    )
+set_target_properties(fst_gpu_w_cylinders PROPERTIES CUDA_ARCHITECTURES "${CUDA_ARCH}")
+target_link_libraries(fst_gpu_w_cylinders PUBLIC 
+    parallel_dependencies
+    "${CUDA_TOOLKIT_ROOT_DIR}/lib/x64/cuda.lib"
+    "${CUDA_TOOLKIT_ROOT_DIR}/lib/x64/cudart_static.lib"
+)
 
 target_link_libraries(snd_cpu PUBLIC parallel_dependencies)
 target_link_libraries(snd_cpu_w_cylinders PUBLIC parallel_dependencies)

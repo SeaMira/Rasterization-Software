@@ -34,13 +34,14 @@ set(raster_includes
     ${CMAKE_SOURCE_DIR}/include/vis/gl/texture.h
     ${CMAKE_SOURCE_DIR}/include/vis/gl/storage_buffer.h
     ${CMAKE_SOURCE_DIR}/include/vis/gl/depth_downsample.h
+    ${CMAKE_SOURCE_DIR}/include/vis/gl/depth_downsample_cu.h
     ${CMAKE_SOURCE_DIR}/include/vis/gl/depth_data.h
 
     ${CMAKE_SOURCE_DIR}/include/appSDLGL.h
     ${CMAKE_SOURCE_DIR}/include/appSDLRenderer.h
     )
     
-    set(raster_source
+set(raster_source
     ${CMAKE_SOURCE_DIR}/src/algorithms/frustum_cull.cpp
     ${CMAKE_SOURCE_DIR}/src/algorithms/occlusion_cull.cpp
     
@@ -74,6 +75,7 @@ set(raster_includes
     ${CMAKE_SOURCE_DIR}/src/vis/gl/texture.cpp
     ${CMAKE_SOURCE_DIR}/src/vis/gl/storage_buffer.cpp
     ${CMAKE_SOURCE_DIR}/src/vis/gl/depth_downsample.cpp
+    ${CMAKE_SOURCE_DIR}/src/vis/gl/depth_downsample_cu.cpp
     ${CMAKE_SOURCE_DIR}/src/vis/gl/depth_data.cpp
     
     ${CMAKE_SOURCE_DIR}/src/appSDLGL.cpp

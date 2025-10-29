@@ -198,9 +198,10 @@ public:
 
 private:
     GLuint m_id; ///< Id of the texture.
-    GLuint m_unit; ///< Id of the texture.
+    GLuint m_unit; ///< Unit of the texture.
     GLenum m_target; ///< target texture to set.
     friend class Canvas; ///< Friend class Canvas so it can access private atributes.
+    friend class TextureCUDAWrapper; ///< Friend class TextureCUDAWrapper so it can access private atributes.
 };
 
 #endif
