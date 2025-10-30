@@ -36,7 +36,7 @@ set(raster_includes
     ${CMAKE_SOURCE_DIR}/include/vis/gl/depth_downsample.h
     ${CMAKE_SOURCE_DIR}/include/vis/gl/depth_data.h
     
-    ${CMAKE_SOURCE_DIR}/include/vis/gl/cu/canvas.h
+    ${CMAKE_SOURCE_DIR}/include/vis/gl/cu/canvas_cu.h
     ${CMAKE_SOURCE_DIR}/include/vis/gl/cu/texture_cu.h
     ${CMAKE_SOURCE_DIR}/include/vis/gl/cu/depth_data_cu.h
     ${CMAKE_SOURCE_DIR}/include/vis/gl/cu/storage_buffer_cu.h
@@ -80,10 +80,9 @@ set(raster_source
     ${CMAKE_SOURCE_DIR}/src/vis/gl/texture.cpp
     ${CMAKE_SOURCE_DIR}/src/vis/gl/storage_buffer.cpp
     ${CMAKE_SOURCE_DIR}/src/vis/gl/depth_downsample.cpp
-    ${CMAKE_SOURCE_DIR}/src/vis/gl/depth_downsample_cu.cpp
     ${CMAKE_SOURCE_DIR}/src/vis/gl/depth_data.cpp
 
-    ${CMAKE_SOURCE_DIR}/src/vis/gl/cu/canvas.cpp
+    ${CMAKE_SOURCE_DIR}/src/vis/gl/cu/canvas_cu.cpp
     ${CMAKE_SOURCE_DIR}/src/vis/gl/cu/texture_cu.cpp
     ${CMAKE_SOURCE_DIR}/src/vis/gl/cu/depth_data_cu.cpp
     ${CMAKE_SOURCE_DIR}/src/vis/gl/cu/storage_buffer_cu.cpp
@@ -99,6 +98,8 @@ ${raster_includes} ${raster_source} ${raster_extern_includes}
 )
 
 set_property(TARGET raster_dependencies PROPERTY CXX_STANDARD 20)
+set_property(TARGET raster_dependencies PROPERTY CUDA_STANDARD 17)
+set_property(TARGET raster_dependencies PROPERTY CUDA_ARCHITECTURES ${CUDA_ARCH})
 
 target_include_directories(raster_dependencies PUBLIC 
 ${OPENGL_INCLUDE_DIRS} 
@@ -113,6 +114,8 @@ glad
 glm 
 chemfiles
 imgui
+"${CUDA_TOOLKIT_ROOT_DIR}/lib/x64/cuda.lib"
+"${CUDA_TOOLKIT_ROOT_DIR}/lib/x64/cudart_static.lib"
 )
     
 ## Sequential Version Dependencies
@@ -153,10 +156,12 @@ endif()
 ## Parallel Version Dependencies
 set(parallel_sources
     ${CMAKE_SOURCE_DIR}/src/utils/parallel/aux_functions.cpp
+    ${CMAKE_SOURCE_DIR}/src/utils/parallel/cuda_checks.cpp
 )
 
 set(parallel_includes
     ${CMAKE_SOURCE_DIR}/include/utils/parallel/aux_functions.h
+    ${CMAKE_SOURCE_DIR}/include/utils/parallel/cuda_checks.h
 )
 
 add_library(parallel_dependencies STATIC
@@ -167,6 +172,8 @@ ${OPENGL_INCLUDE_DIRS}
 )
 
 set_property(TARGET parallel_dependencies PROPERTY CXX_STANDARD 20)
+set_property(TARGET parallel_dependencies PROPERTY CUDA_STANDARD 17)
+set_property(TARGET parallel_dependencies PROPERTY CUDA_ARCHITECTURES ${CUDA_ARCH})
 
 target_include_directories(parallel_dependencies PUBLIC
 "${CMAKE_SOURCE_DIR}/include" 
@@ -174,4 +181,6 @@ target_include_directories(parallel_dependencies PUBLIC
 
 target_link_libraries(parallel_dependencies PUBLIC 
 glm 
+"${CUDA_TOOLKIT_ROOT_DIR}/lib/x64/cuda.lib"
+"${CUDA_TOOLKIT_ROOT_DIR}/lib/x64/cudart_static.lib"
 )

@@ -95,8 +95,8 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
 
     CanvasCUDA canvas(GL_TEXTURE_2D, GL_RGBA8, SCR_WIDTH, SCR_HEIGHT);
     canvas.setFBO(GL_COLOR_ATTACHMENT0);
-    canvas.setupDepthData(SCR_WIDTH, SCR_HEIGHT);
-    canvas.setupDepthDownsample(downsampleLevel, SCR_WIDTH, SCR_HEIGHT);
+    canvas.setupDepthDataCUDA(SCR_WIDTH, SCR_HEIGHT);
+    canvas.setupDepthDownsampleCUDA(downsampleLevel, SCR_WIDTH, SCR_HEIGHT);
     
     StorageBuffer pixelCountFramesBuffer(GL_SHADER_STORAGE_BUFFER, SCR_WIDTH*SCR_HEIGHT * sizeof(GLuint), 4, 
         nullptr, GL_DYNAMIC_COPY);

@@ -86,7 +86,7 @@ target_link_libraries(snd_gpu_w_cylinders PUBLIC parallel_dependencies)
 target_link_libraries(standard_pipeline PUBLIC parallel_dependencies)
 target_link_libraries(standard_pipeline_cpu_cull PUBLIC parallel_dependencies)
 
-add_cuda_props(fst_cpu_w_cylinders)
+add_cuda_props(fst_gpu_w_cylinders)
 add_cuda_props(CUDA_fst)
 
 

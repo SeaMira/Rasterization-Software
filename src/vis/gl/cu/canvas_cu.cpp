@@ -54,7 +54,7 @@ void CanvasCUDA::setTextureImage(GLenum target, GLenum internalFormat, GLsizei w
 
 void CanvasCUDA::setCUDATextureWrapper(GLenum target, unsigned int flags)
 {
-    m_cudaTextureWrapper.setup(m_canvas, target, flags);
+    m_canvasTexWrapper.setup(m_canvas, target, flags);
 }
 
 
@@ -79,7 +79,7 @@ void CanvasCUDA::bindFBO() const
 }
 
 Texture& CanvasCUDA::getTexture() { return m_canvas; }
-TextureCUDAWrapper& CanvasCUDA::getCUDATextureWrapper() { return m_cudaTextureWrapper; }
+TextureCUDAWrapper& CanvasCUDA::getCUDATextureWrapper() { return m_canvasTexWrapper; }
 Framebuffer& CanvasCUDA::getFramebuffer() { return m_fbo; }
 GLsizei CanvasCUDA::getWidth() const { return m_width; }
 GLsizei CanvasCUDA::getHeight() const { return m_height; }

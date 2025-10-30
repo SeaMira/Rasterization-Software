@@ -1,4 +1,4 @@
-#include "vis/gl/depth_data_cu.h"
+#include "vis/gl/cu/depth_data_cu.h"
 
 
 DepthDataCUDA::DepthDataCUDA(int width, int height) :
@@ -6,7 +6,7 @@ DepthDataCUDA::DepthDataCUDA(int width, int height) :
     m_screenWidth(width),
     m_depthBuffer(nullptr)
 {
-    cudaSetup();
+    memoryAlloc();
 }
 
 DepthDataCUDA::~DepthDataCUDA() 
