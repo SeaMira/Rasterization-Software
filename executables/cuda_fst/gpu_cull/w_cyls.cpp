@@ -22,9 +22,9 @@
 
 #include "vis/gl/frame_buffer.h"
 #include "vis/gl/storage_buffer.h"
+#include "vis/gl/cu/storage_buffer_cu.h"
 #include "vis/gl/texture.h"
-#include "vis/canvas.h"
-#include "vis/compute_shader_program.h"
+#include "vis/gl/cu/canvas_cu.h"
 
 using uint = unsigned int;
 
@@ -92,20 +92,11 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
     };
 
     CameraController camera_controller(window, camera);
-    
-    ComputeShader spheresShader("assets/shaders/fst_parallel_attempt/gpu_cull/sphere_culling.compute", "Spheres Shader");
-    ComputeShader cylinderShader("assets/shaders/fst_parallel_attempt/gpu_cull/cylinder_culling.compute", "Cylinders Shader");
 
-    ComputeShader cleaningComputeShader("assets/shaders/fst_parallel_attempt/gpu_cull/set_to_black.compute", "Cleaning Shader");
-    ComputeShader hizPyramidComputeShader("assets/shaders/fst_parallel_attempt/gpu_cull/mipmap_gen.compute", "Hiz Pyramid Shader");
-    ComputeShader pixelCountComputeShader("assets/shaders/fst_parallel_attempt/gpu_cull/pixel_count.compute", "Pixel Count Shader");
-
-    Canvas canvas(GL_TEXTURE_2D, GL_RGBA8, SCR_WIDTH, SCR_HEIGHT);
+    CanvasCUDA canvas(GL_TEXTURE_2D, GL_RGBA8, SCR_WIDTH, SCR_HEIGHT);
     canvas.setFBO(GL_COLOR_ATTACHMENT0);
     canvas.setupDepthData(SCR_WIDTH, SCR_HEIGHT);
-    canvas.setupCleaningProgram(cleaningComputeShader);
     canvas.setupDepthDownsample(downsampleLevel, SCR_WIDTH, SCR_HEIGHT);
-    canvas.setupDownsamplingProgram(hizPyramidComputeShader);
     
     StorageBuffer pixelCountFramesBuffer(GL_SHADER_STORAGE_BUFFER, SCR_WIDTH*SCR_HEIGHT * sizeof(GLuint), 4, 
         nullptr, GL_DYNAMIC_COPY);
@@ -126,12 +117,12 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
     std::cout << "Max SSBO size: " << maxSSBOsize << std::endl;
     StorageBuffer sphereBuffer(GL_SHADER_STORAGE_BUFFER, sphere_count * sizeof(Sphere), 6, 
         spheres.data(), GL_STATIC_DRAW);
+    StorageBufferCUDAWrapper sphereBufferCUDAWrapper(sphereBuffer);
     
     StorageBuffer cylinderBuffer(GL_SHADER_STORAGE_BUFFER, cylinder_count * sizeof(Cylinder), 7, 
         cylinders.data(), GL_STATIC_DRAW);
+    StorageBufferCUDAWrapper cylinderBufferCUDAWrapper(cylinderBuffer);
     
-    // Framebuffer downsampleDepthFBO;
-    // downsampleDepthFBO.attachTexture(GL_COLOR_ATTACHMENT0, downsampledDepthTexture);
     // all entities visibility info ssbo
     int totalEntities = sphere_count + cylinder_count;
     std::vector<GLuint> visibilityFrames(2 * totalEntities, 10);
@@ -173,10 +164,7 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
     std::chrono::steady_clock::time_point endTime = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed_seconds = endTime - startTime;
     std::ofstream logFile("C:\\Users\\Sebatian\\Desktop\\XLIM\\Memoria_per_frame\\log.txt", std::ios::out);
-    logFile << title << std::endl;
-    logFile << "Elapsed time: " << elapsed_seconds.count() << " seconds" << std::endl;
-    logFile << "With occlusion culling: " << withOcclusionCulling << std::endl;
-    logFile.close();
+
     try
     {
         bool fbo1o2 = false;
@@ -189,66 +177,66 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
 
             if (window.getInput().isKeyDown(Key::T)) profiler.startSavingNextFrames(benchmark.getCheckpointID());
 
-            canvas.downsampleCanvasDepth(downsampleWorkGroupSizeX, downsampleWorkGroupSizeY);
+            // canvas.downsampleCanvasDepth(downsampleWorkGroupSizeX, downsampleWorkGroupSizeY);
             
-            canvas.cleanCanvasBuffers(workGroupSizeXPerPixel, workGroupSizeYPerPixel, camera.getFar());
+            // canvas.cleanCanvasBuffers(workGroupSizeXPerPixel, workGroupSizeYPerPixel, camera.getFar());
 
             Frustum frustum(camera);
 
-            spheresShader.use();
-            #if BENCHMARKING 
-                frustumAtomicCounter.bind();
-                glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &visibleCylindersCount);
-                glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &resetValue);
-                frustumAtomicCounter.unbind();
+            // spheresShader.use();
+            // #if BENCHMARKING 
+            //     frustumAtomicCounter.bind();
+            //     glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &visibleCylindersCount);
+            //     glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &resetValue);
+            //     frustumAtomicCounter.unbind();
 
-                occlusionAtomicCounter.bind();
-                glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &notOccludedCylindersCount);
-                glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &resetValue);
-                occlusionAtomicCounter.unbind();
+            //     occlusionAtomicCounter.bind();
+            //     glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &notOccludedCylindersCount);
+            //     glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &resetValue);
+            //     occlusionAtomicCounter.unbind();
 
-                spheresShader.setInt("benchmark", 1); 
-            #else
-                spheresShader.setInt("benchmark", 0);
-            #endif
-            spheresShader.setInt("sphereCount", sphere_count);
-            spheresShader.setUint("visibilityFrameBufferIndexOffset", 0);
-            spheresShader.setVec2I("screenResolution", screenResolution);
-            setFrustumUniforms(spheresShader, frustum);
-            setCameraUniforms(spheresShader, camera);
-            glDispatchCompute(numGroupsXSpheres, numGroupsY, 1);
-            glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
+            //     spheresShader.setInt("benchmark", 1); 
+            // #else
+            //     spheresShader.setInt("benchmark", 0);
+            // #endif
+            // // spheresShader.setInt("sphereCount", sphere_count);
+            // // spheresShader.setUint("visibilityFrameBufferIndexOffset", 0);
+            // // spheresShader.setVec2I("screenResolution", screenResolution);
+            // setFrustumUniforms(spheresShader, frustum);
+            // setCameraUniforms(spheresShader, camera);
+            // glDispatchCompute(numGroupsXSpheres, numGroupsY, 1);
+            // glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
             
-            cylinderShader.use();
-            #if BENCHMARKING 
-                frustumAtomicCounter.bind();
-                glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &visibleSpheresCount);
-                glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &resetValue);
-                frustumAtomicCounter.unbind();
+            // cylinderShader.use();
+            // #if BENCHMARKING 
+            //     frustumAtomicCounter.bind();
+            //     glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &visibleSpheresCount);
+            //     glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &resetValue);
+            //     frustumAtomicCounter.unbind();
 
-                occlusionAtomicCounter.bind();
-                glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &notOccludedSpheresCount);
-                glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &resetValue);
-                occlusionAtomicCounter.unbind();
+            //     occlusionAtomicCounter.bind();
+            //     glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &notOccludedSpheresCount);
+            //     glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &resetValue);
+            //     occlusionAtomicCounter.unbind();
                 
-                cylinderShader.setInt("benchmark", 1); 
-            #else
-                cylinderShader.setInt("benchmark", 0);
-            #endif
-            cylinderShader.setInt("cylinderCount", cylinder_count);
-            cylinderShader.setUint("visibilityFrameBufferIndexOffset", sphere_count);
-            cylinderShader.setVec2I("screenResolution", screenResolution);
-            setFrustumUniforms(cylinderShader, frustum);
-            setCameraUniforms(cylinderShader, camera);
-            glDispatchCompute(numGroupsXCylinders, numGroupsY, 1);
-            glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
+            //     cylinderShader.setInt("benchmark", 1); 
+            // #else
+            //     cylinderShader.setInt("benchmark", 0);
+            // #endif
+            // cylinderShader.setInt("cylinderCount", cylinder_count);
+            // cylinderShader.setUint("visibilityFrameBufferIndexOffset", sphere_count);
+            // cylinderShader.setVec2I("screenResolution", screenResolution);
+            // setFrustumUniforms(cylinderShader, frustum);
+            // setCameraUniforms(cylinderShader, camera);
+            // glDispatchCompute(numGroupsXCylinders, numGroupsY, 1);
+            // glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 
-            pixelCountComputeShader.use();
-            pixelCountComputeShader.setVec2I("screenResolution", screenResolution);
-            glDispatchCompute((SCR_WIDTH + workGroupSizeXPerPixel - 1) / workGroupSizeXPerPixel, 
-                (SCR_HEIGHT + workGroupSizeYPerPixel - 1) / workGroupSizeYPerPixel, 
-                1);
-            glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+            // pixelCountComputeShader.use();
+            // pixelCountComputeShader.setVec2I("screenResolution", screenResolution);
+            // glDispatchCompute((SCR_WIDTH + workGroupSizeXPerPixel - 1) / workGroupSizeXPerPixel, 
+            //     (SCR_HEIGHT + workGroupSizeYPerPixel - 1) / workGroupSizeYPerPixel, 
+            //     1);
+            // glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
             
             glBindFramebuffer(GL_READ_FRAMEBUFFER, canvas.getFramebuffer().getId());
             isRunning = window.update();

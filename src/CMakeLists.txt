@@ -34,8 +34,13 @@ set(raster_includes
     ${CMAKE_SOURCE_DIR}/include/vis/gl/texture.h
     ${CMAKE_SOURCE_DIR}/include/vis/gl/storage_buffer.h
     ${CMAKE_SOURCE_DIR}/include/vis/gl/depth_downsample.h
-    ${CMAKE_SOURCE_DIR}/include/vis/gl/depth_downsample_cu.h
     ${CMAKE_SOURCE_DIR}/include/vis/gl/depth_data.h
+    
+    ${CMAKE_SOURCE_DIR}/include/vis/gl/cu/canvas.h
+    ${CMAKE_SOURCE_DIR}/include/vis/gl/cu/texture_cu.h
+    ${CMAKE_SOURCE_DIR}/include/vis/gl/cu/depth_data_cu.h
+    ${CMAKE_SOURCE_DIR}/include/vis/gl/cu/storage_buffer_cu.h
+    ${CMAKE_SOURCE_DIR}/include/vis/gl/cu/depth_downsample_cu.h
 
     ${CMAKE_SOURCE_DIR}/include/appSDLGL.h
     ${CMAKE_SOURCE_DIR}/include/appSDLRenderer.h
@@ -77,6 +82,12 @@ set(raster_source
     ${CMAKE_SOURCE_DIR}/src/vis/gl/depth_downsample.cpp
     ${CMAKE_SOURCE_DIR}/src/vis/gl/depth_downsample_cu.cpp
     ${CMAKE_SOURCE_DIR}/src/vis/gl/depth_data.cpp
+
+    ${CMAKE_SOURCE_DIR}/src/vis/gl/cu/canvas.cpp
+    ${CMAKE_SOURCE_DIR}/src/vis/gl/cu/texture_cu.cpp
+    ${CMAKE_SOURCE_DIR}/src/vis/gl/cu/depth_data_cu.cpp
+    ${CMAKE_SOURCE_DIR}/src/vis/gl/cu/storage_buffer_cu.cpp
+    ${CMAKE_SOURCE_DIR}/src/vis/gl/cu/depth_downsample_cu.cpp
     
     ${CMAKE_SOURCE_DIR}/src/appSDLGL.cpp
     ${CMAKE_SOURCE_DIR}/src/appSDLRenderer.cpp

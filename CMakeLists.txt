@@ -54,22 +54,29 @@ add_subproject(snd_gpu_w_cylinders "${CMAKE_SOURCE_DIR}/executables/snd_parallel
 add_subproject(standard_pipeline "${CMAKE_SOURCE_DIR}/executables/standard_version/gpu_cull/standard_version.cpp")
 add_subproject(standard_pipeline_cpu_cull "${CMAKE_SOURCE_DIR}/executables/standard_version/cpu_cull/standard_version.cpp")
 
+
+# First CUDA version
+add_subproject(CUDA_fst "${CMAKE_SOURCE_DIR}/executables/cuda_fst/gpu_cull/w_cyls.cpp")
+
 target_link_libraries(brute_sequencial PUBLIC sequential_dependencies)
 target_link_libraries(cylinder_projection_cpu PUBLIC sequential_dependencies)
+
+function(add_cuda_props project_name )
+	target_compile_options(${project_name} PRIVATE 
+        $<$<COMPILE_LANGUAGE:CUDA>:-allow-unsupported-compiler>
+    )
+	set_target_properties(${project_name} PROPERTIES CUDA_ARCHITECTURES "${CUDA_ARCH}")
+	target_link_libraries(${project_name} PUBLIC 
+        parallel_dependencies
+        "${CUDA_TOOLKIT_ROOT_DIR}/lib/x64/cuda.lib"
+        "${CUDA_TOOLKIT_ROOT_DIR}/lib/x64/cudart_static.lib"
+    )
+endfunction()
+
 
 target_link_libraries(fst_cpu PUBLIC parallel_dependencies)
 target_link_libraries(fst_cpu_w_cylinders PUBLIC parallel_dependencies)
 target_link_libraries(fst_gpu PUBLIC parallel_dependencies)
-
-target_compile_options(fst_gpu_w_cylinders PRIVATE 
-        $<$<COMPILE_LANGUAGE:CUDA>:-allow-unsupported-compiler>
-    )
-set_target_properties(fst_gpu_w_cylinders PROPERTIES CUDA_ARCHITECTURES "${CUDA_ARCH}")
-target_link_libraries(fst_gpu_w_cylinders PUBLIC 
-    parallel_dependencies
-    "${CUDA_TOOLKIT_ROOT_DIR}/lib/x64/cuda.lib"
-    "${CUDA_TOOLKIT_ROOT_DIR}/lib/x64/cudart_static.lib"
-)
 
 target_link_libraries(snd_cpu PUBLIC parallel_dependencies)
 target_link_libraries(snd_cpu_w_cylinders PUBLIC parallel_dependencies)
@@ -78,6 +85,10 @@ target_link_libraries(snd_gpu_w_cylinders PUBLIC parallel_dependencies)
 
 target_link_libraries(standard_pipeline PUBLIC parallel_dependencies)
 target_link_libraries(standard_pipeline_cpu_cull PUBLIC parallel_dependencies)
+
+add_cuda_props(fst_cpu_w_cylinders)
+add_cuda_props(CUDA_fst)
+
 
 
 add_custom_command(

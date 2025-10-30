@@ -4,6 +4,7 @@
 #include <SDL3/SDL.h>
 #include "vis/gl/frame_buffer.h"
 #include "vis/gl/texture.h"
+#include "vis/gl/cu/texture_cu.h"
 #include "vis/gl/cu/depth_data_cu.h"
 #include "vis/gl/cu/depth_downsample_cu.h"
 
@@ -15,7 +16,7 @@
  * Used as direct canvas to draw and show in the viewport. It's texture and framebuffer
  * are the main ones to be shown.
  */
-class Canvas
+class CanvasCUDA
 {
 public:
     /**
@@ -23,7 +24,7 @@ public:
      * 
      * Class default constructor for future setup.
      */
-    Canvas() = default;
+    CanvasCUDA() = default;
 
     /**
      * @brief Class constructor.
@@ -37,8 +38,8 @@ public:
      * @param format format of the pixel data.
      * @param type data type of the pixel.
      */
-    Canvas(GLenum target, GLenum internalFormat, GLsizei width, 
-        GLsizei height, GLenum format, GLenum type);
+    CanvasCUDA(GLenum target, GLenum internalFormat, GLsizei width, 
+        GLsizei height, GLenum format, GLenum type, unsigned int flags=cudaGraphicsRegisterFlagsSurfaceLoadStore);
 
     /**
      * @brief Class constructor.
@@ -52,43 +53,43 @@ public:
      * 
      * The difference with last constructor is the usage of glTexStorage2D
      */    
-    Canvas(GLenum target, GLenum internalFormat, GLsizei width, 
-        GLsizei height);
+    CanvasCUDA(GLenum target, GLenum internalFormat, GLsizei width, 
+        GLsizei height, unsigned int flags=cudaGraphicsRegisterFlagsSurfaceLoadStore);
 
     /**
      * @brief Copy operator.
      * 
      * Copy operator is deleted, doesn't allow copy.
      */
-    Canvas( const Canvas& ) = delete;
+    CanvasCUDA( const CanvasCUDA& ) = delete;
 
     /**
      * @brief Asignment by copy operator.
      * 
      * Asignment by copy operator is deleted, doesn't allow copy.
      */
-    Canvas& operator=( const Canvas& ) = delete;
+    CanvasCUDA& operator=( const CanvasCUDA& ) = delete;
     
     /**
      * @brief Movement constructor.
      * 
      * Allows object movement.
      */
-    Canvas( Canvas&& ) noexcept;
+    CanvasCUDA( CanvasCUDA&& ) noexcept;
 
     /**
      * @brief Movement by asignment constructor.
      * 
      * Allows object movement by asignment.
      */
-    Canvas& operator=( Canvas&& ) noexcept;
+    CanvasCUDA& operator=( CanvasCUDA&& ) noexcept;
 
     /**
      * @brief Class default constructor.
      * 
      * Class destructor. No manually deallocation needed.
      */
-    ~Canvas() = default;
+    ~CanvasCUDA() = default;
 
     /**
      * @brief Get canvas texture.
@@ -98,6 +99,16 @@ public:
      * @return Canvas texture object reference.
      */
     Texture& getTexture();
+    
+    
+    /**
+     * @brief Get canvas texture's CUDA wrapper .
+     * 
+     * Gets canvas texture object reference.
+     * 
+     * @return Canvas texture object reference.
+     */
+    TextureCUDAWrapper& getCUDATextureWrapper();
 
     /**
      * @brief Get canvas framebuffer.
@@ -141,6 +152,8 @@ public:
      */
     void setTexture(GLenum target, GLenum internalFormat, GLsizei width, 
         GLsizei height, GLenum format, GLenum type);
+
+    void setCUDATextureWrapper(GLenum target, unsigned int flags=cudaGraphicsRegisterFlagsSurfaceLoadStore);
 
     /**
      * @brief Texture image late setting.
@@ -204,18 +217,8 @@ public:
      * @param width width of the texture (depends on the screen resolution).
      * @param height height of the texture (depends on the screen resolution).
      */
-    void setupDepthData(int width, int height);
+    void setupDepthDataCUDA(int width, int height);
 
-    /**
-     * @brief sets up a "cleaning" shader program. Restart the depth buffer and the
-     * depth texture values.
-     * 
-     * Restart values on framebuffer, depth buffer and depth texture. May also be used to restart values on 
-     * other buffers (pixel ownership buffer, for example).
-     * 
-     * @param cleaningShader compute shader used to clean desired buffers.
-     */
-    void setupCleaningProgram(ComputeShader& cleaningShader);
     
     /**
      * * @brief sets up a depth downsampled texture for mipmap generation on a customized
@@ -225,14 +228,8 @@ public:
      * @param width width of the texture (depends on the screen resolution).
      * @param height height of the texture (depends on the screen resolution).
      */
-    void setupDepthDownsample(int desiredLevel, int width, int height);
+    void setupDepthDownsampleCUDA(int desiredLevel, int width, int height);
     
-    /**
-     * @brief generates a downsampled depth texture mipmap.
-     * 
-     * @param downsampleShader compute shader used to generate downsampled texture.  
-     */
-    void setupDownsamplingProgram(ComputeShader& downsampleShader);
 
     /**
      * @brief cleans the canvas framebuffer, depth buffers and customized using a compute shader.
@@ -241,7 +238,7 @@ public:
      * @param workGroupSizeYPerPixel number of work groups per pixel in Y direction.
      * @param far far plane distance (restart value in depth buffer).
      */
-    void cleanCanvasBuffers(int workGroupSizeXPerPixel, int workGroupSizeYPerPixel, float far);
+    // void cleanCanvasBuffers(int workGroupSizeXPerPixel, int workGroupSizeYPerPixel, float far);
 
     /**
      * @brief downsampled depth texture mipmap generation. Dispatches the program to compute the
@@ -250,7 +247,7 @@ public:
      * @param downsampleWorkGroupSizeX number of work groups per pixel in X direction.
      * @param downsampleWorkGroupSizeY number of work groups per pixel in Y direction.
      */
-    void downsampleCanvasDepth(int downsampleWorkGroupSizeX, int downsampleWorkGroupSizeY);
+    // void downsampleCanvasDepth(int downsampleWorkGroupSizeX, int downsampleWorkGroupSizeY);
 
 private:
     Texture m_canvas; ///< texture used as a canvas to draw pixels.
