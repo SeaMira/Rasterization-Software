@@ -75,7 +75,7 @@ void cleaningScreen(
     );
 
 void downsamplingDepthTexture(
-    float* depthBuffer, 
+    unsigned int* depthBuffer, 
     cudaSurfaceObject_t downsampleSurface, 
     int screenResolutionX, 
     int screenResolutionY, 

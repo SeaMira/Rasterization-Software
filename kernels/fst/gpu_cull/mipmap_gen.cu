@@ -1,7 +1,7 @@
 #include <cuda_runtime.h>
 
 __global__ void downsampleDepthMaxKernel(
-    const float* depthBuffer,
+    unsigned int* depthBuffer,
     int screenResolutionX,
     int screenResolutionY,
     cudaSurfaceObject_t downsampleSurface)
@@ -41,7 +41,7 @@ __global__ void downsampleDepthMaxKernel(
 
 
 extern "C" void downsamplingDepthTexture(
-    float* depthBuffer, 
+    unsigned int* depthBuffer, 
     cudaSurfaceObject_t downsampleSurface, 
     int screenResolutionX, 
     int screenResolutionY, 

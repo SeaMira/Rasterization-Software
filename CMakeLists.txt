@@ -33,7 +33,7 @@ function(add_subproject project_name executable)
 endfunction()
 
 function(add_cuda_subproject project_name executable kernel_dir)
-    file(GLOB KERNEL_SOURCES "${kernel_dir}/*.cu")
+    file(GLOB KERNEL_SOURCES CONFIGURE_DEPENDS "${kernel_dir}/*.cu")
 
 	add_executable(${project_name} ${executable} ${KERNEL_SOURCES})
 
