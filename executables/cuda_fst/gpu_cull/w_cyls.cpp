@@ -60,6 +60,24 @@ std::chrono::steady_clock::time_point startTime = std::chrono::high_resolution_c
 
 // void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window);
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+void cleaningScreen(
+    cudaSurfaceObject_t& texSurfaceObj, 
+    unsigned int* depthBuffer,
+    unsigned int* pixelOwnershipBuffer,
+    int workGroupSizeXPerPixel,
+    int workGroupSizeYPerPixel,
+    float far, 
+    float screenResolutionX,
+    float screenResolutionY
+    );
+#ifdef __cplusplus
+}
+#endif
+
+
 void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window);
 
 int main(int argc, char* argv[]) 
@@ -100,6 +118,7 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
     
     StorageBuffer pixelCountFramesBuffer(GL_SHADER_STORAGE_BUFFER, SCR_WIDTH*SCR_HEIGHT * sizeof(GLuint), 4, 
         nullptr, GL_DYNAMIC_COPY);
+    StorageBufferCUDAWrapper pixelCountFramesBufferCUDAWrapper(pixelCountFramesBuffer);
     
     std::vector<Sphere> spheres = getScene(sphere_count);
     sphere_count = spheres.size(); 
@@ -237,7 +256,24 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
             //     (SCR_HEIGHT + workGroupSizeYPerPixel - 1) / workGroupSizeYPerPixel, 
             //     1);
             // glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+            TextureCUDAWrapper& canvasDepthTextureCUDAWrapper = canvas.getCUDADepthTextureWrapper();
+            canvasDepthTextureCUDAWrapper.cudaMapResources();
+            canvasDepthTextureCUDAWrapper.cudaCreateSurfaceObj();
+            unsigned int* depthBufferPtr = canvas.getDepthDataCUDA().getDepthBuffer();
+            unsigned int* pixelOwnershipBufferPtr = pixelCountFramesBufferCUDAWrapper.getDevicePointer();
             
+            cleaningScreen(
+                canvasDepthTextureCUDAWrapper.getSurfaceObj(), 
+                depthBufferPtr,
+                pixelOwnershipBufferPtr,
+                workGroupSizeXPerPixel,
+                workGroupSizeYPerPixel,
+                camera.getFar(),
+                static_cast<float>(SCR_WIDTH),
+                static_cast<float>(SCR_HEIGHT)
+            );
+
             glBindFramebuffer(GL_READ_FRAMEBUFFER, canvas.getFramebuffer().getId());
             isRunning = window.update();
 

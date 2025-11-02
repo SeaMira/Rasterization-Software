@@ -110,6 +110,9 @@ public:
      */
     TextureCUDAWrapper& getCUDATextureWrapper();
 
+
+    DepthDataCUDA& getDepthDataCUDA();
+
     /**
      * @brief Get canvas framebuffer.
      * 

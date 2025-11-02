@@ -32,6 +32,17 @@ function(add_subproject project_name executable)
 	target_include_directories(${project_name} PUBLIC ${OPENGL_INCLUDE_DIRS} extern/SDL/include extern/imgui)
 endfunction()
 
+function(add_cuda_subproject project_name executable kernel_dir)
+    file(GLOB KERNEL_SOURCES "${kernel_dir}/*.cu")
+
+	add_executable(${project_name} ${executable} ${KERNEL_SOURCES})
+
+    set_source_files_properties(${KERNEL_SOURCES} PROPERTIES LANGUAGE CUDA)
+
+	target_link_libraries(${project_name} PUBLIC raster_dependencies SDL3-static glad imgui)
+	target_include_directories(${project_name} PUBLIC ${OPENGL_INCLUDE_DIRS} extern/SDL/include extern/imgui)
+endfunction()
+
 # Sequential attempt define
 add_subproject(brute_sequencial "${CMAKE_SOURCE_DIR}/executables/seq_version/brute_sequencial.cpp")
 
@@ -56,7 +67,10 @@ add_subproject(standard_pipeline_cpu_cull "${CMAKE_SOURCE_DIR}/executables/stand
 
 
 # First CUDA version
-add_subproject(CUDA_fst "${CMAKE_SOURCE_DIR}/executables/cuda_fst/gpu_cull/w_cyls.cpp")
+add_cuda_subproject(CUDA_fst 
+    "${CMAKE_SOURCE_DIR}/executables/cuda_fst/gpu_cull/w_cyls.cpp"
+    "${CMAKE_SOURCE_DIR}/kernels/fst/gpu_cull"    
+)
 
 target_link_libraries(brute_sequencial PUBLIC sequential_dependencies)
 target_link_libraries(cylinder_projection_cpu PUBLIC sequential_dependencies)
