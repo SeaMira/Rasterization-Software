@@ -113,6 +113,8 @@ public:
 
     DepthDataCUDA& getDepthDataCUDA();
 
+    DepthDownsampleCUDA& getDepthDownsampleDataCUDA();
+
     /**
      * @brief Get canvas framebuffer.
      * 

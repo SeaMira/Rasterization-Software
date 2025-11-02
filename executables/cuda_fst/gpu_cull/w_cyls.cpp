@@ -52,9 +52,9 @@ int visibleCylindersCount = 0;
 int notOccludedCylindersCount = 0;
 
 // downsample settings
-int downsampleLevel = 4;
-int downsampleWorkGroupSizeX = 16/downsampleLevel;
-int downsampleWorkGroupSizeY = 16/downsampleLevel;
+int downsampleLevel = 2;
+int downsampleWorkGroupSizeX = (1 << downsampleLevel);
+int downsampleWorkGroupSizeY = (1 << downsampleLevel);
 
 std::chrono::steady_clock::time_point startTime = std::chrono::high_resolution_clock::now();
 
@@ -73,6 +73,14 @@ void cleaningScreen(
     int screenResolutionX,
     int screenResolutionY
     );
+
+void downsamplingDepthTexture(
+    float* depthBuffer, 
+    cudaSurfaceObject_t downsampleSurface, 
+    int screenResolutionX, 
+    int screenResolutionY, 
+    int downsampleWorkGroupSizeX, 
+    int downsampleWorkGroupSizeY);
 #ifdef __cplusplus
 }
 #endif
@@ -115,11 +123,16 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
     canvas.setFBO(GL_COLOR_ATTACHMENT0);
     canvas.setupDepthDataCUDA(SCR_WIDTH, SCR_HEIGHT);
     canvas.setupDepthDownsampleCUDA(downsampleLevel, SCR_WIDTH, SCR_HEIGHT);
+    unsigned int* depthBufferPtr = canvas.getDepthDataCUDA().getDepthBuffer();
+    DepthDownsampleCUDA& canvasDepthDownsampleCUDA = canvas.getDepthDownsampleDataCUDA();
     
     StorageBuffer pixelCountFramesBuffer(GL_SHADER_STORAGE_BUFFER, SCR_WIDTH*SCR_HEIGHT * sizeof(GLuint), 4, 
         nullptr, GL_DYNAMIC_COPY);
     StorageBufferCUDAWrapper pixelCountFramesBufferCUDAWrapper(pixelCountFramesBuffer);
-    
+    pixelCountFramesBufferCUDAWrapper.cudaMapResources();
+    unsigned int* pixelOwnershipBufferPtr = pixelCountFramesBufferCUDAWrapper.getDevicePointer<unsigned int>();
+
+
     std::vector<Sphere> spheres = getScene(sphere_count);
     sphere_count = spheres.size(); 
 
@@ -257,13 +270,19 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
             //     1);
             // glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
+            downsamplingDepthTexture(
+                depthBufferPtr,
+                canvasDepthDownsampleCUDA.getSurface(),
+                SCR_WIDTH,
+                SCR_HEIGHT,
+                downsampleWorkGroupSizeX,
+                downsampleWorkGroupSizeY
+            );
+
+
             TextureCUDAWrapper& canvasTextureCUDAWrapper = canvas.getCUDATextureWrapper();
             canvasTextureCUDAWrapper.cudaMapResources();
             canvasTextureCUDAWrapper.cudaCreateSurfaceObj();
-            unsigned int* depthBufferPtr = canvas.getDepthDataCUDA().getDepthBuffer();
-
-            pixelCountFramesBufferCUDAWrapper.cudaMapResources();
-            unsigned int* pixelOwnershipBufferPtr = pixelCountFramesBufferCUDAWrapper.getDevicePointer<unsigned int>();
             
             cleaningScreen(
                 canvasTextureCUDAWrapper.getSurfaceObject(), 
@@ -277,8 +296,6 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
             );
             canvasTextureCUDAWrapper.cudaDestroySurfaceObj();
             canvasTextureCUDAWrapper.cudaUnmapResources();
-
-            pixelCountFramesBufferCUDAWrapper.cudaUnmapResources();
 
             glBindFramebuffer(GL_READ_FRAMEBUFFER, canvas.getFramebuffer().getId());
             isRunning = window.update();
@@ -312,6 +329,7 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
         std::cerr << "Error: " << e.what() << std::endl;
         return ;
     }
+    pixelCountFramesBufferCUDAWrapper.cudaUnmapResources();
 }
 
 // void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)

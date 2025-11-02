@@ -2,8 +2,8 @@
 
 __global__ void downsampleDepthMaxKernel(
     const float* depthBuffer,
-    int width,
-    int height,
+    int screenResolutionX,
+    int screenResolutionY,
     cudaSurfaceObject_t downsampleSurface)
 {
     __shared__ unsigned int sharedMax;
@@ -21,9 +21,9 @@ __global__ void downsampleDepthMaxKernel(
         {
             int x = baseX + dx;
             int y = baseY + dy;
-            if (x < width && y < height)
+            if (x < screenResolutionX && y < screenResolutionY)
             {
-                float val = depthBuffer[y * width + x];
+                float val = depthBuffer[y * screenResolutionX + x];
                 if (val > localMax) localMax = val;
             }
         }
@@ -40,21 +40,16 @@ __global__ void downsampleDepthMaxKernel(
 }
 
 
-extern "C" void downsamplingDepthTexture(const float* depthBuffer, cudaArray* downsampleArray, int width, int height)
+extern "C" void downsamplingDepthTexture(
+    float* depthBuffer, 
+    cudaSurfaceObject_t downsampleSurface, 
+    int screenResolutionX, 
+    int screenResolutionY, 
+    int downsampleWorkGroupSizeX, 
+    int downsampleWorkGroupSizeY)
 {
-    // Crear descriptor del recurso (para el surface object)
-    cudaResourceDesc resDesc = {};
-    resDesc.resType = cudaResourceTypeArray;
-    resDesc.res.array.array = downsampleArray;
-
-    // Crear surface object
-    cudaSurfaceObject_t surfaceObj = 0;
-    cudaCreateSurfaceObject(&surfaceObj, &resDesc);
-
-    dim3 block(4,4);
-    dim3 grid(width/4, height/4);
-    downsampleDepthMaxKernel<<<grid, block>>>(depthBuffer, width, height, surfaceObj);
+    dim3 block(downsampleWorkGroupSizeX, downsampleWorkGroupSizeY);
+    dim3 grid((screenResolutionX + downsampleWorkGroupSizeX -1)/downsampleWorkGroupSizeX, (downsampleWorkGroupSizeY + downsampleWorkGroupSizeY - 1)/downsampleWorkGroupSizeY);
+    downsampleDepthMaxKernel<<<grid, block>>>(depthBuffer, screenResolutionX, screenResolutionY, downsampleSurface);
     cudaDeviceSynchronize();
-
-    cudaDestroySurfaceObject(surfaceObj);
 }

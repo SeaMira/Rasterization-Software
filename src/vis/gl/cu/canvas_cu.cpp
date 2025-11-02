@@ -81,6 +81,7 @@ void CanvasCUDA::bindFBO() const
 Texture& CanvasCUDA::getTexture() { return m_canvas; }
 TextureCUDAWrapper& CanvasCUDA::getCUDATextureWrapper() { return m_canvasTexWrapper; }
 DepthDataCUDA& CanvasCUDA::getDepthDataCUDA() { return m_depthData; }
+DepthDownsampleCUDA& CanvasCUDA::getDepthDownsampleDataCUDA() { return m_depthDownsample; }
 Framebuffer& CanvasCUDA::getFramebuffer() { return m_fbo; }
 GLsizei CanvasCUDA::getWidth() const { return m_width; }
 GLsizei CanvasCUDA::getHeight() const { return m_height; }
