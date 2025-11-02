@@ -42,15 +42,7 @@ void StorageBufferCUDAWrapper::cudaUnmapResources()
     CUDA_CHECK(cudaGraphicsUnmapResources(1, &m_cudaResource, 0));
 }
 
-template<typename T>
-T* StorageBufferCUDAWrapper::getDevicePointer(size_t* sizeInBytes)
-{
-    void* devPtr = nullptr;
-    size_t bytes = 0;
-    CUDA_CHECK(cudaGraphicsResourceGetMappedPointer(&devPtr, &bytes, m_cudaResource));
-    if (sizeInBytes) *sizeInBytes = bytes;
-    return reinterpret_cast<T*>(devPtr);
-}
+
 
 // For template linkage
 // template float* StorageBufferCUDAWrapper::getDevicePointer<float>(size_t*);

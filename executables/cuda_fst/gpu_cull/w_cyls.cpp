@@ -64,14 +64,14 @@ std::chrono::steady_clock::time_point startTime = std::chrono::high_resolution_c
 extern "C" {
 #endif
 void cleaningScreen(
-    cudaSurfaceObject_t& texSurfaceObj, 
+    cudaSurfaceObject_t texSurfaceObj, 
     unsigned int* depthBuffer,
     unsigned int* pixelOwnershipBuffer,
     int workGroupSizeXPerPixel,
     int workGroupSizeYPerPixel,
     float far, 
-    float screenResolutionX,
-    float screenResolutionY
+    int screenResolutionX,
+    int screenResolutionY
     );
 #ifdef __cplusplus
 }
@@ -257,22 +257,28 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
             //     1);
             // glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
-            TextureCUDAWrapper& canvasDepthTextureCUDAWrapper = canvas.getCUDADepthTextureWrapper();
-            canvasDepthTextureCUDAWrapper.cudaMapResources();
-            canvasDepthTextureCUDAWrapper.cudaCreateSurfaceObj();
+            TextureCUDAWrapper& canvasTextureCUDAWrapper = canvas.getCUDATextureWrapper();
+            canvasTextureCUDAWrapper.cudaMapResources();
+            canvasTextureCUDAWrapper.cudaCreateSurfaceObj();
             unsigned int* depthBufferPtr = canvas.getDepthDataCUDA().getDepthBuffer();
-            unsigned int* pixelOwnershipBufferPtr = pixelCountFramesBufferCUDAWrapper.getDevicePointer();
+
+            pixelCountFramesBufferCUDAWrapper.cudaMapResources();
+            unsigned int* pixelOwnershipBufferPtr = pixelCountFramesBufferCUDAWrapper.getDevicePointer<unsigned int>();
             
             cleaningScreen(
-                canvasDepthTextureCUDAWrapper.getSurfaceObj(), 
+                canvasTextureCUDAWrapper.getSurfaceObject(), 
                 depthBufferPtr,
                 pixelOwnershipBufferPtr,
                 workGroupSizeXPerPixel,
                 workGroupSizeYPerPixel,
                 camera.getFar(),
-                static_cast<float>(SCR_WIDTH),
-                static_cast<float>(SCR_HEIGHT)
+                SCR_WIDTH,
+                SCR_HEIGHT
             );
+            canvasTextureCUDAWrapper.cudaDestroySurfaceObj();
+            canvasTextureCUDAWrapper.cudaUnmapResources();
+
+            pixelCountFramesBufferCUDAWrapper.cudaUnmapResources();
 
             glBindFramebuffer(GL_READ_FRAMEBUFFER, canvas.getFramebuffer().getId());
             isRunning = window.update();

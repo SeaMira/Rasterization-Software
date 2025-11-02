@@ -7,8 +7,8 @@ __global__ void cleaningKernel(
         unsigned int* depthBuffer,
         unsigned int* pixelOwnershipBuffer,
         float far, 
-        float screenResolutionX,
-        float screenResolutionY
+        int screenResolutionX,
+        int screenResolutionY
     )
 {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -26,18 +26,18 @@ __global__ void cleaningKernel(
 }
 
 extern "C" void cleaningScreen(
-    cudaSurfaceObject_t& texSurfaceObj, 
+    cudaSurfaceObject_t texSurfaceObj, 
     unsigned int* depthBuffer,
     unsigned int* pixelOwnershipBuffer,
     int workGroupSizeXPerPixel,
     int workGroupSizeYPerPixel,
     float far, 
-    float screenResolutionX,
-    float screenResolutionY
+    int screenResolutionX,
+    int screenResolutionY
     ) {
 
     dim3 block(workGroupSizeXPerPixel,workGroupSizeYPerPixel);
-    dim3 grid((width+workGroupSizeXPerPixel-1)/workGroupSizeXPerPixel, (height+workGroupSizeYPerPixel-1)/workGroupSizeYPerPixel);
-    fillSurfaceKernel<<<grid, block>>>(texSurfaceObj, depthBuffer, pixelOwnershipBuffer, far, screenResolutionX, screenResolutionY);
+    dim3 grid((screenResolutionX+workGroupSizeXPerPixel-1)/workGroupSizeXPerPixel, (screenResolutionY+workGroupSizeYPerPixel-1)/workGroupSizeYPerPixel);
+    cleaningKernel<<<grid, block>>>(texSurfaceObj, depthBuffer, pixelOwnershipBuffer, far, screenResolutionX, screenResolutionY);
     cudaDeviceSynchronize();
 }

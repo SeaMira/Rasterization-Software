@@ -31,7 +31,14 @@ public:
     void cudaUnmapResources();
 
     template<typename T>
-    T* getDevicePointer(size_t* sizeInBytes = nullptr);
+    T* getDevicePointer(size_t* sizeInBytes = nullptr)
+    {
+        void* devPtr = nullptr;
+        size_t bytes = 0;
+        CUDA_CHECK(cudaGraphicsResourceGetMappedPointer(&devPtr, &bytes, m_cudaResource));
+        if (sizeInBytes) *sizeInBytes = bytes;
+        return reinterpret_cast<T*>(devPtr);
+    }
 
     StorageBuffer* getBufferRef() const { return m_buffer; }
 
