@@ -109,7 +109,7 @@ void sphereRaster(
     int benchmark,
     cudaSurfaceObject_t outputImage,
     cudaTextureObject_t downsampleTex
-)
+);
 #ifdef __cplusplus
 }
 #endif
@@ -176,14 +176,17 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
     GLint maxSSBOsize = 0;
     glGetIntegerv(GL_MAX_SHADER_STORAGE_BLOCK_SIZE, &maxSSBOsize);
     std::cout << "Max SSBO size: " << maxSSBOsize << std::endl;
+    
     StorageBuffer sphereBuffer(GL_SHADER_STORAGE_BUFFER, sphere_count * sizeof(Sphere), 6, 
         spheres.data(), GL_STATIC_DRAW);
     StorageBufferCUDAWrapper sphereBufferCUDAWrapper(sphereBuffer);
-    
+    sphereBufferCUDAWrapper.cudaMapResources();
+
     StorageBuffer cylinderBuffer(GL_SHADER_STORAGE_BUFFER, cylinder_count * sizeof(Cylinder), 7, 
         cylinders.data(), GL_STATIC_DRAW);
     StorageBufferCUDAWrapper cylinderBufferCUDAWrapper(cylinderBuffer);
-    
+    cylinderBufferCUDAWrapper.cudaMapResources();
+
     // all entities visibility info ssbo
     int totalEntities = sphere_count + cylinder_count;
     std::vector<GLuint> visibilityFrames(2 * totalEntities, 10);
@@ -191,17 +194,20 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
         visibilityFrames.data(), GL_DYNAMIC_COPY);
     StorageBufferCUDAWrapper visibilityFramesBufferCUDAWrapper(visibilityFramesBuffer);
     unsigned int* visibilityFrameBufferPtr = visibilityFramesBufferCUDAWrapper.getDevicePointer<unsigned int>();
+    visibilityFramesBufferCUDAWrapper.cudaMapResources();
 
     GLuint zero = 0;
     GLuint resetValue = 0;
     StorageBuffer frustumAtomicCounter(GL_SHADER_STORAGE_BUFFER, sizeof(GLuint), 8, 
         &zero, GL_STATIC_DRAW);
     StorageBufferCUDAWrapper frustumAtomicCounterCUDAWrapper(frustumAtomicCounter);
+    frustumAtomicCounterCUDAWrapper.cudaMapResources();
 
     StorageBuffer occlusionAtomicCounter(GL_SHADER_STORAGE_BUFFER, sizeof(GLuint), 9, 
         &zero, GL_STATIC_DRAW);
     StorageBufferCUDAWrapper occlusionAtomicCounterCUDAWrapper(occlusionAtomicCounter);
-    
+    occlusionAtomicCounterCUDAWrapper.cudaMapResources();
+
     Benchmark benchmark(camera_controller, chkPoints);
 
     std::string base_path = "media/csv/fst_parallel_w_cyl/gpu_cull/occ_"; 
@@ -333,14 +339,14 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
             sphereRaster(
                 sphereBufferCUDAWrapper.getDevicePointer<Sphere>(),
                 sphere_count,
-                camera.getViewMatrix(),
-                camera.getProjectionMatrix(),
-                frustum.topFace,
-                frustum.bottomFace,
-                frustum.rightFace,
-                frustum.leftFace,
-                frustum.farFace,
-                frustum.nearFace,
+                camera.getView(),
+                camera.getProjection(),
+                glm::vec4(frustum.topFace.normal, frustum.topFace.distance),
+                glm::vec4(frustum.bottomFace.normal, frustum.bottomFace.distance),
+                glm::vec4(frustum.rightFace.normal, frustum.rightFace.distance),
+                glm::vec4(frustum.leftFace.normal, frustum.leftFace.distance),
+                glm::vec4(frustum.farFace.normal, frustum.farFace.distance),
+                glm::vec4(frustum.nearFace.normal, frustum.nearFace.distance),
                 camera.getFront(),
                 camera.getUp(),
                 camera.getRight(),
@@ -356,7 +362,7 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
                 occlusionAtomicCounterCUDAWrapper.getDevicePointer<unsigned int>(),
                 0,
                 canvasTextureCUDAWrapper.getSurfaceObject(),
-                canvasDepthDownsampleCUDA.getTextureObject()
+                canvasDepthDownsampleCUDA.getTexture()
             );
 
             canvasTextureCUDAWrapper.cudaDestroySurfaceObj();

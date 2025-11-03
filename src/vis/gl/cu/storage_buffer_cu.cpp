@@ -9,6 +9,7 @@ StorageBufferCUDAWrapper::StorageBufferCUDAWrapper(StorageBuffer& buffer, unsign
     m_buffer(&buffer),
     m_cudaResource(nullptr)
 {
+    std::cout << "setting buffer wrapper number: " << buffer.getId() << std::endl;
     cudaRegisterBuffer(flags);
 }
 

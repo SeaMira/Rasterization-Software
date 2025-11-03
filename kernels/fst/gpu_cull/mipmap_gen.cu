@@ -1,3 +1,5 @@
+#define CUDA_VERSION 13000
+
 #include <cuda_runtime.h>
 
 __global__ void downsampleDepthMaxKernel(

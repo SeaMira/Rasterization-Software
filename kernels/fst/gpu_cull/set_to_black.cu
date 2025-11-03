@@ -1,3 +1,5 @@
+#define CUDA_VERSION 13000
+
 #include <glad/glad.h>
 #include <cuda_runtime.h>
 #include <cuda_gl_interop.h>

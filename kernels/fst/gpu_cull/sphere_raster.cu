@@ -1,6 +1,7 @@
 // depth_occlusion_kernel.cu
 #define GLM_FORCE_CUDA
 #define GLM_FORCE_INLINE
+#define CUDA_VERSION 13000
 
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
@@ -371,7 +372,7 @@ extern "C" void sphereRaster(
     float fov,
     unsigned int* d_depthBuffer,
     unsigned int* d_pixelOwnershipBuffer,
-    FramePixelsCount* d_visibilityFrameBuffer,
+    unsigned int* d_visibilityFrameBuffer,
     unsigned int visibilityFrameBufferIndexOffset,
     unsigned int* d_frustCullcounter,
     unsigned int* d_occCullcounter,
@@ -402,7 +403,7 @@ extern "C" void sphereRaster(
         fov,
         d_depthBuffer,
         d_pixelOwnershipBuffer,
-        d_visibilityFrameBuffer,
+        (FramePixelsCount*)d_visibilityFrameBuffer,
         visibilityFrameBufferIndexOffset,
         d_frustCullcounter,
         d_occCullcounter,
