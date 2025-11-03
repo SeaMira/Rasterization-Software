@@ -81,6 +81,35 @@ void downsamplingDepthTexture(
     int screenResolutionY, 
     int downsampleWorkGroupSizeX, 
     int downsampleWorkGroupSizeY);
+
+void sphereRaster(
+    Sphere* d_spheres,
+    int sphereCount,
+    glm::mat4 view,
+    glm::mat4 proj,
+    glm::vec4 frustumTopFace,
+    glm::vec4 frustumBottomFace,
+    glm::vec4 frustumRightFace,
+    glm::vec4 frustumLeftFace,
+    glm::vec4 frustumFarFace,
+    glm::vec4 frustumNearFace,
+    glm::vec3 front,
+    glm::vec3 up,
+    glm::vec3 rightVec,
+    glm::vec3 cameraPos,
+    int screenW,
+    int screenH,
+    float fov,
+    unsigned int* d_depthBuffer,
+    unsigned int* d_pixelOwnershipBuffer,
+    unsigned int* d_visibilityFrameBuffer,
+    unsigned int visibilityFrameBufferIndexOffset,
+    unsigned int* d_frustCullcounter,
+    unsigned int* d_occCullcounter,
+    int benchmark,
+    cudaSurfaceObject_t outputImage,
+    cudaTextureObject_t downsampleTex
+)
 #ifdef __cplusplus
 }
 #endif
@@ -160,13 +189,18 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
     std::vector<GLuint> visibilityFrames(2 * totalEntities, 10);
     StorageBuffer visibilityFramesBuffer(GL_SHADER_STORAGE_BUFFER, 2 * totalEntities * sizeof(GLuint), 5, 
         visibilityFrames.data(), GL_DYNAMIC_COPY);
-    
+    StorageBufferCUDAWrapper visibilityFramesBufferCUDAWrapper(visibilityFramesBuffer);
+    unsigned int* visibilityFrameBufferPtr = visibilityFramesBufferCUDAWrapper.getDevicePointer<unsigned int>();
+
     GLuint zero = 0;
     GLuint resetValue = 0;
     StorageBuffer frustumAtomicCounter(GL_SHADER_STORAGE_BUFFER, sizeof(GLuint), 8, 
         &zero, GL_STATIC_DRAW);
+    StorageBufferCUDAWrapper frustumAtomicCounterCUDAWrapper(frustumAtomicCounter);
+
     StorageBuffer occlusionAtomicCounter(GL_SHADER_STORAGE_BUFFER, sizeof(GLuint), 9, 
         &zero, GL_STATIC_DRAW);
+    StorageBufferCUDAWrapper occlusionAtomicCounterCUDAWrapper(occlusionAtomicCounter);
     
     Benchmark benchmark(camera_controller, chkPoints);
 
@@ -294,6 +328,37 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
                 SCR_WIDTH,
                 SCR_HEIGHT
             );
+
+
+            sphereRaster(
+                sphereBufferCUDAWrapper.getDevicePointer<Sphere>(),
+                sphere_count,
+                camera.getViewMatrix(),
+                camera.getProjectionMatrix(),
+                frustum.topFace,
+                frustum.bottomFace,
+                frustum.rightFace,
+                frustum.leftFace,
+                frustum.farFace,
+                frustum.nearFace,
+                camera.getFront(),
+                camera.getUp(),
+                camera.getRight(),
+                camera.getPosition(),
+                SCR_WIDTH,
+                SCR_HEIGHT,
+                camera.getFov(),
+                depthBufferPtr,
+                pixelOwnershipBufferPtr,
+                visibilityFrameBufferPtr,
+                0,
+                frustumAtomicCounterCUDAWrapper.getDevicePointer<unsigned int>(),
+                occlusionAtomicCounterCUDAWrapper.getDevicePointer<unsigned int>(),
+                0,
+                canvasTextureCUDAWrapper.getSurfaceObject(),
+                canvasDepthDownsampleCUDA.getTextureObject()
+            );
+
             canvasTextureCUDAWrapper.cudaDestroySurfaceObj();
             canvasTextureCUDAWrapper.cudaUnmapResources();
 
