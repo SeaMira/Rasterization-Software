@@ -1,5 +1,6 @@
 // depth_occlusion_kernel.cu
 #define GLM_FORCE_CUDA
+#define GLM_ENABLE_EXPERIMENTAL
 #define GLM_FORCE_INLINE
 #define CUDA_VERSION 13000
 
@@ -15,9 +16,9 @@
 
 // ========================================================
 // Types (mirror GLSL)
-struct Sphere {
-    glm::vec4 positionr; // (x,y,z,r)
-};
+// struct Sphere {
+//     glm::vec4 positionr; // (x,y,z,r)
+// };
 
 struct FramePixelsCount {
     unsigned int frames;
@@ -147,10 +148,9 @@ __device__ glm::vec3 computeRd(int px, int py, int screenW, int screenH, const g
 // onSphDepth same math as GLSL
 __device__ float onSphDepth(const glm::vec3& rd, int px, int py, const glm::vec3& spherePos, float r,
                             const glm::vec3& rayStart, const glm::vec3& dx, const glm::vec3& dy,
-                            const glm::mat4& proj)
+                            const glm::mat4& proj, const glm::vec3& cameraPos)
 {
-    float h = iSphere(rayStart, rd, spherePos, r);
-    if (h < 0.0f) return 1e30f;
+    float h = iSphere(cameraPos, rd, spherePos, r);
     glm::vec3 hit = (rayStart + float(px) * dx + float(py) * dy) * h;
     // project depth like GLSL: (hit.z * proj[2].z + proj[3].z) / -hit.z
     float proj2z = proj[2][2]; // assumes column-major glm (access as proj[col][row])
@@ -159,12 +159,20 @@ __device__ float onSphDepth(const glm::vec3& rd, int px, int py, const glm::vec3
     return depth;
 }
 
+__device__ inline glm::vec2 safeMin(const glm::vec2& a, const glm::vec2& b) {
+    return glm::vec2(fminf(a.x, b.x), fminf(a.y, b.y));
+}
+
+__device__ inline glm::vec2 safeMax(const glm::vec2& a, const glm::vec2& b) {
+    return glm::vec2(fmaxf(a.x, b.x), fmaxf(a.y, b.y));
+}
+
 // ========================================================
 // Kernel: one thread per sphere
 // ========================================================
 __global__ void depthOcclusionKernel(
     // buffers (device pointers)
-    Sphere* __restrict__ spheres,
+    glm::vec4* __restrict__ spheres,
     int sphereCount,
     // frame / view data
     glm::mat4 view,
@@ -198,10 +206,11 @@ __global__ void depthOcclusionKernel(
 )
 {
     const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
     if (idx >= sphereCount) return;
 
-    Sphere s = spheres[idx];
-    glm::vec4 posr = s.positionr;
+    glm::vec4 posr = spheres[idx];
+    // glm::vec4 posr = s.positionr;
 
     // Frustum test
     if (!isSphereInside(posr, frustumLeftFace, frustumRightFace, frustumFarFace,
@@ -210,6 +219,12 @@ __global__ void depthOcclusionKernel(
         // mark zero pixels like shader did
         unsigned int visId = visibilityFrameBufferIndexOffset + idx;
         visibilityFrameBuffer[visId].pixels = 0;
+
+        // uchar4 uColor;
+        // uColor = make_uchar4(255, 0, 0, 255);
+        // surf2Dwrite(uColor, outputImage, (screenW/2 + 1) * sizeof(uchar4), screenH/2);
+
+        // atomicAdd(frustCullcounter, 1u);
         return;
     }
 
@@ -219,7 +234,7 @@ __global__ void depthOcclusionKernel(
     // camera-space sphere
     glm::vec4 worldPos = glm::vec4(posr.x, posr.y, posr.z, 1.0f);
     glm::vec4 camSpace4 = view * worldPos;
-    glm::vec3 cameraSpaceSphere = glm::vec3(camSpace4);
+    glm::vec3 cameraSpaceSphere = glm::vec3(camSpace4.x, camSpace4.y, camSpace4.z);
     glm::vec3 normCamSpaceSphere = glm::normalize(cameraSpaceSphere);
     glm::vec3 camImposPos = cameraSpaceSphere - normCamSpaceSphere * posr.w;
 
@@ -251,10 +266,14 @@ __global__ void depthOcclusionKernel(
     glm::vec3 ndcDR = ndc(downRight);
     glm::vec3 ndcDL = ndc(downLeft);
 
-    glm::vec2 minCorner = glm::min(glm::min(glm::vec2(ndcUR.x, ndcUR.y), glm::vec2(ndcUL.x, ndcUL.y)),
-                                   glm::min(glm::vec2(ndcDR.x, ndcDR.y), glm::vec2(ndcDL.x, ndcDL.y)));
-    glm::vec2 maxCorner = glm::max(glm::max(glm::vec2(ndcUR.x, ndcUR.y), glm::vec2(ndcUL.x, ndcUL.y)),
-                                   glm::max(glm::vec2(ndcDR.x, ndcDR.y), glm::vec2(ndcDL.x, ndcDL.y)));
+    glm::vec2 minCorner = safeMin(
+        safeMin(glm::vec2(ndcUR.x, ndcUR.y), glm::vec2(ndcUL.x, ndcUL.y)),
+        safeMin(glm::vec2(ndcDR.x, ndcDR.y), glm::vec2(ndcDL.x, ndcDL.y))
+    );
+    glm::vec2 maxCorner = safeMax(
+        safeMax(glm::vec2(ndcUR.x, ndcUR.y), glm::vec2(ndcUL.x, ndcUL.y)),
+        safeMax(glm::vec2(ndcDR.x, ndcDR.y), glm::vec2(ndcDL.x, ndcDL.y))
+    );
 
     int screenMinX = int((minCorner.x * 0.5f + 0.5f) * float(screenW));
     int screenMinY = int((minCorner.y * 0.5f + 0.5f) * float(screenH));
@@ -265,6 +284,7 @@ __global__ void depthOcclusionKernel(
     float dify = float(screenMaxY - screenMinY);
     if (difx * dify <= 2.0f) {
         visibilityFrameBuffer[visibilityFrameBufferIndexOffset + idx].pixels = 0;
+        // atomicAdd(frustCullcounter, 1u);
         return;
     }
 
@@ -281,27 +301,27 @@ __global__ void depthOcclusionKernel(
     glm::vec3 dy = scrc.dy;
     glm::vec3 rayStart = scrc.rayStart;
 
-    float pixelDepths[5];
-    for (int i = 0; i < 5; ++i) {
-        glm::vec3 rd = computeRd(xcoords[i], ycoords[i], screenW, screenH, rightVec, up, front, fov);
-        pixelDepths[i] = onSphDepth(rd, xcoords[i], ycoords[i], glm::vec3(posr), posr.w, rayStart, dx, dy, proj);
-    }
+    // float pixelDepths[5];
+    // for (int i = 0; i < 5; ++i) {
+    //     glm::vec3 rd = computeRd(xcoords[i], ycoords[i], screenW, screenH, rightVec, up, front, fov);
+    //     pixelDepths[i] = onSphDepth(rd, xcoords[i], ycoords[i], glm::vec3(posr), posr.w, rayStart, dx, dy, proj, cameraPos);
+    // }
 
-    bool billboardVisible = isSphereBillboardVisible(downsampleTex, screenW, screenH, xcoords, ycoords, pixelDepths, 5);
+    // bool billboardVisible = isSphereBillboardVisible(downsampleTex, screenW, screenH, xcoords, ycoords, pixelDepths, 5);
 
     unsigned int visIdx = visibilityFrameBufferIndexOffset + idx;
-    if (!billboardVisible) {
-        if (visibilityFrameBuffer[visIdx].frames > 0 && visibilityFrameBuffer[visIdx].pixels == 0) {
-            visibilityFrameBuffer[visIdx].frames -= 1;
-        } else if (visibilityFrameBuffer[visIdx].frames == 0 && visibilityFrameBuffer[visIdx].pixels == 0) {
-            // fully occluded, bail out
-            return;
-        } else {
-            visibilityFrameBuffer[visIdx].frames = 10;
-        }
-    } else {
-        visibilityFrameBuffer[visIdx].frames = 10;
-    }
+    // if (!billboardVisible) {
+    //     if (visibilityFrameBuffer[visIdx].frames > 0 && visibilityFrameBuffer[visIdx].pixels == 0) {
+    //         visibilityFrameBuffer[visIdx].frames -= 1;
+    //     } else if (visibilityFrameBuffer[visIdx].frames == 0 && visibilityFrameBuffer[visIdx].pixels == 0) {
+    //         // fully occluded, bail out
+    //         return;
+    //     } else {
+    //         visibilityFrameBuffer[visIdx].frames = 10;
+    //     }
+    // } else {
+    //     visibilityFrameBuffer[visIdx].frames = 10;
+    // }
 
     if (benchmark == 1) atomicAdd(occCullcounter, 1u);
 
@@ -315,6 +335,9 @@ __global__ void depthOcclusionKernel(
         glm::vec3 rayColStart = rayStart + float(px) * dx;
         bool finishedLine = false;
         for (int py = miny; py < maxy; ++py) {
+            // surf2Dwrite(make_uchar4(255, 255, 255, 255), outputImage,
+            // static_cast<unsigned int>(px) * sizeof(uchar4),
+            // static_cast<unsigned int>(py));
             glm::vec3 rd = computeRd(px, py, screenW, screenH, rightVec, up, front, fov);
             float t = iSphere(glm::vec3(cameraPos), rd, glm::vec3(posr), posr.w);
             if (t > 0.0f) {
@@ -353,7 +376,7 @@ __global__ void depthOcclusionKernel(
 
 
 extern "C" void sphereRaster(
-    Sphere* d_spheres,
+    glm::vec4* d_spheres,
     int sphereCount,
     glm::mat4 view,
     glm::mat4 proj,

@@ -14,6 +14,7 @@ find_package(OpenGL REQUIRED)
 # ===============================
 find_package(CUDA REQUIRED)
 set(CUDA_ARCH "75;86;89") # ajusta según tus tarjetas
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-relaxed-constexpr")
 
 add_subdirectory(src)
 add_subdirectory(extern)
