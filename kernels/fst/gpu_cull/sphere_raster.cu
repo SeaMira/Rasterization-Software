@@ -220,11 +220,6 @@ __global__ void depthOcclusionKernel(
         unsigned int visId = visibilityFrameBufferIndexOffset + idx;
         visibilityFrameBuffer[visId].pixels = 0;
 
-        // uchar4 uColor;
-        // uColor = make_uchar4(255, 0, 0, 255);
-        // surf2Dwrite(uColor, outputImage, (screenW/2 + 1) * sizeof(uchar4), screenH/2);
-
-        // atomicAdd(frustCullcounter, 1u);
         return;
     }
 
@@ -301,27 +296,27 @@ __global__ void depthOcclusionKernel(
     glm::vec3 dy = scrc.dy;
     glm::vec3 rayStart = scrc.rayStart;
 
-    // float pixelDepths[5];
-    // for (int i = 0; i < 5; ++i) {
-    //     glm::vec3 rd = computeRd(xcoords[i], ycoords[i], screenW, screenH, rightVec, up, front, fov);
-    //     pixelDepths[i] = onSphDepth(rd, xcoords[i], ycoords[i], glm::vec3(posr), posr.w, rayStart, dx, dy, proj, cameraPos);
-    // }
+    float pixelDepths[5];
+    for (int i = 0; i < 5; ++i) {
+        glm::vec3 rd = computeRd(xcoords[i], ycoords[i], screenW, screenH, rightVec, up, front, fov);
+        pixelDepths[i] = onSphDepth(rd, xcoords[i], ycoords[i], glm::vec3(posr), posr.w, rayStart, dx, dy, proj, cameraPos);
+    }
 
-    // bool billboardVisible = isSphereBillboardVisible(downsampleTex, screenW, screenH, xcoords, ycoords, pixelDepths, 5);
+    bool billboardVisible = isSphereBillboardVisible(downsampleTex, screenW, screenH, xcoords, ycoords, pixelDepths, 5);
 
     unsigned int visIdx = visibilityFrameBufferIndexOffset + idx;
-    // if (!billboardVisible) {
-    //     if (visibilityFrameBuffer[visIdx].frames > 0 && visibilityFrameBuffer[visIdx].pixels == 0) {
-    //         visibilityFrameBuffer[visIdx].frames -= 1;
-    //     } else if (visibilityFrameBuffer[visIdx].frames == 0 && visibilityFrameBuffer[visIdx].pixels == 0) {
-    //         // fully occluded, bail out
-    //         return;
-    //     } else {
-    //         visibilityFrameBuffer[visIdx].frames = 10;
-    //     }
-    // } else {
-    //     visibilityFrameBuffer[visIdx].frames = 10;
-    // }
+    if (!billboardVisible) {
+        if (visibilityFrameBuffer[visIdx].frames > 0 && visibilityFrameBuffer[visIdx].pixels == 0) {
+            visibilityFrameBuffer[visIdx].frames -= 1;
+        } else if (visibilityFrameBuffer[visIdx].frames == 0 && visibilityFrameBuffer[visIdx].pixels == 0) {
+            // fully occluded, bail out
+            return;
+        } else {
+            visibilityFrameBuffer[visIdx].frames = 10;
+        }
+    } else {
+        visibilityFrameBuffer[visIdx].frames = 10;
+    }
 
     if (benchmark == 1) atomicAdd(occCullcounter, 1u);
 

@@ -42,6 +42,9 @@ bool withOcclusionCulling = false;
 GLuint workGroupSizeXPerPixel = 16;  // Deifining threads-per-group (X)
 GLuint workGroupSizeYPerPixel = 16;  // Deifining threads-per-group (Y)
 
+GLuint workGroupSizeXPixelCount = 16;  // Deifining threads-per-group (X)
+GLuint workGroupSizeYPixelCount = 16;  // Deifining threads-per-group (Y)
+
 GLuint workGroupSizeXPerSphere = 256;  // Deifining threads-per-sphere (X)
 GLuint workGroupSizeXPerCylinder = 256;  // Deifining threads-per-sphere (X)
 
@@ -110,6 +113,15 @@ void sphereRaster(
     cudaSurfaceObject_t outputImage,
     cudaTextureObject_t downsampleTex
 );
+
+void pixelCount(
+    unsigned int* pixelOwnershipBuffer,   // length = screenW*screenH
+    unsigned int* d_visibilityFrameBuffer,
+    int workGroupSizeX,
+    int workGroupSizeY,
+    int screenResolutionX,
+    int screenResolutionY
+    );
 #ifdef __cplusplus
 }
 #endif
@@ -372,13 +384,23 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
                 0,
                 frustumCounter,
                 occlusionCounter,
-                0,
+                1,
                 canvasTextureCUDAWrapper.getSurfaceObject(),
                 canvasDepthDownsampleCUDA.getTexture()
             );
 
-            // unsigned int h_frustCount = 0;
-            // cudaMemcpy(&h_frustCount, frustumCounter, sizeof(unsigned int), cudaMemcpyDeviceToHost);
+            pixelCount(
+                pixelOwnershipBufferPtr,
+                visibilityFrameBufferPtr,
+                workGroupSizeXPixelCount,
+                workGroupSizeYPixelCount,
+                SCR_WIDTH,
+                SCR_HEIGHT
+            );
+
+            unsigned int h_frustCount = 0;
+            cudaMemcpy(&h_frustCount, frustumCounter, sizeof(unsigned int), cudaMemcpyDeviceToHost);
+            visibleSpheresCount = h_frustCount;
             // std::cout << "Visible Spheres: " << h_frustCount << std::endl;
             // Sphere* h_Spheres = new Sphere[sphere_count];
             // cudaMemcpy(h_Spheres, sphereBufferPtr, sizeof(Sphere) * sphere_count, cudaMemcpyDeviceToHost);

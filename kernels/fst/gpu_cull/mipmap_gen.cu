@@ -25,7 +25,7 @@ __global__ void downsampleDepthMaxKernel(
             int y = baseY + dy;
             if (x < screenResolutionX && y < screenResolutionY)
             {
-                float val = depthBuffer[y * screenResolutionX + x];
+                float val = __uint_as_float(depthBuffer[y * screenResolutionX + x]);
                 if (val > localMax) localMax = val;
             }
         }
