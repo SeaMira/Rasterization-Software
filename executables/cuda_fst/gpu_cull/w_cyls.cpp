@@ -32,7 +32,7 @@ using uint = unsigned int;
 int SCR_WIDTH = 1024;
 int SCR_HEIGHT = 1024;
 int sphere_count = 4000000;
-int cylinder_count = 4000000;
+int cylinder_count = 1;
 
 std::string title = "First Parallel CUDA Version: Spheres and Cylinders - GPU Frustum Culling"; 
 
@@ -55,7 +55,7 @@ int visibleCylindersCount = 0;
 int notOccludedCylindersCount = 0;
 
 // downsample settings
-int downsampleLevel = 2;
+int downsampleLevel = 4;
 int downsampleWorkGroupSizeX = (1 << downsampleLevel);
 int downsampleWorkGroupSizeY = (1 << downsampleLevel);
 

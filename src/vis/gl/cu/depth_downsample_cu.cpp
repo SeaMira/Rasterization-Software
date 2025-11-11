@@ -68,7 +68,6 @@ void DepthDownsampleCUDA::writingSurfaceSetup()
     m_surfResDesc.res.array.array = m_downsampleArray;
     CUDA_CHECK(cudaCreateSurfaceObject(&m_surface, &m_surfResDesc));
 
-    m_texResDesc = m_surfResDesc;
 }
 
 void DepthDownsampleCUDA::readingSurfaceSetup()
@@ -79,7 +78,7 @@ void DepthDownsampleCUDA::readingSurfaceSetup()
     m_texDesc.filterMode = cudaFilterModePoint;
     m_texDesc.readMode = cudaReadModeElementType;
     m_texDesc.normalizedCoords = 0;
-    CUDA_CHECK(cudaCreateTextureObject(&m_texture, &m_texResDesc, &m_texDesc, nullptr));
+    CUDA_CHECK(cudaCreateTextureObject(&m_texture, &m_surfResDesc, &m_texDesc, nullptr));
 }
 
 bool DepthDownsampleCUDA::isValid() const

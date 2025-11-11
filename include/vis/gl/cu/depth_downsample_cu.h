@@ -104,7 +104,6 @@ private:
     cudaArray_t m_downsampleArray;        ///< Textura destino (mipmap/<)
 
     cudaResourceDesc m_surfResDesc = {};
-    cudaResourceDesc m_texResDesc = {};
     cudaTextureDesc m_texDesc = {};
 
     cudaSurfaceObject_t m_surface;        ///< Para escritura (downsample)

@@ -92,8 +92,8 @@ __device__ bool isSphereBillboardVisible(
     int screenW, int screenH,
     int xcoords[], int ycoords[], float pixelDepths[], int pixelsToCheck = 5)
 {
-    int dsW = max(1, screenW / 4);
-    int dsH = max(1, screenH / 4);
+    int dsW = max(1, screenW / 16);
+    int dsH = max(1, screenH / 16);
 
     // sample mapped coords (like original)
     float downvals[5];
