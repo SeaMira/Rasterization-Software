@@ -170,7 +170,7 @@ __device__ inline glm::vec2 safeMax(const glm::vec2& a, const glm::vec2& b) {
 // ========================================================
 // Kernel: one thread per sphere
 // ========================================================
-__global__ void depthOcclusionKernel(
+__global__ void sphereRasterKernel(
     // buffers (device pointers)
     glm::vec4* __restrict__ spheres,
     int sphereCount,
@@ -401,7 +401,7 @@ extern "C" void sphereRaster(
 {
     dim3 block(128);
     dim3 grid((sphereCount + block.x - 1) / block.x);
-    depthOcclusionKernel<<<grid, block>>>(
+    sphereRasterKernel<<<grid, block>>>(
         d_spheres,
         sphereCount,
         view,
