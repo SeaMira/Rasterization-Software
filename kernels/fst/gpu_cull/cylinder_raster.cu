@@ -106,7 +106,7 @@ struct ScreenRayCasting {
     glm::vec3 dy;
 };
 
-__device__ ScreenRayCasting makeScreenRayCasting(
+__device__ inline ScreenRayCasting makeScreenRayCasting(
     const glm::mat4& view,
     const glm::vec3& front,
     const glm::vec3& up,
@@ -179,7 +179,7 @@ __device__ bool isCylinderBillboardVisible(
 __device__ inline bool isOnOrForwardPlaneAABB(glm::vec4 plane, BBox3D bbox) 
 {
     glm::vec3 negativeVertex = bbox.mMin;
-    glm::vec3 normal = plane.xyz;
+    glm::vec3 normal = glm::vec3(plane.x, plane.y, plane.z);
     float distance = plane.w;
 
     if (normal.x >= 0) negativeVertex.x = bbox.mMax.x;
@@ -206,7 +206,7 @@ __device__ inline bool isCylinderInside(const glm::vec3& pa,
 {
     glm::vec3 a = pb - pa;
     glm::vec3 e = radius*sqrt( 1.0f - a*a/glm::dot(a,a) );
-    BBox3D bbox3d = BBox3D(safeMin( pa - e, pb - e ), safeMax( pa + e, pb + e ));
+    BBox3D bbox3d = BBox3D{safeMin( pa - e, pb - e ), safeMax( pa + e, pb + e )};
     return isOnOrForwardPlaneAABB(frustumLeft, bbox3d) &&
            isOnOrForwardPlaneAABB(frustumRight, bbox3d) &&
            isOnOrForwardPlaneAABB(frustumFar, bbox3d) &&
@@ -216,7 +216,7 @@ __device__ inline bool isCylinderInside(const glm::vec3& pa,
 }
 
 // compute eye ray direction (equivalent to computeRd in GLSL)
-__device__ glm::vec3 computeRd(int px, int py, int screenW, int screenH, const glm::vec3& right, const glm::vec3& up, const glm::vec3& front, float fov)
+__device__ inline glm::vec3 computeRd(int px, int py, int screenW, int screenH, const glm::vec3& right, const glm::vec3& up, const glm::vec3& front, float fov)
 {
     glm::vec2 p = ( -glm::vec2(screenW, screenH) + 2.0f * glm::vec2(px, py) ) / glm::vec2(screenW, screenH);
     float fovRad = glm::radians(fov);
@@ -230,7 +230,7 @@ __device__ float onCylDepth(const glm::vec3& rd, int px, int py, const glm::vec3
                             const glm::vec3& rayStart, const glm::vec3& dx, const glm::vec3& dy,
                             const glm::mat4& proj, const glm::vec3& cameraPos)
 {
-    float h = iCylinder(cameraPos, rd, pa, pb, r);
+    float h = iCylinder(cameraPos, rd, pa, pb, r).x;
     glm::vec3 hit = (rayStart + float(px) * dx + float(py) * dy) * h;
     // project depth like GLSL: (hit.z * proj[2].z + proj[3].z) / -hit.z
     float proj2z = proj[2][2]; // assumes column-major glm (access as proj[col][row])
@@ -277,7 +277,7 @@ __global__ void cylinderRasterKernel(
     cudaTextureObject_t downsampleTex
 )
 {
-    const int visIdx = blockIdx.x * blockDim.x + threadIdx.x;
+    const int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (idx >= cylinderCount) return;
 
@@ -285,7 +285,7 @@ __global__ void cylinderRasterKernel(
     // glm::vec4 posr = s.positionr;
 
     // Frustum test
-    if (!isCylinderInside(c.pa_r.xyz, c.pb_r.xyz, c.pa_r.w, frustumLeftFace, frustumRightFace, frustumFarFace,
+    if (!isCylinderInside(glm::vec3(c.pa_r.x, c.pa_r.y, c.pa_r.z), glm::vec3(c.pb_r.x, c.pb_r.y, c.pb_r.z), c.pa_r.w, frustumLeftFace, frustumRightFace, frustumFarFace,
                         frustumNearFace, frustumTopFace, frustumBottomFace))
     {
         // mark zero pixels like shader did
@@ -297,8 +297,8 @@ __global__ void cylinderRasterKernel(
 
     if (benchmark == 1) atomicAdd(frustCullcounter, 1u);
 
-    glm::vec3 pa = c.pa_r.xyz;
-    glm::vec3 pb = c.pb_r.xyz;
+    glm::vec3 pa = glm::vec3(c.pa_r.x, c.pa_r.y, c.pa_r.z);
+    glm::vec3 pb = glm::vec3(c.pb_r.x, c.pb_r.y, c.pb_r.z);
     float ra = c.pa_r.w;
     glm::vec3 camSpaceCylA = glm::vec3(view * glm::vec4(pa, 1.0f));
     glm::vec3 camSpaceCylB = glm::vec3(view * glm::vec4(pb, 1.0f));
@@ -356,12 +356,12 @@ __global__ void cylinderRasterKernel(
     projectedPoints[2] = glm::vec2(ndcv4Proj);
     projectedPoints[3] = glm::vec2(ndcv3Proj);
 
-    int minY = screenResolution.y;
+    int minY = screenH;
     int maxY = 0;
     for (int i = 0; i < 4; i++) 
     {
-        projectedPoints[i].x = int((projectedPoints[i].x * 0.5f + 0.5f) * screenResolution.x);
-        projectedPoints[i].y = int((projectedPoints[i].y * 0.5f + 0.5f) * screenResolution.y);
+        projectedPoints[i].x = int((projectedPoints[i].x * 0.5f + 0.5f) * screenW);
+        projectedPoints[i].y = int((projectedPoints[i].y * 0.5f + 0.5f) * screenH);
 
         minY = min(minY, int(floorf(projectedPoints[i].y))); 
         maxY = max(maxY, int(ceilf(projectedPoints[i].y)));
@@ -378,7 +378,7 @@ __global__ void cylinderRasterKernel(
     glm::vec3 closePa = closePa1.z < closePa2.z ? closePa1 : closePa2;
     const glm::vec4 closePaProj = proj * glm::vec4(closePa, 1.0f);
     closePa = glm::vec3(closePaProj.x / closePaProj.w, closePaProj.y / closePaProj.w, closePaProj.z / closePaProj.w);
-    const glm::ivec2 closePaScreen = glm::ivec2((closePa.x * 0.5f + 0.5f) * screenResolution.x, (closePa.y * 0.5f + 0.5f) * screenResolution.y);
+    const glm::ivec2 closePaScreen = glm::ivec2((closePa.x * 0.5f + 0.5f) * screenW, (closePa.y * 0.5f + 0.5f) * screenH);
     closePa = computeRd(closePaScreen.x, closePaScreen.y, screenW, screenH, rightVec, up, front, fov);
     
     const glm::vec3 closePb1 = camImpPosB - x * ra;
@@ -386,7 +386,7 @@ __global__ void cylinderRasterKernel(
     glm::vec3 closePb = closePb1.z < closePb2.z ? closePb1 : closePb2;
     const glm::vec4 closePbProj = proj * glm::vec4(closePb, 1.0f);
     closePb = glm::vec3(closePbProj.x / closePbProj.w, closePbProj.y / closePbProj.w, closePbProj.z / closePbProj.w);
-    const glm::ivec2 closePbScreen = glm::ivec2(int((closePb.x * 0.5f + 0.5f) * screenResolution.x), int((closePb.y * 0.5f + 0.5f) * screenResolution.y));
+    const glm::ivec2 closePbScreen = glm::ivec2(int((closePb.x * 0.5f + 0.5f) * screenW), int((closePb.y * 0.5f + 0.5f) * screenH));
     closePb = computeRd(closePbScreen.x, closePbScreen.y, screenW, screenH, rightVec, up, front, fov);
     
     const glm::vec3 closeCenter1 = center - x * ra;
@@ -394,7 +394,7 @@ __global__ void cylinderRasterKernel(
     glm::vec3 closeCenter = closeCenter1.z < closeCenter2.z ? closeCenter1 : closeCenter2;
     const glm::vec4 closeCenterProj = proj * glm::vec4(closeCenter, 1.0f);
     closeCenter = glm::vec3(closeCenterProj.x / closeCenterProj.w, closeCenterProj.y / closeCenterProj.w, closeCenterProj.z / closeCenterProj.w);
-    const glm::ivec2 closeCenterScreen = glm::ivec2(int((closeCenter.x * 0.5f + 0.5f) * screenResolution.x), int((closeCenter.y * 0.5f + 0.5f) * screenResolution.y));
+    const glm::ivec2 closeCenterScreen = glm::ivec2(int((closeCenter.x * 0.5f + 0.5f) * screenW), int((closeCenter.y * 0.5f + 0.5f) * screenH));
     closeCenter = computeRd(closeCenterScreen.x, closeCenterScreen.y, screenW, screenH, rightVec, up, front, fov);
 
 
@@ -404,7 +404,7 @@ __global__ void cylinderRasterKernel(
         onCylDepth(closePa, closePaScreen.x, closePaScreen.y, pa, pb, ra, rayStart, dx, dy, proj, cameraPos),
         onCylDepth(closePb, closePbScreen.x, closePbScreen.y, pa, pb, ra, rayStart, dx, dy, proj, cameraPos),
         onCylDepth(closeCenter, closeCenterScreen.x, closeCenterScreen.y, pa, pb, ra, rayStart, dx, dy, proj, cameraPos)
-    }
+    };
 
     bool billboardVisible = isCylinderBillboardVisible(downsampleTex, screenW, screenH, xcoords, ycoords, pixelDepths, 5);
 
@@ -483,9 +483,7 @@ __global__ void cylinderRasterKernel(
                         ucharColor = make_uchar4(color.x*255, color.y*255, color.z*255, 255);
                         surf2Dwrite(ucharColor, outputImage, px * sizeof(uchar4), py); 
                     }
-                } else if (finishedLine) {
-                    break;
-                }
+                } 
             }
         }
     }
@@ -524,8 +522,8 @@ extern "C" void cylinderRaster(
     cudaTextureObject_t downsampleTex
 )
 {
-    dim3 block(128);
-    dim3 grid((sphereCount + block.x - 1) / block.x);
+    dim3 block(256);
+    dim3 grid((cylinderCount + block.x - 1) / block.x);
     cylinderRasterKernel<<<grid, block>>>(
         cylinders,
         cylinderCount,

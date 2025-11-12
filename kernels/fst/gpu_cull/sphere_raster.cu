@@ -399,7 +399,7 @@ extern "C" void sphereRaster(
     cudaTextureObject_t downsampleTex
 )
 {
-    dim3 block(128);
+    dim3 block(256);
     dim3 grid((sphereCount + block.x - 1) / block.x);
     sphereRasterKernel<<<grid, block>>>(
         d_spheres,

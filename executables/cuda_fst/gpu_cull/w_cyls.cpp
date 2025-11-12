@@ -32,7 +32,7 @@ using uint = unsigned int;
 int SCR_WIDTH = 1024;
 int SCR_HEIGHT = 1024;
 int sphere_count = 4000000;
-int cylinder_count = 1;
+int cylinder_count = 4000000;
 
 std::string title = "First Parallel CUDA Version: Spheres and Cylinders - GPU Frustum Culling"; 
 
@@ -460,11 +460,9 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
                 canvasDepthDownsampleCUDA.getTexture()
             );
 
-            unsigned int h_frustCount = 0;
             cudaMemcpy(&h_frustCount, frustumCounter, sizeof(unsigned int), cudaMemcpyDeviceToHost);
             visibleCylindersCount = h_frustCount;
             
-            unsigned int h_occCount = 0;
             cudaMemcpy(&h_occCount, occlusionCounter, sizeof(unsigned int), cudaMemcpyDeviceToHost);
             notOccludedCylindersCount = h_occCount;
 
