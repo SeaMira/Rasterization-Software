@@ -310,7 +310,7 @@ private:
 
     float mSpeed = 10.0f; ///< speed of the camera.
     float mNear = 0.1f;  ///< near plane distance of the camera.
-    float mFar = 100.0f; ///< far plane distance of the camera.
+    float mFar = 1000.0f; ///< far plane distance of the camera.
 
     friend class CameraInfoComponent; ///< the camera info component is a friend class so it can be shown on UI.
     
