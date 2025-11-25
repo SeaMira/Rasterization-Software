@@ -26,6 +26,7 @@
 #include "vis/gl/texture.h"
 #include "vis/gl/cu/canvas_cu.h"
 
+
 using uint = unsigned int;
 
 // Settings
@@ -72,75 +73,80 @@ void cleaningScreen(
     unsigned int* pixelOwnershipBuffer,
     int workGroupSizeXPerPixel,
     int workGroupSizeYPerPixel,
-    float far, 
-    int screenResolutionX,
-    int screenResolutionY
+    float c_far, 
+    int c_screenResolutionX,
+    int c_screenResolutionY,
+    cudaStream_t& stream
     );
 
 void downsamplingDepthTexture(
     unsigned int* depthBuffer, 
     cudaSurfaceObject_t downsampleSurface, 
-    int screenResolutionX, 
-    int screenResolutionY, 
+    int c_screenResolutionX, 
+    int c_screenResolutionY, 
     int downsampleWorkGroupSizeX, 
-    int downsampleWorkGroupSizeY);
+    int downsampleWorkGroupSizeY,
+    cudaStream_t& stream
+);
 
 void sphereRaster(
-    Sphere* d_spheres,
-    int sphereCount,
-    glm::mat4 view,
-    glm::mat4 proj,
-    glm::vec4 frustumTopFace,
-    glm::vec4 frustumBottomFace,
-    glm::vec4 frustumRightFace,
-    glm::vec4 frustumLeftFace,
-    glm::vec4 frustumFarFace,
-    glm::vec4 frustumNearFace,
-    glm::vec3 front,
-    glm::vec3 up,
-    glm::vec3 rightVec,
-    glm::vec3 cameraPos,
-    int screenW,
-    int screenH,
-    float fov,
+    glm::vec4* d_spheres,
+    int c_sphereCount,
+    glm::mat4 c_view,
+    glm::mat4 c_proj,
+    glm::vec4 c_frustumTopFace,
+    glm::vec4 c_frustumBottomFace,
+    glm::vec4 c_frustumRightFace,
+    glm::vec4 c_frustumLeftFace,
+    glm::vec4 c_frustumFarFace,
+    glm::vec4 c_frustumNearFace,
+    glm::vec3 c_front,
+    glm::vec3 c_up,
+    glm::vec3 c_right,
+    glm::vec3 c_cameraPos,
+    int c_screenW,
+    int c_screenH,
+    float c_fov,
     unsigned int* d_depthBuffer,
     unsigned int* d_pixelOwnershipBuffer,
     unsigned int* d_visibilityFrameBuffer,
-    unsigned int visibilityFrameBufferIndexOffset,
+    unsigned int c_visibilityFrameBufferIndexOffset,
     unsigned int* d_frustCullcounter,
     unsigned int* d_occCullcounter,
-    int benchmark,
+    int c_benchmark,
     cudaSurfaceObject_t outputImage,
-    cudaTextureObject_t downsampleTex
+    cudaTextureObject_t downsampleTex,
+    cudaStream_t& stream
 );
 
 void cylinderRaster(
     Cylinder* cylinders,
-    int cylinderCount,
-    glm::mat4 view,
-    glm::mat4 proj,
-    glm::vec4 frustumTopFace,
-    glm::vec4 frustumBottomFace,
-    glm::vec4 frustumRightFace,
-    glm::vec4 frustumLeftFace,
-    glm::vec4 frustumFarFace,
-    glm::vec4 frustumNearFace,
-    glm::vec3 front,
-    glm::vec3 up,
-    glm::vec3 rightVec,
-    glm::vec3 cameraPos,
-    int screenW,
-    int screenH,
-    float fov,
+    int c_cylinderCount,
+    glm::mat4 c_view,
+    glm::mat4 c_proj,
+    glm::vec4 c_frustumTopFace,
+    glm::vec4 c_frustumBottomFace,
+    glm::vec4 c_frustumRightFace,
+    glm::vec4 c_frustumLeftFace,
+    glm::vec4 c_frustumFarFace,
+    glm::vec4 c_frustumNearFace,
+    glm::vec3 c_front,
+    glm::vec3 c_up,
+    glm::vec3 c_right,
+    glm::vec3 c_cameraPos,
+    int c_screenW,
+    int c_screenH,
+    float c_fov,
     unsigned int* d_depthBuffer,
     unsigned int* d_pixelOwnershipBuffer,
     unsigned int* d_visibilityFrameBuffer,
-    unsigned int visibilityFrameBufferIndexOffset,
+    unsigned int c_visibilityFrameBufferIndexOffset,
     unsigned int* d_frustCullcounter,
     unsigned int* d_occCullcounter,
-    int benchmark,
+    int c_benchmark,
     cudaSurfaceObject_t outputImage,
-    cudaTextureObject_t downsampleTex
+    cudaTextureObject_t downsampleTex,
+    cudaStream_t& stream
 );
 
 void pixelCount(
@@ -148,8 +154,9 @@ void pixelCount(
     unsigned int* d_visibilityFrameBuffer,
     int workGroupSizeX,
     int workGroupSizeY,
-    int screenResolutionX,
-    int screenResolutionY
+    int c_screenResolutionX,
+    int c_screenResolutionY,
+    cudaStream_t& stream
     );
 #ifdef __cplusplus
 }
@@ -288,10 +295,37 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
     std::chrono::duration<double> elapsed_seconds = endTime - startTime;
     std::ofstream logFile("C:\\Users\\Sebatian\\Desktop\\XLIM\\Memoria_per_frame\\log.txt", std::ios::out);
 
+    int count = 0;
+    cudaGetDeviceCount(&count);
+
+    for (int i = 0; i < count; i++) {
+        cudaDeviceProp prop;
+        cudaGetDeviceProperties(&prop, i);
+
+        std::cout << "Device " << i << ": " << prop.name << std::endl;
+        
+        std::cout << "Compute capability: " << prop.major << "." << prop.minor << std::endl;
+        std::cout << "Memoria global: " << prop.totalGlobalMem / (1024.0 * 1024 * 1024) << " GB" << std::endl;
+    }
+    cudaSetDevice(0);
+    
     try
     {
         bool fbo1o2 = false;
         bool isRunning = true;
+
+        cudaStream_t stream;
+        cudaStreamCreate(&stream);
+
+        cudaEvent_t evtFrameReady;
+        cudaEventCreateWithFlags(&evtFrameReady, cudaEventDisableTiming);
+
+        TextureCUDAWrapper& canvasTextureCUDAWrapper = canvas.getCUDATextureWrapper();
+        canvasTextureCUDAWrapper.cudaMapResources();
+        canvasTextureCUDAWrapper.cudaCreateSurfaceObj();
+
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, canvas.getFramebuffer().getId());
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
         while ( isRunning )
         {
             camera_controller.cameraUpdate();
@@ -300,69 +334,13 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
 
             if (window.getInput().isKeyDown(Key::T)) profiler.startSavingNextFrames(benchmark.getCheckpointID());
 
-            // canvas.downsampleCanvasDepth(downsampleWorkGroupSizeX, downsampleWorkGroupSizeY);
-            
-            // canvas.cleanCanvasBuffers(workGroupSizeXPerPixel, workGroupSizeYPerPixel, camera.getFar());
-
+    
             Frustum frustum(camera);
 
-            // spheresShader.use();
-            // #if BENCHMARKING 
-            //     frustumAtomicCounter.bind();
-            //     glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &visibleCylindersCount);
-            //     glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &resetValue);
-            //     frustumAtomicCounter.unbind();
 
-            //     occlusionAtomicCounter.bind();
-            //     glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &notOccludedCylindersCount);
-            //     glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &resetValue);
-            //     occlusionAtomicCounter.unbind();
-
-            //     spheresShader.setInt("benchmark", 1); 
-            // #else
-            //     spheresShader.setInt("benchmark", 0);
-            // #endif
-            // // spheresShader.setInt("sphereCount", sphere_count);
-            // // spheresShader.setUint("visibilityFrameBufferIndexOffset", 0);
-            // // spheresShader.setVec2I("screenResolution", screenResolution);
-            // setFrustumUniforms(spheresShader, frustum);
-            // setCameraUniforms(spheresShader, camera);
-            // glDispatchCompute(numGroupsXSpheres, numGroupsY, 1);
-            // glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
-            
-            // cylinderShader.use();
-            // #if BENCHMARKING 
-            //     frustumAtomicCounter.bind();
-            //     glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &visibleSpheresCount);
-            //     glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &resetValue);
-            //     frustumAtomicCounter.unbind();
-
-            //     occlusionAtomicCounter.bind();
-            //     glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &notOccludedSpheresCount);
-            //     glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &resetValue);
-            //     occlusionAtomicCounter.unbind();
-                
-            //     cylinderShader.setInt("benchmark", 1); 
-            // #else
-            //     cylinderShader.setInt("benchmark", 0);
-            // #endif
-            // cylinderShader.setInt("cylinderCount", cylinder_count);
-            // cylinderShader.setUint("visibilityFrameBufferIndexOffset", sphere_count);
-            // cylinderShader.setVec2I("screenResolution", screenResolution);
-            // setFrustumUniforms(cylinderShader, frustum);
-            // setCameraUniforms(cylinderShader, camera);
-            // glDispatchCompute(numGroupsXCylinders, numGroupsY, 1);
-            // glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
-
-            // pixelCountComputeShader.use();
-            // pixelCountComputeShader.setVec2I("screenResolution", screenResolution);
-            // glDispatchCompute((SCR_WIDTH + workGroupSizeXPerPixel - 1) / workGroupSizeXPerPixel, 
-            //     (SCR_HEIGHT + workGroupSizeYPerPixel - 1) / workGroupSizeYPerPixel, 
-            //     1);
-            // glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-
-            cudaMemset(frustumCounter, 0, sizeof(unsigned int));
-            cudaMemset(occlusionCounter, 0, sizeof(unsigned int));
+            // Limpiar contadores en stream
+            cudaMemsetAsync(frustumCounter, 0, sizeof(unsigned int), stream);
+            cudaMemsetAsync(occlusionCounter, 0, sizeof(unsigned int), stream);
 
             downsamplingDepthTexture(
                 depthBufferPtr,
@@ -370,13 +348,11 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
                 SCR_WIDTH,
                 SCR_HEIGHT,
                 downsampleWorkGroupSizeX,
-                downsampleWorkGroupSizeY
+                downsampleWorkGroupSizeY,
+                stream
             );
 
 
-            TextureCUDAWrapper& canvasTextureCUDAWrapper = canvas.getCUDATextureWrapper();
-            canvasTextureCUDAWrapper.cudaMapResources();
-            canvasTextureCUDAWrapper.cudaCreateSurfaceObj();
             
             cleaningScreen(
                 canvasTextureCUDAWrapper.getSurfaceObject(), 
@@ -386,7 +362,8 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
                 workGroupSizeYPerPixel,
                 camera.getFar(),
                 SCR_WIDTH,
-                SCR_HEIGHT
+                SCR_HEIGHT,
+                stream
             );
 
 
@@ -416,20 +393,17 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
                 occlusionCounter,
                 1,
                 canvasTextureCUDAWrapper.getSurfaceObject(),
-                canvasDepthDownsampleCUDA.getTexture()
+                canvasDepthDownsampleCUDA.getTexture(),
+                stream
             );
 
-            unsigned int h_frustCount = 0;
-            cudaMemcpy(&h_frustCount, frustumCounter, sizeof(unsigned int), cudaMemcpyDeviceToHost);
-            visibleSpheresCount = h_frustCount;
-            
-            unsigned int h_occCount = 0;
-            cudaMemcpy(&h_occCount, occlusionCounter, sizeof(unsigned int), cudaMemcpyDeviceToHost);
-            notOccludedSpheresCount = h_occCount;
+            // Copias asíncronas
+            cudaMemcpyAsync(&visibleSpheresCount, frustumCounter, sizeof(unsigned int), cudaMemcpyDeviceToHost, stream);
+            cudaMemcpyAsync(&notOccludedSpheresCount, occlusionCounter, sizeof(unsigned int), cudaMemcpyDeviceToHost, stream);
 
-
-            cudaMemset(frustumCounter, 0, sizeof(unsigned int));
-            cudaMemset(occlusionCounter, 0, sizeof(unsigned int));
+            // Limpiar contadores en stream
+            cudaMemsetAsync(frustumCounter, 0, sizeof(unsigned int), stream);
+            cudaMemsetAsync(occlusionCounter, 0, sizeof(unsigned int), stream);
 
             cylinderRaster(
                 cylinderBufferPtr,
@@ -457,14 +431,14 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
                 occlusionCounter,
                 1,
                 canvasTextureCUDAWrapper.getSurfaceObject(),
-                canvasDepthDownsampleCUDA.getTexture()
+                canvasDepthDownsampleCUDA.getTexture(),
+                stream
             );
+            cudaEventRecord(evtFrameReady, stream);
+            cudaEventSynchronize(evtFrameReady);
 
-            cudaMemcpy(&h_frustCount, frustumCounter, sizeof(unsigned int), cudaMemcpyDeviceToHost);
-            visibleCylindersCount = h_frustCount;
-            
-            cudaMemcpy(&h_occCount, occlusionCounter, sizeof(unsigned int), cudaMemcpyDeviceToHost);
-            notOccludedCylindersCount = h_occCount;
+            cudaMemcpyAsync(&visibleCylindersCount, frustumCounter, sizeof(unsigned int), cudaMemcpyDeviceToHost, stream);
+            cudaMemcpyAsync(&notOccludedCylindersCount, occlusionCounter, sizeof(unsigned int), cudaMemcpyDeviceToHost, stream);
 
             pixelCount(
                 pixelOwnershipBufferPtr,
@@ -472,14 +446,15 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
                 workGroupSizeXPixelCount,
                 workGroupSizeYPixelCount,
                 SCR_WIDTH,
-                SCR_HEIGHT
+                SCR_HEIGHT,
+                stream
             );
 
+            // Sincronizar stream antes de usar OpenGL
             
-            canvasTextureCUDAWrapper.cudaDestroySurfaceObj();
-            canvasTextureCUDAWrapper.cudaUnmapResources();
+            
 
-            glBindFramebuffer(GL_READ_FRAMEBUFFER, canvas.getFramebuffer().getId());
+            
             isRunning = window.update();
 
             //// if want mipmap check 
@@ -505,6 +480,10 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
             if (window.getInput().isKeyDown(Key::F)) fbo1o2 = !fbo1o2; 
 
         }
+        cudaEventDestroy(evtFrameReady);
+        cudaStreamDestroy(stream);
+        canvasTextureCUDAWrapper.cudaDestroySurfaceObj();
+        canvasTextureCUDAWrapper.cudaUnmapResources();
     }
     catch (const std::exception& e)
     {
