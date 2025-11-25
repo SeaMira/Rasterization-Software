@@ -35,7 +35,7 @@ int cylinder_count = 4000000;
 std::string title = "Standard OpenGL Version: Spheres and Cylinders - GPU Frustum Culling"; 
 
 bool shown = true;
-bool withOcclusionCulling = false;
+bool withOcclusionCulling = true;
 
 GLuint workGroupSizeXPerPixel = 16;  // Deifining threads-per-group (X)
 GLuint workGroupSizeYPerPixel = 16;  // Deifining threads-per-group (Y)
