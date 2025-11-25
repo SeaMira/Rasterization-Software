@@ -145,10 +145,13 @@ void Canvas::cleanCanvasBuffers(int workGroupSizeXPerPixel, int workGroupSizeYPe
         }
         m_cleaningProgram->setFloat("far", far);
         m_cleaningProgram->setVec2I("screenResolution", glm::ivec2(m_width, m_height));
+
+        glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Cleaning Shader");
         glDispatchCompute((m_width + workGroupSizeXPerPixel - 1) / workGroupSizeXPerPixel, 
                 (m_height + workGroupSizeYPerPixel - 1) / workGroupSizeYPerPixel, 
                 1);
         glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
+        glPopDebugGroup();
     }
 }
 
@@ -162,9 +165,12 @@ void Canvas::downsampleCanvasDepth(int downsampleWorkGroupSizeX, int downsampleW
         m_depthData.bindTexture();
         glm::vec2 utexelDimensions = glm::vec2( 1.0f / (float)m_width, 1.0f / (float)m_height );            
         m_downsampleProgram->setVec2("utexelDimensions", utexelDimensions);
+        
+        glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Downsampling Shader");
         glDispatchCompute((m_width + downsampleWorkGroupSizeX - 1) / downsampleWorkGroupSizeX, 
             (m_height + downsampleWorkGroupSizeY - 1) / downsampleWorkGroupSizeY, 
             1);
         glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+        glPopDebugGroup();
     }
 }
