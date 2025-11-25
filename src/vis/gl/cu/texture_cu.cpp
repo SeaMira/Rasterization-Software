@@ -73,8 +73,11 @@ GLenum TextureCUDAWrapper::getTarget() const
 void TextureCUDAWrapper::cudaMapResources()
 {
     // std::cout << "Mapping resources for texture (ID: " << m_texture->getId() << ")." << std::endl;
-    CUDA_CHECK(cudaGraphicsMapResources(1, &m_cudaResource, 0));
-    CUDA_CHECK(cudaGraphicsSubResourceGetMappedArray(&m_textureArray, m_cudaResource, 0, 0));
+    if (!m_mapped) {
+        CUDA_CHECK(cudaGraphicsMapResources(1, &m_cudaResource, 0));
+        CUDA_CHECK(cudaGraphicsSubResourceGetMappedArray(&m_textureArray, m_cudaResource, 0, 0));
+        m_mapped = true;
+    }
 }
 
 void TextureCUDAWrapper::cudaCreateSurfaceObj()
@@ -95,7 +98,10 @@ void TextureCUDAWrapper::cudaDestroySurfaceObj()
 void TextureCUDAWrapper::cudaUnmapResources()
 {
     // std::cout << "Unmapping resources for texture (ID: " << m_texture->getId() << ")." << std::endl;
-    CUDA_CHECK(cudaGraphicsUnmapResources(1, &m_cudaResource));
+    if (m_mapped) {
+        CUDA_CHECK(cudaGraphicsUnmapResources(1, &m_cudaResource));
+        m_mapped = false;
+    }
 }
 
 void TextureCUDAWrapper::cudaUnregisterTex()
