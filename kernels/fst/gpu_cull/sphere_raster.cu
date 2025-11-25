@@ -15,10 +15,23 @@
 #include <cstdint>
 
 // ========================================================
-// Types (mirror GLSL)
-// struct Sphere {
-//     glm::vec4 positionr; // (x,y,z,r)
-// };
+// -----------------------------
+// CONSTANT MEMORY (per-frame)
+// -----------------------------
+
+struct Constants {
+    glm::mat4 view;
+    glm::mat4 proj;
+    glm::vec4 frustumPlanes[6];
+    glm::vec3 front, up, right, cameraPos;
+    int screenW, screenH;
+    float fov;
+    int sphereCount;
+    unsigned int visibilityFrameBufferIndexOffset;
+    int benchmark;
+};
+
+__constant__ Constants cst;
 
 struct FramePixelsCount {
     unsigned int frames;
@@ -51,30 +64,24 @@ struct ScreenRayCasting {
     glm::vec3 dy;
 };
 
-__device__ ScreenRayCasting makeScreenRayCasting(
-    const glm::mat4& view,
-    const glm::vec3& front,
-    const glm::vec3& up,
-    const glm::vec3& right,
-    int screenW,
-    int screenH,
-    float fov)
+__device__ inline ScreenRayCasting makeScreenRayCasting(
+    const float& fovRad,
+    const float& fovTan,
+    const float& halfFovTan)
 {
-    float aspectRatio = float(screenW) / float(screenH);
-    float fovRad = glm::radians(fov);
-    float fovTan = tanf(fovRad * 0.5f);
-    float halfFovTan = fovTan * aspectRatio;
+    glm::vec3 halfFovTan_right = halfFovTan * cst.right;
+    glm::vec3 fovTan_up = fovTan * cst.up;
+    
+    glm::vec3 corner00 = glm::normalize(-halfFovTan_right + (-fovTan_up) + cst.front);
+    glm::vec3 corner10 = glm::normalize(( halfFovTan_right) + (-fovTan_up) + cst.front);
+    glm::vec3 corner01 = glm::normalize((-halfFovTan_right) + ( fovTan_up) + cst.front);
 
-    glm::vec3 corner00 = glm::normalize((-halfFovTan) * right + (-fovTan) * up + front);
-    glm::vec3 corner10 = glm::normalize(( halfFovTan) * right + (-fovTan) * up + front);
-    glm::vec3 corner01 = glm::normalize((-halfFovTan) * right + ( fovTan) * up + front);
+    glm::vec3 wCorner00 = glm::mat3(cst.view) * corner00;
+    glm::vec3 wCorner10 = glm::mat3(cst.view) * corner10;
+    glm::vec3 wCorner01 = glm::mat3(cst.view) * corner01;
 
-    glm::vec3 wCorner00 = glm::mat3(view) * corner00;
-    glm::vec3 wCorner10 = glm::mat3(view) * corner10;
-    glm::vec3 wCorner01 = glm::mat3(view) * corner01;
-
-    glm::vec3 dx = (wCorner10 - wCorner00) / float(screenW);
-    glm::vec3 dy = (wCorner01 - wCorner00) / float(screenH);
+    glm::vec3 dx = (wCorner10 - wCorner00) / float(cst.screenW);
+    glm::vec3 dy = (wCorner01 - wCorner00) / float(cst.screenH);
     glm::vec3 rayStart = wCorner00;
 
     return { rayStart, dx, dy };
@@ -87,19 +94,20 @@ __device__ inline float texelFetchDepth(cudaTextureObject_t tex, int x, int y) {
 }
 
 // billboard pre-test: samples 5 texels from downsampled texture
-__device__ bool isSphereBillboardVisible(
+__device__ inline bool isSphereBillboardVisible(
     cudaTextureObject_t downsampleTex,
-    int screenW, int screenH,
     int xcoords[], int ycoords[], float pixelDepths[], int pixelsToCheck = 5)
 {
-    int dsW = max(1, screenW / 16);
-    int dsH = max(1, screenH / 16);
+    int dsW = max(1, cst.screenW / 16);
+    int dsH = max(1, cst.screenH / 16);
 
     // sample mapped coords (like original)
     float downvals[5];
+    float dsW_scrW = float(dsW) / float(cst.screenW);
+    float dsH_scrH = float(dsH) / float(cst.screenH);
     for (int i = 0; i < pixelsToCheck; ++i) {
-        int tx = int(float(xcoords[i]) * float(dsW) / float(screenW));
-        int ty = int(float(ycoords[i]) * float(dsH) / float(screenH));
+        int tx = int(float(xcoords[i]) * dsW_scrW);
+        int ty = int(float(ycoords[i]) * dsH_scrH);
         tx = clampi(tx, 0, dsW - 1);
         ty = clampi(ty, 0, dsH - 1);
         downvals[i] = texelFetchDepth(downsampleTex, tx, ty);
@@ -119,43 +127,31 @@ __device__ inline bool isOnOrForwardOfPlane(const glm::vec4& plane, const glm::v
     return d >= -sphPosR.w;
 }
 
-__device__ inline bool isSphereInside(const glm::vec4& sphPosR,
-                                      const glm::vec4& frustumLeft,
-                                      const glm::vec4& frustumRight,
-                                      const glm::vec4& frustumFar,
-                                      const glm::vec4& frustumNear,
-                                      const glm::vec4& frustumTop,
-                                      const glm::vec4& frustumBottom)
+__device__ inline bool isSphereInside(const glm::vec4& sphPosR)
 {
-    return isOnOrForwardOfPlane(frustumLeft, sphPosR) &&
-           isOnOrForwardOfPlane(frustumRight, sphPosR) &&
-           isOnOrForwardOfPlane(frustumFar, sphPosR) &&
-           isOnOrForwardOfPlane(frustumNear, sphPosR) &&
-           isOnOrForwardOfPlane(frustumTop, sphPosR) &&
-           isOnOrForwardOfPlane(frustumBottom, sphPosR);
+    return isOnOrForwardOfPlane(cst.frustumPlanes[0], sphPosR) &&
+           isOnOrForwardOfPlane(cst.frustumPlanes[1], sphPosR) &&
+           isOnOrForwardOfPlane(cst.frustumPlanes[2], sphPosR) &&
+           isOnOrForwardOfPlane(cst.frustumPlanes[3], sphPosR) &&
+           isOnOrForwardOfPlane(cst.frustumPlanes[4], sphPosR) &&
+           isOnOrForwardOfPlane(cst.frustumPlanes[5], sphPosR);
 }
 
 // compute eye ray direction (equivalent to computeRd in GLSL)
-__device__ glm::vec3 computeRd(int px, int py, int screenW, int screenH, const glm::vec3& right, const glm::vec3& up, const glm::vec3& front, float fov)
+__device__ inline glm::vec3 computeRd(int px, int py, const float& fovTan, const float& halfFovTan)
 {
-    glm::vec2 p = ( -glm::vec2(screenW, screenH) + 2.0f * glm::vec2(px, py) ) / glm::vec2(screenW, screenH);
-    float fovRad = glm::radians(fov);
-    float fovTan = tanf(fovRad * 0.5f);
-    float halfFovTan = fovTan * (float(screenW) / float(screenH));
-    return glm::normalize(p.x * right * halfFovTan + p.y * up * fovTan + front);
+    glm::vec2 p = ( -glm::vec2(cst.screenW, cst.screenH) + 2.0f * glm::vec2(px, py) ) / glm::vec2(cst.screenW, cst.screenH);
+    return glm::normalize(p.x * cst.right * halfFovTan + p.y * cst.up * fovTan + cst.front);
 }
 
 // onSphDepth same math as GLSL
-__device__ float onSphDepth(const glm::vec3& rd, int px, int py, const glm::vec3& spherePos, float r,
-                            const glm::vec3& rayStart, const glm::vec3& dx, const glm::vec3& dy,
-                            const glm::mat4& proj, const glm::vec3& cameraPos)
+__device__ inline float onSphDepth(const glm::vec3& rd, int px, int py, const glm::vec3& spherePos, float r,
+                            const glm::vec3& rayStart, const glm::vec3& dx, const glm::vec3& dy)
 {
-    float h = iSphere(cameraPos, rd, spherePos, r);
+    float h = iSphere(cst.cameraPos, rd, spherePos, r);
     glm::vec3 hit = (rayStart + float(px) * dx + float(py) * dy) * h;
     // project depth like GLSL: (hit.z * proj[2].z + proj[3].z) / -hit.z
-    float proj2z = proj[2][2]; // assumes column-major glm (access as proj[col][row])
-    float proj3z = proj[3][2];
-    float depth = (hit.z * proj2z + proj3z) / -hit.z;
+    float depth = (hit.z * cst.proj[2][2] + cst.proj[3][2]) / -hit.z;
     return depth;
 }
 
@@ -173,32 +169,13 @@ __device__ inline glm::vec2 safeMax(const glm::vec2& a, const glm::vec2& b) {
 __global__ void sphereRasterKernel(
     // buffers (device pointers)
     glm::vec4* __restrict__ spheres,
-    int sphereCount,
-    // frame / view data
-    glm::mat4 view,
-    glm::mat4 proj,
-    glm::vec4 frustumTopFace,
-    glm::vec4 frustumBottomFace,
-    glm::vec4 frustumRightFace,
-    glm::vec4 frustumLeftFace,
-    glm::vec4 frustumFarFace,
-    glm::vec4 frustumNearFace,
-    glm::vec3 front,
-    glm::vec3 up,
-    glm::vec3 rightVec,
-    glm::vec3 cameraPos,
-    int screenW,
-    int screenH,
-    float fov,
     // storage buffers (lineal)
-    unsigned int* depthBuffer,            // in uint bits of float depth, length = screenW*screenH
-    unsigned int* pixelOwnershipBuffer,   // length = screenW*screenH
-    FramePixelsCount* visibilityFrameBuffer,
-    unsigned int visibilityFrameBufferIndexOffset,
+    unsigned int* __restrict__ depthBuffer,            // in uint bits of float depth, length = screenW*screenH
+    unsigned int* __restrict__ pixelOwnershipBuffer,   // length = screenW*screenH
+    FramePixelsCount* __restrict__ visibilityFrameBuffer,
     // counters
     unsigned int* frustCullcounter,
     unsigned int* occCullcounter,
-    int benchmark,
     // outputs (linear) -- optional, can pass nullptr if unused
     cudaSurfaceObject_t outputImage,         // RGBA8 linear buffer [screenW*screenH*4]
     // downsample texture object for billboard test
@@ -207,28 +184,27 @@ __global__ void sphereRasterKernel(
 {
     const int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (idx >= sphereCount) return;
+    if (idx >= cst.sphereCount) return;
 
     glm::vec4 posr = spheres[idx];
     // glm::vec4 posr = s.positionr;
 
     // Frustum test
-    if (!isSphereInside(posr, frustumLeftFace, frustumRightFace, frustumFarFace,
-                        frustumNearFace, frustumTopFace, frustumBottomFace))
+    if (!isSphereInside(posr))
     {
         // mark zero pixels like shader did
-        unsigned int visId = visibilityFrameBufferIndexOffset + idx;
+        unsigned int visId = cst.visibilityFrameBufferIndexOffset + idx;
         visibilityFrameBuffer[visId].pixels = 0;
 
         return;
     }
 
-    if (benchmark == 1) atomicAdd(frustCullcounter, 1u);
+    if (cst.benchmark == 1) atomicAdd(frustCullcounter, 1u);
 
     // compute bbox etc.
     // camera-space sphere
     glm::vec4 worldPos = glm::vec4(posr.x, posr.y, posr.z, 1.0f);
-    glm::vec4 camSpace4 = view * worldPos;
+    glm::vec4 camSpace4 = cst.view * worldPos;
     glm::vec3 cameraSpaceSphere = glm::vec3(camSpace4.x, camSpace4.y, camSpace4.z);
     glm::vec3 normCamSpaceSphere = glm::normalize(cameraSpaceSphere);
     glm::vec3 camImposPos = cameraSpaceSphere - normCamSpaceSphere * posr.w;
@@ -238,73 +214,73 @@ __global__ void sphereRasterKernel(
     const float tanAngle = tanf(asinf(sinAngle));
     const float quadScale = tanAngle * glm::length(camImposPos);
 
-    glm::vec3 impU = glm::normalize(glm::cross(normCamSpaceSphere, up));
+    glm::vec3 impU = glm::normalize(glm::cross(normCamSpaceSphere, cst.up));
     glm::vec3 impV = glm::cross(impU, normCamSpaceSphere) * quadScale;
     impU *= quadScale;
 
-    glm::vec3 upRightCorner = camImposPos + impU + impV;
-    glm::vec3 upLeftCorner  = camImposPos - impU + impV;
-    glm::vec3 downRightCorner = camImposPos + impU - impV;
-    glm::vec3 downLeftCorner  = camImposPos - impU - impV;
+    // Corners
+    glm::vec3 corners[4];
+    corners[0] = camImposPos + impU + impV;
+    corners[1] = camImposPos - impU + impV;
+    corners[2] = camImposPos + impU - impV;
+    corners[3] = camImposPos - impU - impV;
 
-    glm::vec4 upRight = proj * glm::vec4(upRightCorner, 1.0f);
-    glm::vec4 upLeft  = proj * glm::vec4(upLeftCorner, 1.0f);
-    glm::vec4 downRight = proj * glm::vec4(downRightCorner, 1.0f);
-    glm::vec4 downLeft  = proj * glm::vec4(downLeftCorner, 1.0f);
+    // Project + normalize
+    glm::vec2 minC(1e6f), maxC(-1e6f);
+    #pragma unroll
+    for (int i = 0; i < 4; ++i) {
+        glm::vec4 clip = cst.proj * glm::vec4(corners[i], 1.0f);
+        float iw = 1.0f / clip.w;
+        float x = clip.x * iw;
+        float y = clip.y * iw;
+        minC.x = fminf(minC.x, x);
+        minC.y = fminf(minC.y, y);
+        maxC.x = fmaxf(maxC.x, x);
+        maxC.y = fmaxf(maxC.y, y);
+    }
 
-    auto ndc = [](const glm::vec4& p)->glm::vec3 {
-        return glm::vec3(p.x / p.w, p.y / p.w, p.z / p.w);
-    };
-
-    glm::vec3 ndcUR = ndc(upRight);
-    glm::vec3 ndcUL = ndc(upLeft);
-    glm::vec3 ndcDR = ndc(downRight);
-    glm::vec3 ndcDL = ndc(downLeft);
-
-    glm::vec2 minCorner = safeMin(
-        safeMin(glm::vec2(ndcUR.x, ndcUR.y), glm::vec2(ndcUL.x, ndcUL.y)),
-        safeMin(glm::vec2(ndcDR.x, ndcDR.y), glm::vec2(ndcDL.x, ndcDL.y))
-    );
-    glm::vec2 maxCorner = safeMax(
-        safeMax(glm::vec2(ndcUR.x, ndcUR.y), glm::vec2(ndcUL.x, ndcUL.y)),
-        safeMax(glm::vec2(ndcDR.x, ndcDR.y), glm::vec2(ndcDL.x, ndcDL.y))
-    );
-
-    int screenMinX = int((minCorner.x * 0.5f + 0.5f) * float(screenW));
-    int screenMinY = int((minCorner.y * 0.5f + 0.5f) * float(screenH));
-    int screenMaxX = int((maxCorner.x * 0.5f + 0.5f) * float(screenW));
-    int screenMaxY = int((maxCorner.y * 0.5f + 0.5f) * float(screenH));
+    // Convert to screen coordinates (fused ops)
+    int screenMinX = __float2int_rd(fmaf(minC.x, 0.5f, 0.5f) * cst.screenW);
+    int screenMaxX = __float2int_ru(fmaf(maxC.x, 0.5f, 0.5f) * cst.screenW);
+    int screenMinY = __float2int_rd(fmaf(minC.y, 0.5f, 0.5f) * cst.screenH);
+    int screenMaxY = __float2int_ru(fmaf(maxC.y, 0.5f, 0.5f) * cst.screenH);
 
     float difx = float(screenMaxX - screenMinX);
     float dify = float(screenMaxY - screenMinY);
     if (difx * dify <= 2.0f) {
-        visibilityFrameBuffer[visibilityFrameBufferIndexOffset + idx].pixels = 0;
+        visibilityFrameBuffer[cst.visibilityFrameBufferIndexOffset + idx].pixels = 0;
         // atomicAdd(frustCullcounter, 1u);
         return;
     }
 
     // Prepare billboard samples (five)
-    int midx = clampi((screenMinX + screenMaxX) / 2, 0, screenW);
-    int midy = clampi((screenMinY + screenMaxY) / 2, 0, screenH);
+    int midx = clampi((screenMinX + screenMaxX) / 2, 0, cst.screenW);
+    int midy = clampi((screenMinY + screenMaxY) / 2, 0, cst.screenH);
 
     int xcoords[5] = { int(midx - difx * 0.49f), int(midx + difx * 0.49f), midx, midx, (screenMinX + screenMaxX) / 2 };
     int ycoords[5] = { midy, midy, int(midy - dify * 0.49f), int(midy + dify * 0.49f), (screenMinY + screenMaxY) / 2 };
 
+    float aspectRatio = float(cst.screenW) / float(cst.screenH);
+    float fovRad = glm::radians(cst.fov);
+    float fovTan = tanf(fovRad * 0.5f);
+    float halfFovTan = fovTan * aspectRatio;
+
     // ray casting helpers
-    ScreenRayCasting scrc = makeScreenRayCasting(view, front, up, rightVec, screenW, screenH, fov);
+    ScreenRayCasting scrc = makeScreenRayCasting(fovRad, fovTan, halfFovTan);
     glm::vec3 dx = scrc.dx;
     glm::vec3 dy = scrc.dy;
     glm::vec3 rayStart = scrc.rayStart;
 
+
     float pixelDepths[5];
     for (int i = 0; i < 5; ++i) {
-        glm::vec3 rd = computeRd(xcoords[i], ycoords[i], screenW, screenH, rightVec, up, front, fov);
-        pixelDepths[i] = onSphDepth(rd, xcoords[i], ycoords[i], glm::vec3(posr), posr.w, rayStart, dx, dy, proj, cameraPos);
+        glm::vec3 rd =  computeRd(xcoords[i], ycoords[i], fovTan, halfFovTan);
+        pixelDepths[i] = onSphDepth(rd, xcoords[i], ycoords[i], glm::vec3(posr), posr.w, rayStart, dx, dy);
     }
 
-    bool billboardVisible = isSphereBillboardVisible(downsampleTex, screenW, screenH, xcoords, ycoords, pixelDepths, 5);
+    bool billboardVisible = isSphereBillboardVisible(downsampleTex, xcoords, ycoords, pixelDepths, 5);
 
-    unsigned int visIdx = visibilityFrameBufferIndexOffset + idx;
+    unsigned int visIdx = cst.visibilityFrameBufferIndexOffset + idx;
     if (!billboardVisible) {
         if (visibilityFrameBuffer[visIdx].frames > 0 && visibilityFrameBuffer[visIdx].pixels == 0) {
             visibilityFrameBuffer[visIdx].frames -= 1;
@@ -318,13 +294,13 @@ __global__ void sphereRasterKernel(
         visibilityFrameBuffer[visIdx].frames = 10;
     }
 
-    if (benchmark == 1) atomicAdd(occCullcounter, 1u);
+    if (cst.benchmark == 1) atomicAdd(occCullcounter, 1u);
 
     // rasterize inside bbox
     int minx = max(0, screenMinX);
-    int maxx = min(screenMaxX, screenW);
+    int maxx = min(screenMaxX, cst.screenW);
     int miny = max(0, screenMinY);
-    int maxy = min(screenMaxY, screenH);
+    int maxy = min(screenMaxY, cst.screenH);
 
     for (int px = minx; px < maxx; ++px) {
         glm::vec3 rayColStart = rayStart + float(px) * dx;
@@ -333,17 +309,15 @@ __global__ void sphereRasterKernel(
             // surf2Dwrite(make_uchar4(255, 255, 255, 255), outputImage,
             // static_cast<unsigned int>(px) * sizeof(uchar4),
             // static_cast<unsigned int>(py));
-            glm::vec3 rd = computeRd(px, py, screenW, screenH, rightVec, up, front, fov);
-            float t = iSphere(glm::vec3(cameraPos), rd, glm::vec3(posr), posr.w);
+            glm::vec3 rd = computeRd(px, py, fovTan, halfFovTan);
+            float t = iSphere(glm::vec3(cst.cameraPos), rd, glm::vec3(posr), posr.w);
             if (t > 0.0f) {
                 finishedLine = true;
                 glm::vec3 hit = (rayColStart + float(py) * dy) * t;
-                float proj2z = proj[2][2];
-                float proj3z = proj[3][2];
-                float depth = (hit.z * proj2z + proj3z) / -hit.z;
+                float depth = (hit.z * cst.proj[2][2] + cst.proj[3][2]) / -hit.z;
 
                 unsigned int depthU = floatToUintBits(depth);
-                int index = px + screenW * py;
+                int index = px + cst.screenW * py;
 
                 // atomicMin over uint bits (we store depth as float bits in uint)
                 unsigned int old = atomicMin(&depthBuffer[index], depthU);
@@ -352,11 +326,10 @@ __global__ void sphereRasterKernel(
                 if (uintToFloatBits(old) > depth) {
                     // own the pixel
                     pixelOwnershipBuffer[index] = (unsigned int)idx;
-                    glm::vec3 normal = glm::normalize(glm::vec3(cameraPos) + rd * t - glm::vec3(posr));
+                    glm::vec3 normal = glm::normalize(glm::vec3(cst.cameraPos) + rd * t - glm::vec3(posr));
                     float lambert = glm::max(0.0f, glm::dot(normal, -glm::normalize(rd * t)));
                     glm::vec3 color = glm::vec3(0.01f, 1.0f, 0.05f) * lambert * 0.9f;
-                    uchar4 ucharColor;
-                    ucharColor = make_uchar4(color.x*255, color.y*255, color.z*255, 255);
+                    uchar4 ucharColor = make_uchar4(color.x*255, color.y*255, color.z*255, 255); 
                     surf2Dwrite(ucharColor, outputImage, px * sizeof(uchar4), py); 
                 }
             } else if (finishedLine) {
@@ -372,60 +345,67 @@ __global__ void sphereRasterKernel(
 
 extern "C" void sphereRaster(
     glm::vec4* d_spheres,
-    int sphereCount,
-    glm::mat4 view,
-    glm::mat4 proj,
-    glm::vec4 frustumTopFace,
-    glm::vec4 frustumBottomFace,
-    glm::vec4 frustumRightFace,
-    glm::vec4 frustumLeftFace,
-    glm::vec4 frustumFarFace,
-    glm::vec4 frustumNearFace,
-    glm::vec3 front,
-    glm::vec3 up,
-    glm::vec3 rightVec,
-    glm::vec3 cameraPos,
-    int screenW,
-    int screenH,
-    float fov,
+    int c_sphereCount,
+    glm::mat4 c_view,
+    glm::mat4 c_proj,
+    glm::vec4 c_frustumTopFace,
+    glm::vec4 c_frustumBottomFace,
+    glm::vec4 c_frustumRightFace,
+    glm::vec4 c_frustumLeftFace,
+    glm::vec4 c_frustumFarFace,
+    glm::vec4 c_frustumNearFace,
+    glm::vec3 c_front,
+    glm::vec3 c_up,
+    glm::vec3 c_right,
+    glm::vec3 c_cameraPos,
+    int c_screenW,
+    int c_screenH,
+    float c_fov,
     unsigned int* d_depthBuffer,
     unsigned int* d_pixelOwnershipBuffer,
     unsigned int* d_visibilityFrameBuffer,
-    unsigned int visibilityFrameBufferIndexOffset,
+    unsigned int c_visibilityFrameBufferIndexOffset,
     unsigned int* d_frustCullcounter,
     unsigned int* d_occCullcounter,
-    int benchmark,
+    int c_benchmark,
     cudaSurfaceObject_t outputImage,
-    cudaTextureObject_t downsampleTex
+    cudaTextureObject_t downsampleTex,
+    cudaStream_t& stream
 )
 {
-    dim3 block(256);
-    dim3 grid((sphereCount + block.x - 1) / block.x);
-    sphereRasterKernel<<<grid, block>>>(
+
+    Constants c_constants = {
+    c_view,
+    c_proj,
+    {c_frustumTopFace,
+    c_frustumBottomFace,
+    c_frustumRightFace,
+    c_frustumLeftFace,
+    c_frustumFarFace,
+    c_frustumNearFace},
+    c_front,
+    c_up,
+    c_right,
+    c_cameraPos,
+    c_screenW,
+    c_screenH,
+    c_fov,
+    c_sphereCount,
+    c_visibilityFrameBufferIndexOffset,
+    c_benchmark
+    };
+    // copy constants to symbol memory (per-frame)
+    cudaMemcpyToSymbol(cst, &c_constants, sizeof(Constants));
+
+    dim3 block(192);
+    dim3 grid((c_sphereCount + block.x - 1) / block.x);
+    sphereRasterKernel<<<grid, block, 0, stream>>>(
         d_spheres,
-        sphereCount,
-        view,
-        proj,
-        frustumTopFace,
-        frustumBottomFace,
-        frustumRightFace,
-        frustumLeftFace,
-        frustumFarFace,
-        frustumNearFace,
-        front,
-        up,
-        rightVec,
-        cameraPos,
-        screenW,
-        screenH,
-        fov,
         d_depthBuffer,
         d_pixelOwnershipBuffer,
         (FramePixelsCount*)d_visibilityFrameBuffer,
-        visibilityFrameBufferIndexOffset,
         d_frustCullcounter,
         d_occCullcounter,
-        benchmark,
         outputImage,
         downsampleTex
     );
