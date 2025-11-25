@@ -51,6 +51,8 @@ private:
     cudaArray* m_textureArray;
     cudaResourceDesc m_resDesc = {};
     cudaSurfaceObject_t m_surfaceObj = 0;
+
+    bool m_mapped = false;
 };
 
 #endif

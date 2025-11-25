@@ -226,8 +226,13 @@ protected:
      */
     void renderFrame() override 
     {
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+        // glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Bind Draw Framebuffer");
+        // glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+        // glPopDebugGroup();
+
+        glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Blit Framebuffer");
         glBlitFramebuffer(0, 0, m_width, m_height, 0, 0, m_width, m_height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        glPopDebugGroup();
     }
     
     /** 
@@ -244,8 +249,13 @@ protected:
      */
     void renderFrame(int width, int height) 
     {
+        glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Bind Draw Framebuffer");
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+        glPopDebugGroup();
+
+        glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Blit Framebuffer");
         glBlitFramebuffer(0, 0, width, height, 0, 0, m_width, m_height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        glPopDebugGroup();
     }
 
     /** 
@@ -259,7 +269,9 @@ protected:
      */
     void presentFrame() override 
     {
+        glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Swap Window");
         SDL_GL_SwapWindow(m_window);
+        glPopDebugGroup();
     }
 
     /** 
