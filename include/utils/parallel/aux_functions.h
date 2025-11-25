@@ -147,4 +147,18 @@ void setCameraUniforms(ShaderProgram& shader, Camera& camera);
  */
 void setFrustumUniforms(ComputeShader& shader, Frustum& frustum);
 
+
+/**
+ * @brief Dispatches a compute shader with label.
+ * 
+ * Dispatches the active compute shader with a label for debugging purposes, indicating 
+ * the work group size.
+ * 
+ * @param numGroupsX Number of work groups in X dimension.
+ * @param numGroupsY Number of work groups in Y dimension.
+ * @param label The label to be used for debugging.
+ * 
+ */
+void dispatchComputeShaderWithLabel(GLuint numGroupsX, GLuint numGroupsY, const std::string& label, GLbitfield barrier = 0);
+
 #endif // _AUX_PARALLEL_H_

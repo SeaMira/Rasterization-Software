@@ -86,3 +86,12 @@ void setFrustumUniforms(ComputeShader& shader, Frustum& frustum)
     shader.setVec4("frustumFarFace", glm::vec4(frustum.farFace.normal, frustum.farFace.distance));
     shader.setVec4("frustumNearFace", glm::vec4(frustum.nearFace.normal, frustum.nearFace.distance));
 }
+
+void dispatchComputeShaderWithLabel(GLuint numGroupsX, GLuint numGroupsY, const std::string& label, GLbitfield barrier)
+{
+    glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, label.c_str());
+    glDispatchCompute(numGroupsX, numGroupsY, 1);
+    if (barrier != 0)
+        glMemoryBarrier(barrier);
+    glPopDebugGroup();
+}
