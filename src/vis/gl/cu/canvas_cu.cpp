@@ -52,6 +52,16 @@ void CanvasCUDA::setTextureImage(GLenum target, GLenum internalFormat, GLsizei w
     m_canvas = Texture(target, internalFormat, width, height, 0);
 }
 
+void CanvasCUDA::setupCanvas(GLenum target, GLenum internalFormat, GLsizei width, 
+    GLsizei height, unsigned int flags)
+{
+    m_canvas.setup(target, internalFormat, width, height, 0);
+    m_width = width;
+    m_height = height;
+    m_canvasTexWrapper.setup(m_canvas, target, flags);
+}
+
+
 void CanvasCUDA::setCUDATextureWrapper(GLenum target, unsigned int flags)
 {
     m_canvasTexWrapper.setup(m_canvas, target, flags);
@@ -68,6 +78,11 @@ void CanvasCUDA::bindTexture() const
     m_canvas.bind();
 }
 
+void CanvasCUDA::unbindTexture() const
+{
+    m_canvas.unbind();
+}
+
 void CanvasCUDA::bindTextureImage(GLenum access, GLenum format) const
 {
     m_canvas.bindImage(access, format);
@@ -76,6 +91,11 @@ void CanvasCUDA::bindTextureImage(GLenum access, GLenum format) const
 void CanvasCUDA::bindFBO() const
 {
     m_fbo.bind(GL_FRAMEBUFFER);
+}
+
+void CanvasCUDA::unbindFBO() const
+{
+    m_fbo.unbind();
 }
 
 Texture& CanvasCUDA::getTexture() { return m_canvas; }
@@ -115,7 +135,7 @@ void CanvasCUDA::takeScreenshot(std::string screenshot_file) const
     if (sshot_saved) std::cout << "Screenshot " << screenshot_file << " saved." << std::endl;
     else std::cout << "Screenshot couldnt be saved." << std::endl;
     SDL_DestroySurface(surface);
-    m_fbo.unbind();
+    unbindFBO();
 }
 
 

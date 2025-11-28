@@ -43,6 +43,9 @@ public:
     void attachTexture(GLenum attachment, const Texture& texture, 
         GLenum framebuffer = GL_FRAMEBUFFER);
 
+
+    void setup();
+
     /**
      * @brief attach a texture image to the framebuffer.
      * 

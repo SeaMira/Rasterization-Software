@@ -158,6 +158,9 @@ public:
     void setTexture(GLenum target, GLenum internalFormat, GLsizei width, 
         GLsizei height, GLenum format, GLenum type);
 
+    void setupCanvas(GLenum target, GLenum internalFormat, GLsizei width, 
+        GLsizei height, unsigned int flags=cudaGraphicsRegisterFlagsSurfaceLoadStore);
+    
     void setCUDATextureWrapper(GLenum target, unsigned int flags=cudaGraphicsRegisterFlagsSurfaceLoadStore);
 
     /**
@@ -190,6 +193,13 @@ public:
      * Binds canvas texture to its specified unit.
      */
     void bindTexture() const;
+    
+    /**
+     * @brief Unbinds canvas texture.
+     * 
+     * Unbinds canvas texture from its specified unit.
+     */
+    void unbindTexture() const;
 
     /**
      * @brief Binds canvas texture image.
@@ -205,6 +215,11 @@ public:
      * @brief Bind canvas framebuffer.
      */
     void bindFBO() const;
+    
+    /**
+     * @brief Unbind canvas framebuffer.
+     */
+    void unbindFBO() const;
 
     /**
      * @brief Takes screenshot of texture.

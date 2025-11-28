@@ -2,10 +2,18 @@
 
 Framebuffer::Framebuffer() {
     glGenFramebuffers(1, &m_id);
+    std::cout << "Framebuffer created with ID: " << m_id << std::endl;
 }
 
 Framebuffer::~Framebuffer() {
     glDeleteFramebuffers(1, &m_id);
+    std::cout << "Framebuffer deleted with ID: " << m_id << std::endl;
+}
+
+void Framebuffer::setup()
+{
+    glGenFramebuffers(1, &m_id);
+    std::cout << "Framebuffer created with ID: " << m_id << std::endl;
 }
 
 void Framebuffer::attachTexture(GLenum attachment, const Texture& texture, 
