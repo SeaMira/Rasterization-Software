@@ -20,6 +20,7 @@ class ShaderProgram
 {
     public:
         unsigned int ID; ///< Shader program ID
+        std::string m_shaderName; ///< Shader program name
         
         /**
          * @brief ShaderProgram class constructor.
@@ -30,8 +31,9 @@ class ShaderProgram
          * @param vertexPath file name with a vertex shader.
          * @param fragmentPath file name with a fragment shader.
          * @param geometryPath file name with a geometry shader.
+         * @param shaderName name of the shader program.
          */
-        ShaderProgram(const char* vertexPath = "", const char* fragmentPath = "", const char* geometryPath = "");
+        ShaderProgram(const char* vertexPath = "", const char* fragmentPath = "", const char* geometryPath = "", const char* shaderName = "");
         
         /**
          * @brief ShaderProgram class destructor.

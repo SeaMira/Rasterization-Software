@@ -29,6 +29,7 @@ class ComputeShader
          * everything is correct and generates a program.
          * 
          * @param computePath file name with compute shader.
+         * @param computeName name of the compute shader.
          */
         ComputeShader(const char* computePath, const char* computeName);
         

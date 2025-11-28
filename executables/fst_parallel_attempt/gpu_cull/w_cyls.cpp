@@ -37,7 +37,7 @@ int cylinder_count = 4000000;
 std::string title = "First Parallel Version: Spheres and Cylinders - GPU Frustum Culling"; 
 
 bool shown = true;
-bool withOcclusionCulling = true;
+bool withOcclusionCulling = false;
 
 GLuint workGroupSizeXPerPixel = 16;  // Deifining threads-per-group (X)
 GLuint workGroupSizeYPerPixel = 16;  // Deifining threads-per-group (Y)
@@ -182,6 +182,10 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
         bool isRunning = true;
         glEnable(GL_DEBUG_OUTPUT);
         glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+
+        glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Bind Draw Framebuffer");
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+        glPopDebugGroup();
         while ( isRunning )
         {
             
@@ -372,6 +376,9 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
     try
     {
         bool isRunning = true;
+        glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Bind Draw Framebuffer");
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+        glPopDebugGroup();
         while ( isRunning )
         {
             camera_controller.cameraUpdate();
@@ -399,8 +406,7 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
             spheresShader.setVec2I("screenResolution", screenResolution);
             setFrustumUniforms(spheresShader, frustum);
             setCameraUniforms(spheresShader, camera);
-            glDispatchCompute(numGroupsXSpheres, numGroupsY, 1);
-            glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
+            dispatchComputeShaderWithLabel(numGroupsXSpheres, numGroupsY, "Sphere Shader", GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
             
             cylinderShader.use();
             #if BENCHMARKING 
@@ -417,8 +423,7 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
             cylinderShader.setVec2I("screenResolution", screenResolution);
             setFrustumUniforms(cylinderShader, frustum);
             setCameraUniforms(cylinderShader, camera);
-            glDispatchCompute(numGroupsXCylinders, numGroupsY, 1);
-            glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
+            dispatchComputeShaderWithLabel(numGroupsXCylinders, numGroupsY, "Cylinder Shader", GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
             
             glBindFramebuffer(GL_READ_FRAMEBUFFER, canvas.getFramebuffer().getId());
             isRunning = window.update();
