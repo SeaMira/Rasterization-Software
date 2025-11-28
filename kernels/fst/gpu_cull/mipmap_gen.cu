@@ -7,10 +7,10 @@ struct Constants {
     int screenResolutionY;
 };
 
-__constant__ Constants cst;
+static __constant__ Constants cst;
 
 __global__ void downsampleDepthMaxKernel(
-    unsigned int* __restrict__ depthBuffer,
+    const unsigned int* __restrict__ depthBuffer,
     cudaSurfaceObject_t downsampleSurface)
 {
 
@@ -41,9 +41,8 @@ __global__ void downsampleDepthMaxKernel(
 
             if (x < cst.screenResolutionX && y < cst.screenResolutionY)
             {
-                float val = __uint_as_float(depthBuffer[y * cst.screenResolutionX + x]);
-                if (val > localMax)
-                    localMax = val;
+                float val = __uint_as_float(__ldg(&depthBuffer[y * cst.screenResolutionX + x]));
+                localMax = fmaxf(localMax, val);
             }
         }
     }
@@ -74,7 +73,7 @@ extern "C" void downsamplingDepthTexture(
 {
 
     Constants h_cst = { c_screenResolutionX, c_screenResolutionY };
-    cudaMemcpyToSymbol(cst, &h_cst, sizeof(Constants));
+    cudaMemcpyToSymbolAsync(cst, &h_cst, sizeof(Constants), 0, cudaMemcpyHostToDevice, stream);
 
     dim3 block(4, 4);
     dim3 grid((c_screenResolutionX + downsampleWorkGroupSizeX -1)/downsampleWorkGroupSizeX, (c_screenResolutionY + downsampleWorkGroupSizeY - 1)/downsampleWorkGroupSizeY);

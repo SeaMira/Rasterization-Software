@@ -9,7 +9,7 @@ struct Constants {
     int screenResolutionY;
 };
 
-__constant__ Constants cst;
+static __constant__ Constants cst;
 
 struct FramePixelsCount {
     unsigned int frames;
@@ -25,7 +25,7 @@ __global__ void pixelCountKernel(
     int y = blockIdx.y * blockDim.y + threadIdx.y;
     if (x >= cst.screenResolutionX || y >= cst.screenResolutionY) return;
 
-    unsigned int index= pixelOwnershipBuffer[x + cst.screenResolutionX * y];
+    unsigned int index= __ldg(&pixelOwnershipBuffer[x + cst.screenResolutionX * y]);
     visibilityFrameBuffer[index].pixels += 1;
 }
 
@@ -39,7 +39,7 @@ extern "C" void pixelCount(
     cudaStream_t& stream
     ) {
     Constants h_cst = { c_screenResolutionX, c_screenResolutionY };
-    cudaMemcpyToSymbol(cst, &h_cst, sizeof(Constants));
+    cudaMemcpyToSymbolAsync(cst, &h_cst, sizeof(Constants), 0, cudaMemcpyHostToDevice, stream);
 
     dim3 block(workGroupSizeX, workGroupSizeY);
     dim3 grid((c_screenResolutionX+workGroupSizeX-1)/workGroupSizeX, (c_screenResolutionY+workGroupSizeY-1)/workGroupSizeY);

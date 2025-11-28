@@ -3,6 +3,7 @@
 #include <glad/glad.h>
 #include <cuda_runtime.h>
 #include <cuda_gl_interop.h>
+#include "utils/scene_descriptor.h"
 
 struct Constants {
     float far;
@@ -10,7 +11,7 @@ struct Constants {
     int screenResolutionY;
 };
 
-__constant__ Constants cst;
+static __constant__ Constants cst;
 
 
 __global__ void cleaningKernel(
@@ -27,7 +28,7 @@ __global__ void cleaningKernel(
     depthBuffer[x + cst.screenResolutionX * y] = __float_as_uint(cst.far);
 
     uchar4 color;
-    color = make_uchar4(255, 255, 0, 255); // amarillo
+    color = make_uchar4(backgroundColor.x * 255, backgroundColor.y * 255, backgroundColor.z * 255, 255); 
 
     // Escritura directa a la textura 2D
     surf2Dwrite(color, surface, x * sizeof(uchar4), y);
@@ -47,7 +48,7 @@ extern "C" void cleaningScreen(
     
 
     Constants h_cst = { c_far, c_screenResolutionX, c_screenResolutionY };
-    cudaMemcpyToSymbol(cst, &h_cst, sizeof(Constants));
+    cudaMemcpyToSymbolAsync(cst, &h_cst, sizeof(Constants), 0, cudaMemcpyHostToDevice, stream);
 
     dim3 block(workGroupSizeXPerPixel,workGroupSizeYPerPixel);
     dim3 grid((c_screenResolutionX+workGroupSizeXPerPixel-1)/workGroupSizeXPerPixel, (c_screenResolutionY+workGroupSizeYPerPixel-1)/workGroupSizeYPerPixel);
