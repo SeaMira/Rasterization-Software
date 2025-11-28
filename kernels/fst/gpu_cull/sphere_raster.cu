@@ -13,6 +13,10 @@
 
 #include <cmath>
 #include <cstdint>
+#include <stdio.h>
+#include "utils/scene_descriptor.h"
+
+#define pixelsToCheck 5
 
 // ========================================================
 // -----------------------------
@@ -31,7 +35,7 @@ struct Constants {
     int benchmark;
 };
 
-__constant__ Constants cst;
+static __constant__ Constants cst;
 
 struct FramePixelsCount {
     unsigned int frames;
@@ -48,11 +52,11 @@ __device__ inline int clampi(int v, int lo, int hi) {
 }
 
 // iSphere (returns t or -1)
-__device__ float iSphere(const glm::vec3& ro, const glm::vec3& rd, const glm::vec3& sph, float radius) {
+static __device__ float iSphere(const glm::vec3& ro, const glm::vec3& rd, const glm::vec3& sph, float radius) {
     glm::vec3 oc = ro - sph;
     float b = glm::dot(oc, rd);
     float c = glm::dot(oc, oc) - radius * radius;
-    float h = b*b - c;
+    float h = fmaf(b, b, -c);
     if (h < 0.0f) return -1.0f;
     return -b - sqrtf(h);
 }
@@ -96,7 +100,7 @@ __device__ inline float texelFetchDepth(cudaTextureObject_t tex, int x, int y) {
 // billboard pre-test: samples 5 texels from downsampled texture
 __device__ inline bool isSphereBillboardVisible(
     cudaTextureObject_t downsampleTex,
-    int xcoords[], int ycoords[], float pixelDepths[], int pixelsToCheck = 5)
+    int xcoords[], int ycoords[], float pixelDepths[])
 {
     int dsW = max(1, cst.screenW / 16);
     int dsH = max(1, cst.screenH / 16);
@@ -105,6 +109,8 @@ __device__ inline bool isSphereBillboardVisible(
     float downvals[5];
     float dsW_scrW = float(dsW) / float(cst.screenW);
     float dsH_scrH = float(dsH) / float(cst.screenH);
+
+    #pragma unroll pixelsToCheck
     for (int i = 0; i < pixelsToCheck; ++i) {
         int tx = int(float(xcoords[i]) * dsW_scrW);
         int ty = int(float(ycoords[i]) * dsH_scrH);
@@ -113,6 +119,7 @@ __device__ inline bool isSphereBillboardVisible(
         downvals[i] = texelFetchDepth(downsampleTex, tx, ty);
     }
 
+    #pragma unroll pixelsToCheck
     for (int i = 0; i < pixelsToCheck; ++i) {
         float pd = pixelDepths[i];
         if (pd <= downvals[0] || pd <= downvals[1] || pd <= downvals[2] || pd <= downvals[3] || pd <= downvals[4])
@@ -151,7 +158,7 @@ __device__ inline float onSphDepth(const glm::vec3& rd, int px, int py, const gl
     float h = iSphere(cst.cameraPos, rd, spherePos, r);
     glm::vec3 hit = (rayStart + float(px) * dx + float(py) * dy) * h;
     // project depth like GLSL: (hit.z * proj[2].z + proj[3].z) / -hit.z
-    float depth = (hit.z * cst.proj[2][2] + cst.proj[3][2]) / -hit.z;
+    float depth = (fmaf(hit.z, cst.proj[2][2], cst.proj[3][2])) / -hit.z;
     return depth;
 }
 
@@ -167,9 +174,8 @@ __device__ inline glm::vec2 safeMax(const glm::vec2& a, const glm::vec2& b) {
 // Kernel: one thread per sphere
 // ========================================================
 __global__ void sphereRasterKernel(
-    // buffers (device pointers)
-    glm::vec4* __restrict__ spheres,
     // storage buffers (lineal)
+    glm::vec4* __restrict__ spheres,
     unsigned int* __restrict__ depthBuffer,            // in uint bits of float depth, length = screenW*screenH
     unsigned int* __restrict__ pixelOwnershipBuffer,   // length = screenW*screenH
     FramePixelsCount* __restrict__ visibilityFrameBuffer,
@@ -186,6 +192,7 @@ __global__ void sphereRasterKernel(
 
     if (idx >= cst.sphereCount) return;
 
+    
     glm::vec4 posr = spheres[idx];
     // glm::vec4 posr = s.positionr;
 
@@ -257,8 +264,8 @@ __global__ void sphereRasterKernel(
     int midx = clampi((screenMinX + screenMaxX) / 2, 0, cst.screenW);
     int midy = clampi((screenMinY + screenMaxY) / 2, 0, cst.screenH);
 
-    int xcoords[5] = { int(midx - difx * 0.49f), int(midx + difx * 0.49f), midx, midx, (screenMinX + screenMaxX) / 2 };
-    int ycoords[5] = { midy, midy, int(midy - dify * 0.49f), int(midy + dify * 0.49f), (screenMinY + screenMaxY) / 2 };
+    int xcoords[5] = { __float2int_rn(fmaf(-difx, 0.49f, midx)), __float2int_rn(fmaf(difx, 0.49f, midx)), midx, midx, (screenMinX + screenMaxX) / 2 };
+    int ycoords[5] = { midy, midy, __float2int_rn(fmaf(-dify, 0.49f, midy)), __float2int_rn(fmaf(dify, 0.49f, midy)), (screenMinY + screenMaxY) / 2 };
 
     float aspectRatio = float(cst.screenW) / float(cst.screenH);
     float fovRad = glm::radians(cst.fov);
@@ -278,7 +285,7 @@ __global__ void sphereRasterKernel(
         pixelDepths[i] = onSphDepth(rd, xcoords[i], ycoords[i], glm::vec3(posr), posr.w, rayStart, dx, dy);
     }
 
-    bool billboardVisible = isSphereBillboardVisible(downsampleTex, xcoords, ycoords, pixelDepths, 5);
+    bool billboardVisible = isSphereBillboardVisible(downsampleTex, xcoords, ycoords, pixelDepths);
 
     unsigned int visIdx = cst.visibilityFrameBufferIndexOffset + idx;
     if (!billboardVisible) {
@@ -302,6 +309,9 @@ __global__ void sphereRasterKernel(
     int miny = max(0, screenMinY);
     int maxy = min(screenMaxY, cst.screenH);
 
+    float proj22 = cst.proj[2][2];
+    float proj32 = cst.proj[3][2];
+
     for (int px = minx; px < maxx; ++px) {
         glm::vec3 rayColStart = rayStart + float(px) * dx;
         bool finishedLine = false;
@@ -314,7 +324,7 @@ __global__ void sphereRasterKernel(
             if (t > 0.0f) {
                 finishedLine = true;
                 glm::vec3 hit = (rayColStart + float(py) * dy) * t;
-                float depth = (hit.z * cst.proj[2][2] + cst.proj[3][2]) / -hit.z;
+                float depth = fmaf(hit.z, proj22, proj32) / -hit.z;
 
                 unsigned int depthU = floatToUintBits(depth);
                 int index = px + cst.screenW * py;
@@ -328,7 +338,7 @@ __global__ void sphereRasterKernel(
                     pixelOwnershipBuffer[index] = (unsigned int)idx;
                     glm::vec3 normal = glm::normalize(glm::vec3(cst.cameraPos) + rd * t - glm::vec3(posr));
                     float lambert = glm::max(0.0f, glm::dot(normal, -glm::normalize(rd * t)));
-                    glm::vec3 color = glm::vec3(0.01f, 1.0f, 0.05f) * lambert * 0.9f;
+                    glm::vec3 color = glm::vec3(atomsColor.x, atomsColor.y, atomsColor.z) * lambert * diffuse;
                     uchar4 ucharColor = make_uchar4(color.x*255, color.y*255, color.z*255, 255); 
                     surf2Dwrite(ucharColor, outputImage, px * sizeof(uchar4), py); 
                 }
@@ -370,7 +380,8 @@ extern "C" void sphereRaster(
     int c_benchmark,
     cudaSurfaceObject_t outputImage,
     cudaTextureObject_t downsampleTex,
-    cudaStream_t& stream
+    cudaStream_t& stream,
+    int workGroupSizeX
 )
 {
 
@@ -395,9 +406,9 @@ extern "C" void sphereRaster(
     c_benchmark
     };
     // copy constants to symbol memory (per-frame)
-    cudaMemcpyToSymbol(cst, &c_constants, sizeof(Constants));
+    cudaMemcpyToSymbolAsync(cst, &c_constants, sizeof(Constants), 0, cudaMemcpyHostToDevice, stream);
 
-    dim3 block(192);
+    dim3 block(workGroupSizeX);
     dim3 grid((c_sphereCount + block.x - 1) / block.x);
     sphereRasterKernel<<<grid, block, 0, stream>>>(
         d_spheres,
@@ -409,5 +420,17 @@ extern "C" void sphereRaster(
         outputImage,
         downsampleTex
     );
-    cudaDeviceSynchronize();
+    // cudaDeviceSynchronize();
+    // int minGridSize=0, blockSize=0;
+    // cudaError_t err = cudaOccupancyMaxPotentialBlockSize(
+    //     &minGridSize, &blockSize,
+    //     (void*)sphereRasterKernel,    // pointer al kernel
+    //     0,  // bytes de shared memory dinámico por bloque (aquí 0)
+    //     0   // tamaño máximo de block que quieres limitar, 0 = no limit
+    // );
+    // if (err != cudaSuccess) {
+    //     printf("cudaOccupancy error: %s\n", cudaGetErrorString(err));
+    //     return;
+    // }
+    // printf("Occupancy suggested block size: %d  (minGridSize %d)\n", blockSize, minGridSize);
 }

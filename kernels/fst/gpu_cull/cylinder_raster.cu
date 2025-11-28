@@ -13,6 +13,9 @@
 
 #include <cmath>
 #include <cstdint>
+#include "utils/scene_descriptor.h"
+
+#define pixelsToCheck 3
 
 // ========================================================
 // ========================================================
@@ -31,7 +34,7 @@ struct Constants {
     int benchmark;
 };
 
-__constant__ Constants cst;
+static __constant__ Constants cst;
 
 struct Cylinder 
 {
@@ -83,7 +86,7 @@ __device__ inline glm::vec3 safeMax(const glm::vec3& a, const glm::vec3& b) {
     );
 }
 
-__device__ inline glm::vec4 iCylinder(const glm::vec3& ro, const glm::vec3& rd, const glm::vec3& pa, const glm::vec3& pb, float ra) {
+static __device__ inline glm::vec4 iCylinder(const glm::vec3& ro, const glm::vec3& rd, const glm::vec3& pa, const glm::vec3& pb, float ra) {
     glm::vec3  ba = pb - pa;
     glm::vec3  oc = ro - pa;
 
@@ -91,18 +94,18 @@ __device__ inline glm::vec4 iCylinder(const glm::vec3& ro, const glm::vec3& rd, 
     float bard = glm::dot(ba,rd);
     float baoc = glm::dot(ba,oc);
     
-    float k2 = baba - bard*bard;
-    float k1 = baba*glm::dot(oc,rd) - baoc*bard;
-    float k0 = baba*glm::dot(oc,oc) - baoc*baoc - ra*ra*baba;
+    float k2 = fmaf(bard, -bard, baba);
+    float k1 = fmaf(glm::dot(oc,rd), baba, -baoc*bard);
+    float k0 = fmaf(baba, glm::dot(oc,oc), fmaf(- ra*ra, baba, -baoc*baoc));
     
     
-    float h = k1*k1 - k2*k0;
+    float h = fmaf(k1, k1, -k2*k0);
     if( h<0.0f ) return glm::vec4(-1.0f);
     h = sqrt(h);
     float t = (-k1-h)/k2;
 
     // body
-    float y = baoc + t*bard;
+    float y = fmaf(t, bard, baoc);
     if( y>0.0f && y<baba ) return glm::vec4( t, oc+t*rd - ba*y/baba );
     
     // caps
@@ -154,13 +157,13 @@ __device__ inline float intersectX(glm::vec2 a, glm::vec2 b, float y)
 {
     if (a.y == b.y) return a.x; // horizontal line
     float t = (y - a.y) / (b.y - a.y);
-    return a.x + t * (b.x - a.x);
+    return fmaf(t, (b.x - a.x), a.x);
 }
 
 // billboard pre-test: samples 5 texels from downsampled texture
 __device__ inline bool isCylinderBillboardVisible(
     cudaTextureObject_t downsampleTex,
-    int xcoords[], int ycoords[], float pixelDepths[], int pixelsToCheck = 3)
+    int xcoords[], int ycoords[], float pixelDepths[])
 {
     int dsW = max(1, cst.screenW / 16);
     int dsH = max(1, cst.screenH / 16);
@@ -169,6 +172,8 @@ __device__ inline bool isCylinderBillboardVisible(
     float downvals[3];
     float dsW_scrW = float(dsW) / float(cst.screenW);
     float dsH_scrH = float(dsH) / float(cst.screenH);
+
+    #pragma unroll pixelsToCheck
     for (int i = 0; i < pixelsToCheck; ++i) {
         int tx = int(float(xcoords[i]) * dsW_scrW);
         int ty = int(float(ycoords[i]) * dsH_scrH);
@@ -177,6 +182,7 @@ __device__ inline bool isCylinderBillboardVisible(
         downvals[i] = texelFetchDepth(downsampleTex, tx, ty);
     }
 
+    #pragma unroll pixelsToCheck
     for (int i = 0; i < pixelsToCheck; ++i) {
         float pd = pixelDepths[i];
         if (pd <= downvals[0] || pd <= downvals[1] || pd <= downvals[2])
@@ -233,8 +239,23 @@ __device__ inline float onCylDepth(const glm::vec3& rd, int px, int py, const gl
     glm::vec3 hit = (rayStart + float(px) * dx + float(py) * dy) * h;
     // project depth like GLSL: (hit.z * proj[2].z + proj[3].z) / -hit.z
 
-    float depth = (hit.z * cst.proj[2][2] + cst.proj[3][2]) / -hit.z;
+    float depth = (fmaf(hit.z, cst.proj[2][2], cst.proj[3][2])) / -hit.z;
     return depth;
+}
+
+struct RayDirectionResult 
+{
+    glm::vec3 rd;
+    glm::ivec2 screenPos;
+};
+
+__device__ inline RayDirectionResult getRayDirection(glm::vec3& pa, glm::vec3& pb, const float& fovTan, const float& halfFovTan)
+{
+    glm::vec3 p = pa.z < pb.z ? pa : pb;
+    const glm::vec4 pProj = cst.proj * glm::vec4(p, 1.0f);
+    p = glm::vec3(pProj.x / pProj.w, pProj.y / pProj.w, pProj.z / pProj.w);
+    const glm::ivec2 pScreen = glm::ivec2(int(fmaf(p.x, 0.5f, 0.5f)) * cst.screenW, int(fmaf(p.y, 0.5f, 0.5f)) * cst.screenH);
+    return {computeRd(pScreen.x, pScreen.y, fovTan, halfFovTan), pScreen};
 }
 
 // ========================================================
@@ -334,16 +355,30 @@ __global__ void cylinderRasterKernel(
     projectedPoints[2] = glm::vec2(ndcv4Proj);
     projectedPoints[3] = glm::vec2(ndcv3Proj);
 
+    int minX = cst.screenW;
+    int maxX = 0;
     int minY = cst.screenH;
     int maxY = 0;
+    #pragma unroll 4
     for (int i = 0; i < 4; i++) 
     {
-        projectedPoints[i].x = int((projectedPoints[i].x * 0.5f + 0.5f) * cst.screenW);
-        projectedPoints[i].y = int((projectedPoints[i].y * 0.5f + 0.5f) * cst.screenH);
+        projectedPoints[i].x = int(fmaf(projectedPoints[i].x, 0.5f, 0.5f) * cst.screenW);
+        projectedPoints[i].y = int(fmaf(projectedPoints[i].y, 0.5f, 0.5f) * cst.screenH);
 
-        minY = min(minY, int(floorf(projectedPoints[i].y))); 
-        maxY = max(maxY, int(ceilf(projectedPoints[i].y)));
+        minY = min(minY, __float2int_rd(projectedPoints[i].y)); 
+        maxY = max(maxY, __float2int_ru(projectedPoints[i].y));
+        minX = min(minX, __float2int_rd(projectedPoints[i].x)); 
+        maxX = max(maxX, __float2int_ru(projectedPoints[i].x));
     }
+
+    if (maxY < 0 || minY >= cst.screenH || maxY - minY < 2 ||
+        maxX < 0 || minX >= cst.screenW || maxX - minX < 2) {
+        // outside screen or too small
+        unsigned int visId = cst.visibilityFrameBufferIndexOffset + idx;
+        visibilityFrameBuffer[visId].pixels = 0;
+        return;
+    }
+
     float aspectRatio = float(cst.screenW) / float(cst.screenH);
     float fovRad = glm::radians(cst.fov);
     float fovTan = tanf(fovRad * 0.5f);
@@ -356,37 +391,24 @@ __global__ void cylinderRasterKernel(
     glm::vec3 dy = scrc.dy;
     glm::vec3 rayStart = scrc.rayStart;
 
-    const glm::vec3 closePa1 = camImpPosA - x * ra;
-    const glm::vec3 closePa2 = camImpPosA + x * ra;
-    glm::vec3 closePa = closePa1.z < closePa2.z ? closePa1 : closePa2;
-    const glm::vec4 closePaProj = cst.proj * glm::vec4(closePa, 1.0f);
-    closePa = glm::vec3(closePaProj.x / closePaProj.w, closePaProj.y / closePaProj.w, closePaProj.z / closePaProj.w);
-    const glm::ivec2 closePaScreen = glm::ivec2((closePa.x * 0.5f + 0.5f) * cst.screenW, (closePa.y * 0.5f + 0.5f) * cst.screenH);
-    closePa = computeRd(closePaScreen.x, closePaScreen.y, fovTan, halfFovTan);
+    glm::vec3 closePa1 = camImpPosA - x * ra;
+    glm::vec3 closePa2 = camImpPosA + x * ra;
+    RayDirectionResult closePa = getRayDirection(closePa1, closePa2, fovTan, halfFovTan);
     
-    const glm::vec3 closePb1 = camImpPosB - x * ra;
-    const glm::vec3 closePb2 = camImpPosB + x * ra;
-    glm::vec3 closePb = closePb1.z < closePb2.z ? closePb1 : closePb2;
-    const glm::vec4 closePbProj = cst.proj * glm::vec4(closePb, 1.0f);
-    closePb = glm::vec3(closePbProj.x / closePbProj.w, closePbProj.y / closePbProj.w, closePbProj.z / closePbProj.w);
-    const glm::ivec2 closePbScreen = glm::ivec2(int((closePb.x * 0.5f + 0.5f) * cst.screenW), int((closePb.y * 0.5f + 0.5f) * cst.screenH));
-    closePb = computeRd(closePbScreen.x, closePbScreen.y, fovTan, halfFovTan);
+    glm::vec3 closePb1 = camImpPosB - x * ra;
+    glm::vec3 closePb2 = camImpPosB + x * ra;
+    RayDirectionResult closePb = getRayDirection(closePb1, closePb2, fovTan, halfFovTan);
     
-    const glm::vec3 closeCenter1 = center - x * ra;
-    const glm::vec3 closeCenter2 = center + x * ra;
-    glm::vec3 closeCenter = closeCenter1.z < closeCenter2.z ? closeCenter1 : closeCenter2;
-    const glm::vec4 closeCenterProj = cst.proj * glm::vec4(closeCenter, 1.0f);
-    closeCenter = glm::vec3(closeCenterProj.x / closeCenterProj.w, closeCenterProj.y / closeCenterProj.w, closeCenterProj.z / closeCenterProj.w);
-    const glm::ivec2 closeCenterScreen = glm::ivec2(int((closeCenter.x * 0.5f + 0.5f) * cst.screenW), int((closeCenter.y * 0.5f + 0.5f) * cst.screenH));
-    closeCenter = computeRd(closeCenterScreen.x, closeCenterScreen.y, fovTan, halfFovTan);
+    glm::vec3 closeCenter1 = center - x * ra;
+    glm::vec3 closeCenter2 = center + x * ra;
+    RayDirectionResult closeCenter = getRayDirection(closeCenter1, closeCenter2, fovTan, halfFovTan);
+    int xcoords[3] = {closePa.screenPos.x, closePb.screenPos.x, closeCenter.screenPos.x};
+    int ycoords[3] = {closePa.screenPos.y, closePb.screenPos.y, closeCenter.screenPos.y};
 
-
-    int xcoords[3] = {closePaScreen.x, closePbScreen.x, closeCenterScreen.x};
-    int ycoords[3] = {closePaScreen.y, closePbScreen.y, closeCenterScreen.y};
     float pixelDepths[3] = {
-        onCylDepth(closePa, closePaScreen.x, closePaScreen.y, pa, pb, ra, rayStart, dx, dy),
-        onCylDepth(closePb, closePbScreen.x, closePbScreen.y, pa, pb, ra, rayStart, dx, dy),
-        onCylDepth(closeCenter, closeCenterScreen.x, closeCenterScreen.y, pa, pb, ra, rayStart, dx, dy)
+        onCylDepth(closePa.rd, closePa.screenPos.x, closePa.screenPos.y, pa, pb, ra, rayStart, dx, dy),
+        onCylDepth(closePb.rd, closePb.screenPos.x, closePb.screenPos.y, pa, pb, ra, rayStart, dx, dy),
+        onCylDepth(closeCenter.rd, closeCenter.screenPos.x, closeCenter.screenPos.y, pa, pb, ra, rayStart, dx, dy)
     };
 
     bool billboardVisible = isCylinderBillboardVisible(downsampleTex, xcoords, ycoords, pixelDepths);
@@ -412,6 +434,7 @@ __global__ void cylinderRasterKernel(
         float xIntersections[4];
         int intersections = 0;
 
+        #pragma unroll 4
         for (int i = 0; i < 4; ++i) 
         {
             const glm::vec2 a = projectedPoints[i];
@@ -429,6 +452,7 @@ __global__ void cylinderRasterKernel(
         {
             float xMin = xIntersections[0];
             float xMax = xIntersections[0];
+
             for (int i = 1; i < intersections; ++i) 
             {
                 xMin = fminf(xMin, xIntersections[i]);
@@ -437,7 +461,7 @@ __global__ void cylinderRasterKernel(
 
             glm::vec3 rayColStart = rayStart + float(py) * dy;
 
-            for (int px = fmaxf(0, int(ceil(xMin))); px <= fminf(int(floorf(xMax)), cst.screenW -1); ++px)
+            for (int px = fmaxf(0, __float2int_ru(xMin)); px <= fminf(__float2int_rd(xMax), cst.screenW -1); ++px)
             {
                 glm::vec3 rd = computeRd(px, py, fovTan, halfFovTan);
                 glm::vec4 tnor = iCylinder(glm::vec3(cst.cameraPos), rd, pa, pb, ra);
@@ -445,8 +469,8 @@ __global__ void cylinderRasterKernel(
 
                 if (tnor.x > 0.0f) {
                     float t = tnor.x;
-                    glm::vec3 hit = (rayColStart + float(py) * dy) * t;
-                    float depth = (hit.z * cst.proj[2][2] + cst.proj[3][2]) / -hit.z;
+                    glm::vec3 hit = (rayColStart + float(px) * dx) * t;
+                    float depth = fmaf(hit.z, cst.proj[2][2], cst.proj[3][2]) / -hit.z;
 
                     unsigned int depthU = floatToUintBits(depth);
                     
@@ -459,7 +483,7 @@ __global__ void cylinderRasterKernel(
                         pixelOwnershipBuffer[index] = (unsigned int)visIdx;
                         glm::vec3 normal = glm::normalize(glm::vec3(tnor.y, tnor.z, tnor.w));
                         float lambert = glm::max(0.0f, glm::dot(normal, -glm::normalize(rd * t)));
-                        glm::vec3 color = glm::vec3(0.01f, 1.0f, 0.05f) * lambert * 0.9f;
+                        glm::vec3 color = glm::vec3(bondsColor.x, bondsColor.y, bondsColor.z) * lambert * diffuse;
                         uchar4 ucharColor = make_uchar4(color.x*255, color.y*255, color.z*255, 255);
                         surf2Dwrite(ucharColor, outputImage, px * sizeof(uchar4), py); 
                     }
@@ -500,7 +524,8 @@ extern "C" void cylinderRaster(
     int c_benchmark,
     cudaSurfaceObject_t outputImage,
     cudaTextureObject_t downsampleTex,
-    cudaStream_t& stream
+    cudaStream_t& stream,
+    int workGroupSizeX
 )
 {
 
@@ -525,9 +550,9 @@ extern "C" void cylinderRaster(
     c_benchmark
     };
     // copy constants to symbol memory (per-frame)
-    cudaMemcpyToSymbol(cst, &c_constants, sizeof(Constants));
+    cudaMemcpyToSymbolAsync(cst, &c_constants, sizeof(Constants), 0, cudaMemcpyHostToDevice, stream);
 
-    dim3 block(256);
+    dim3 block(workGroupSizeX);
     dim3 grid((c_cylinderCount + block.x - 1) / block.x);
     cylinderRasterKernel<<<grid, block, 0, stream>>>(
         cylinders,
@@ -539,5 +564,5 @@ extern "C" void cylinderRaster(
         outputImage,
         downsampleTex
     );
-    cudaDeviceSynchronize();
+    // cudaDeviceSynchronize();
 }
