@@ -47,7 +47,6 @@ ComputeShader::ComputeShader(const char* computePath, const char* computeName)
 }
 void ComputeShader::use() 
 { 
-    glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, m_computeName.c_str());
     glUseProgram(ID); 
 }
 

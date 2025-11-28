@@ -1,8 +1,9 @@
 #include "vis/shader_program.h"
 
 
-ShaderProgram::ShaderProgram(const char* vertexPath, const char* fragmentPath, const char* geometryPath)
+ShaderProgram::ShaderProgram(const char* vertexPath, const char* fragmentPath, const char* geometryPath, const char* shaderName)
 {
+    m_shaderName = shaderName;
     ID = glCreateProgram();
     // vertex shader
     if (vertexPath != "")
