@@ -35,7 +35,7 @@ int cylinder_count = 4000000;
 std::string title = "Standard OpenGL Version: Spheres and Cylinders - GPU Frustum Culling"; 
 
 bool shown = true;
-bool withOcclusionCulling = true;
+bool withOcclusionCulling = false;
 
 GLuint workGroupSizeXPerPixel = 16;  // Deifining threads-per-group (X)
 GLuint workGroupSizeYPerPixel = 16;  // Deifining threads-per-group (Y)
@@ -109,16 +109,16 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
 
     // FBO
 
-    ComputeShader pixelCountShader("assets/shaders/standard_version/gpu_cull/pixel_count.compute");
-    ComputeShader hizPyramidComputeShader("assets/shaders/standard_version/gpu_cull/mipmap_gen.compute");
+    ComputeShader pixelCountShader("assets/shaders/standard_version/gpu_cull/pixel_count.compute", "Pixel Count Shader");
+    ComputeShader hizPyramidComputeShader("assets/shaders/standard_version/gpu_cull/mipmap_gen.compute", "Hiz Pyramid Shader");
 
-    ComputeShader spheresCullingShader("assets/shaders/standard_version/gpu_cull/spheresFrusOccCulling.compute");
+    ComputeShader spheresCullingShader("assets/shaders/standard_version/gpu_cull/spheresFrusOccCulling.compute", "Spheres Culling Shader");
     ShaderProgram spheresShader("assets/shaders/standard_version/gpu_cull/spheres.vert", 
                                 "assets/shaders/standard_version/gpu_cull/spheresOccCulling.frag",
                                 "assets/shaders/standard_version/gpu_cull/spheresOccCulling.geom");
     spheresShader.linkProgram();
     
-    ComputeShader cylindersCullingShader("assets/shaders/standard_version/gpu_cull/cylindersFrusOccCulling.compute");
+    ComputeShader cylindersCullingShader("assets/shaders/standard_version/gpu_cull/cylindersFrusOccCulling.compute", "Cylinders Culling Shader");
     ShaderProgram cylindersShader("assets/shaders/standard_version/gpu_cull/cylinders.vert", 
                                 "assets/shaders/standard_version/gpu_cull/cylindersOccCulling.frag",
                                 "assets/shaders/standard_version/gpu_cull/cylindersOccCulling.geom");
@@ -201,7 +201,8 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
     logFile.close();
     try
     {
-       bool isRunning = true;
+        bool isRunning = true;
+        
         while ( isRunning )
         {
             // 1. Binding framebuffer to draw on.
@@ -343,6 +344,9 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
             canvasPixelIdTexture.unbind();
             ////////////////
             glBindFramebuffer(GL_READ_FRAMEBUFFER, canvasFBO.getId());
+            glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Bind Draw Framebuffer");
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+            glPopDebugGroup();
             isRunning = window.update();
         } 
     } catch (const std::exception& e)
@@ -381,16 +385,16 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
 
     // FBO
 
-    ComputeShader spheresCullingShader("assets/shaders/standard_version/gpu_cull/spheresFrusCulling.compute");
+    ComputeShader spheresCullingShader("assets/shaders/standard_version/gpu_cull/spheresFrusCulling.compute", "Spheres Culling Shader");
     ShaderProgram spheresShader("assets/shaders/standard_version/gpu_cull/spheres.vert", 
                                 "assets/shaders/standard_version/gpu_cull/spheres.frag",
-                                "assets/shaders/standard_version/gpu_cull/spheres.geom");
+                                "assets/shaders/standard_version/gpu_cull/spheres.geom","Spheres Shader");
     spheresShader.linkProgram();
     
-    ComputeShader cylindersCullingShader("assets/shaders/standard_version/gpu_cull/cylindersFrusCulling.compute");
+    ComputeShader cylindersCullingShader("assets/shaders/standard_version/gpu_cull/cylindersFrusCulling.compute", "Cylinders Culling Shader");
     ShaderProgram cylindersShader("assets/shaders/standard_version/gpu_cull/cylinders.vert", 
                                 "assets/shaders/standard_version/gpu_cull/cylinders.frag",
-                                "assets/shaders/standard_version/gpu_cull/cylinders.geom");
+                                "assets/shaders/standard_version/gpu_cull/cylinders.geom","Cylinders Shader");
     cylindersShader.linkProgram();
 
     std::vector<Sphere> spheres = getScene(sphere_count);
@@ -461,6 +465,9 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
     try
     {
        bool isRunning = true;
+        glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Bind Draw Framebuffer");
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+        glPopDebugGroup();
         while ( isRunning )
         {
             // 1. Ligar el framebuffer en el que vas a dibujar
@@ -529,6 +536,9 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
 
             ////////////////
             glBindFramebuffer(GL_READ_FRAMEBUFFER, canvasFBO.getId());
+            glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Bind Draw Framebuffer");
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+            glPopDebugGroup();
             isRunning = window.update();
         } 
     } catch (const std::exception& e)
