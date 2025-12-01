@@ -7,6 +7,7 @@
 #include <glad/glad.h>
 #include <SDL3/SDL.h>
 #include <vector>
+#include <nvtx3/nvToolsExt.h>
 
 #include "appSDLGL.h"
 
@@ -851,7 +852,7 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
             cudaEventRecord(evtReady[cur], stream);
 
             if (!firstFrame) {
-                
+                nvtxRangePushA("Async Copies and Updates");
                 // Copias asíncronas
                 cudaMemcpyAsync(visibleSpheresCountPinned, frustumSpheresCounter, sizeof(unsigned int), cudaMemcpyDeviceToHost, stream);
                 cudaMemcpyAsync(visibleCylindersCountPinned, frustumCylindersCounter, sizeof(unsigned int), cudaMemcpyDeviceToHost, stream);
@@ -861,6 +862,8 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
                 visibleCylindersCount = *visibleCylindersCountPinned;
                 
                 cudaEventSynchronize(evtReady[prev]);
+                // cudaStreamSynchronize(stream);
+                nvtxRangePop();
                 
                 glBindFramebuffer(GL_READ_FRAMEBUFFER, canvas[prev].getFramebuffer().getId());
                 isRunning = window.update();
