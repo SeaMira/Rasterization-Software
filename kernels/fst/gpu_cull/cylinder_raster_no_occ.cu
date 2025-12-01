@@ -440,6 +440,7 @@ extern "C" void cylinderRasterNoOcc(
     cudaMemcpyToSymbolAsync(cst, &c_constants, sizeof(Constants), 0, cudaMemcpyHostToDevice, stream);
 
     nvtxRangePushA("Cylinder Raster No Occ Kernel");
+    nvtxMarkA("Launch Cylinder Raster No Occ Kernel");
     dim3 block(workGroupSizeX);
     dim3 grid((c_cylinderCount + block.x - 1) / block.x);
     cylinderRasterKernelNoOcc<<<grid, block, 0, stream>>>(
@@ -448,6 +449,7 @@ extern "C" void cylinderRasterNoOcc(
         d_frustCullcounter,
         outputImage
     );
+    nvtxMarkA("End Cylinder Raster No Occ Kernel");
     // cudaDeviceSynchronize();
     nvtxRangePop();
 }

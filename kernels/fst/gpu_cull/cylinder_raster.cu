@@ -6,7 +6,7 @@
 
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
-
+#include <nvtx3/nvToolsExt.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -552,6 +552,7 @@ extern "C" void cylinderRaster(
     // copy constants to symbol memory (per-frame)
     cudaMemcpyToSymbolAsync(cst, &c_constants, sizeof(Constants), 0, cudaMemcpyHostToDevice, stream);
 
+    nvtxRangePushA("Cylinder Raster Kernel");
     dim3 block(workGroupSizeX);
     dim3 grid((c_cylinderCount + block.x - 1) / block.x);
     cylinderRasterKernel<<<grid, block, 0, stream>>>(
@@ -565,4 +566,5 @@ extern "C" void cylinderRaster(
         downsampleTex
     );
     // cudaDeviceSynchronize();
+    nvtxRangePop();
 }

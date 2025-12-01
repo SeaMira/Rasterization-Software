@@ -3,6 +3,7 @@
 #include <glad/glad.h>
 #include <cuda_runtime.h>
 #include <cuda_gl_interop.h>
+#include <nvtx3/nvToolsExt.h>
 
 struct Constants {
     int screenResolutionX;
@@ -41,6 +42,7 @@ extern "C" void pixelCount(
     Constants h_cst = { c_screenResolutionX, c_screenResolutionY };
     cudaMemcpyToSymbolAsync(cst, &h_cst, sizeof(Constants), 0, cudaMemcpyHostToDevice, stream);
 
+    nvtxRangePushA("Pixel Count Kernel");
     dim3 block(workGroupSizeX, workGroupSizeY);
     dim3 grid((c_screenResolutionX+workGroupSizeX-1)/workGroupSizeX, (c_screenResolutionY+workGroupSizeY-1)/workGroupSizeY);
     pixelCountKernel<<<grid, block, 0, stream>>>(
@@ -48,4 +50,5 @@ extern "C" void pixelCount(
         (FramePixelsCount*)d_visibilityFrameBuffer
     );
     // cudaDeviceSynchronize();
+    nvtxRangePop();
 }

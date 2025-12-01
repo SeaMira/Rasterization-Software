@@ -3,10 +3,11 @@
 #include <glad/glad.h>
 #include <cuda_runtime.h>
 #include <cuda_gl_interop.h>
+#include <nvtx3/nvToolsExt.h>
 #include "utils/scene_descriptor.h"
 
 struct Constants {
-    float far;
+    float c_far;
     int screenResolutionX;
     int screenResolutionY;
 };
@@ -25,7 +26,7 @@ __global__ void cleaningKernel(
     if (x >= cst.screenResolutionX || y >= cst.screenResolutionY) return;
 
     pixelOwnershipBuffer[x + cst.screenResolutionX * y] = 0;
-    depthBuffer[x + cst.screenResolutionX * y] = __float_as_uint(cst.far);
+    depthBuffer[x + cst.screenResolutionX * y] = __float_as_uint(cst.c_far);
 
     uchar4 color;
     color = make_uchar4(backgroundColor.x * 255, backgroundColor.y * 255, backgroundColor.z * 255, 255); 
@@ -50,8 +51,10 @@ extern "C" void cleaningScreen(
     Constants h_cst = { c_far, c_screenResolutionX, c_screenResolutionY };
     cudaMemcpyToSymbolAsync(cst, &h_cst, sizeof(Constants), 0, cudaMemcpyHostToDevice, stream);
 
+    nvtxRangePushA("Cleaning Kernel");
     dim3 block(workGroupSizeXPerPixel,workGroupSizeYPerPixel);
     dim3 grid((c_screenResolutionX+workGroupSizeXPerPixel-1)/workGroupSizeXPerPixel, (c_screenResolutionY+workGroupSizeYPerPixel-1)/workGroupSizeYPerPixel);
     cleaningKernel<<<grid, block, 0, stream>>>(texSurfaceObj, depthBuffer, pixelOwnershipBuffer);
     // cudaDeviceSynchronize();
+    nvtxRangePop();
 }

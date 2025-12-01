@@ -1,6 +1,7 @@
 #define CUDA_VERSION 13000
 
 #include <cuda_runtime.h>
+#include <nvtx3/nvToolsExt.h>
 
 struct Constants {
     int screenResolutionX;
@@ -75,8 +76,10 @@ extern "C" void downsamplingDepthTexture(
     Constants h_cst = { c_screenResolutionX, c_screenResolutionY };
     cudaMemcpyToSymbolAsync(cst, &h_cst, sizeof(Constants), 0, cudaMemcpyHostToDevice, stream);
 
+    nvtxRangePushA("Downsampling Kernel");
     dim3 block(4, 4);
     dim3 grid((c_screenResolutionX + downsampleWorkGroupSizeX -1)/downsampleWorkGroupSizeX, (c_screenResolutionY + downsampleWorkGroupSizeY - 1)/downsampleWorkGroupSizeY);
     downsampleDepthMaxKernel<<<grid, block, 0, stream>>>(depthBuffer, downsampleSurface);
     // cudaDeviceSynchronize();
+    nvtxRangePop();
 }
