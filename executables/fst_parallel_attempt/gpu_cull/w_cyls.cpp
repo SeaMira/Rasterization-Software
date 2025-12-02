@@ -109,10 +109,10 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
     StorageBuffer pixelCountFramesBuffer(GL_SHADER_STORAGE_BUFFER, SCR_WIDTH*SCR_HEIGHT * sizeof(GLuint), 4, 
         nullptr, GL_DYNAMIC_COPY);
     
-    std::vector<Sphere> spheres = getScene(sphere_count);
+    std::vector<Sphere> spheres;
+    std::vector<Cylinder> cylinders;
+    getCompleteScene(spheres, sphere_count, cylinders, cylinder_count);
     sphere_count = spheres.size(); 
-
-    std::vector<Cylinder> cylinders = getCylinderScene(cylinder_count);
     cylinder_count = cylinders.size(); 
 
     std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints = getCheckpoints(sphere_count, spheres, cylinders);
@@ -128,6 +128,9 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
     
     StorageBuffer cylinderBuffer(GL_SHADER_STORAGE_BUFFER, cylinder_count * sizeof(Cylinder), 7, 
         cylinders.data(), GL_STATIC_DRAW);
+
+    spheres.clear();
+    cylinders.clear();
     
     // Framebuffer downsampleDepthFBO;
     // downsampleDepthFBO.attachTexture(GL_COLOR_ATTACHMENT0, downsampledDepthTexture);
@@ -316,16 +319,15 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
     canvas.setupDepthData(SCR_WIDTH, SCR_HEIGHT);
     canvas.setupCleaningProgram(cleaningComputeShader);
     
-    std::vector<Sphere> spheres = getScene(sphere_count);
+    std::vector<Sphere> spheres;
+    std::vector<Cylinder> cylinders;
+    getCompleteScene(spheres, sphere_count, cylinders, cylinder_count);
     sphere_count = spheres.size(); 
-
-    std::vector<Cylinder> cylinders = getCylinderScene(cylinder_count);
     cylinder_count = cylinders.size(); 
 
     std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints = getCheckpoints(sphere_count, spheres, cylinders);
     
     visibleSpheresCount = sphere_count;
-    
     visibleCylindersCount = cylinder_count;
     
     StorageBuffer sphereBuffer(GL_SHADER_STORAGE_BUFFER, sphere_count * sizeof(Sphere), 6, 
@@ -333,7 +335,9 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
     
     StorageBuffer cylinderBuffer(GL_SHADER_STORAGE_BUFFER, cylinder_count * sizeof(Cylinder), 7, 
         cylinders.data(), GL_STATIC_DRAW);
-    
+
+    spheres.clear();
+    cylinders.clear();
 
     GLuint zero = 0;
     GLuint resetValue = 0;
