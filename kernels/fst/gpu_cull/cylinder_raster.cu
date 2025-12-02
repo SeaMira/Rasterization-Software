@@ -102,7 +102,7 @@ static __device__ inline glm::vec4 iCylinder(const glm::vec3& ro, const glm::vec
     float h = fmaf(k1, k1, -k2*k0);
     if( h<0.0f ) return glm::vec4(-1.0f);
     h = sqrt(h);
-    float t = (-k1-h)/k2;
+    float t = __fdividef(-k1-h, k2);
 
     // body
     float y = fmaf(t, bard, baoc);
@@ -156,7 +156,7 @@ __device__ inline float texelFetchDepth(cudaTextureObject_t tex, int x, int y) {
 __device__ inline float intersectX(glm::vec2 a, glm::vec2 b, float y) 
 {
     if (a.y == b.y) return a.x; // horizontal line
-    float t = (y - a.y) / (b.y - a.y);
+    float t = __fdividef(y - a.y, b.y - a.y);
     return fmaf(t, (b.x - a.x), a.x);
 }
 
@@ -170,8 +170,8 @@ __device__ inline bool isCylinderBillboardVisible(
 
     // sample mapped coords (like original)
     float downvals[3];
-    float dsW_scrW = float(dsW) / float(cst.screenW);
-    float dsH_scrH = float(dsH) / float(cst.screenH);
+    float dsW_scrW = __fdividef(float(dsW), float(cst.screenW));
+    float dsH_scrH = __fdividef(float(dsH), float(cst.screenH));
 
     #pragma unroll pixelsToCheck
     for (int i = 0; i < pixelsToCheck; ++i) {
@@ -239,8 +239,7 @@ __device__ inline float onCylDepth(const glm::vec3& rd, int px, int py, const gl
     glm::vec3 hit = (rayStart + float(px) * dx + float(py) * dy) * h;
     // project depth like GLSL: (hit.z * proj[2].z + proj[3].z) / -hit.z
 
-    float depth = (fmaf(hit.z, cst.proj[2][2], cst.proj[3][2])) / -hit.z;
-    return depth;
+    return __fdividef(fmaf(hit.z, cst.proj[2][2], cst.proj[3][2]), -hit.z);
 }
 
 struct RayDirectionResult 
@@ -253,7 +252,7 @@ __device__ inline RayDirectionResult getRayDirection(glm::vec3& pa, glm::vec3& p
 {
     glm::vec3 p = pa.z < pb.z ? pa : pb;
     const glm::vec4 pProj = cst.proj * glm::vec4(p, 1.0f);
-    p = glm::vec3(pProj.x / pProj.w, pProj.y / pProj.w, pProj.z / pProj.w);
+    p = glm::vec3(__fdividef(pProj.x, pProj.w), __fdividef(pProj.y, pProj.w), __fdividef(pProj.z, pProj.w));
     const glm::ivec2 pScreen = glm::ivec2(int(fmaf(p.x, 0.5f, 0.5f)) * cst.screenW, int(fmaf(p.y, 0.5f, 0.5f)) * cst.screenH);
     return {computeRd(pScreen.x, pScreen.y, fovTan, halfFovTan), pScreen};
 }
@@ -326,13 +325,13 @@ __global__ void cylinderRasterKernel(
     const float dV0 = length( camImpPosA );
     const float dV1 = length( camImpPosB );
 
-    const float sinAngle = ra / dV0;
-    float		angle	 = asin( sinAngle );
+    const float sinAngle = __fdividef(ra, dV0);
+    float		angle	 = asinf( sinAngle );
     const glm::vec3	y1		 = y * ra;
-    const glm::vec3	x2		 = x * ra * cos( angle );
+    const glm::vec3	x2		 = x * ra * cosf( angle );
     const glm::vec3	y2		 = y1 * sinAngle;
-    angle				 = asin( ra / dV1 );
-    const glm::vec3 x3		 = x * ( dV1 - ra ) * tan( angle );
+    angle				 = asinf( __fdividef(ra, dV1) );
+    const glm::vec3 x3		 = x * ( dV1 - ra ) * tanf( angle );
 
     // Compute impostors vertices.
     const glm::vec3 v1 = camImpPosA - x2 + y2;
@@ -345,10 +344,10 @@ __global__ void cylinderRasterKernel(
     const glm::vec4 v3Proj = cst.proj * glm::vec4(v3, 1.0f);
     const glm::vec4 v4Proj = cst.proj * glm::vec4(v4, 1.0f);
 
-    glm::vec3 ndcv1Proj = glm::vec3(v1Proj.x / v1Proj.w, v1Proj.y / v1Proj.w, v1Proj.z / v1Proj.w);
-    glm::vec3 ndcv2Proj = glm::vec3(v2Proj.x / v2Proj.w, v2Proj.y / v2Proj.w, v2Proj.z / v2Proj.w);
-    glm::vec3 ndcv3Proj = glm::vec3(v3Proj.x / v3Proj.w, v3Proj.y / v3Proj.w, v3Proj.z / v3Proj.w);
-    glm::vec3 ndcv4Proj = glm::vec3(v4Proj.x / v4Proj.w, v4Proj.y / v4Proj.w, v4Proj.z / v4Proj.w);
+    glm::vec3 ndcv1Proj = glm::vec3(__fdividef(v1Proj.x, v1Proj.w), __fdividef(v1Proj.y, v1Proj.w), __fdividef(v1Proj.z, v1Proj.w));
+    glm::vec3 ndcv2Proj = glm::vec3(__fdividef(v2Proj.x, v2Proj.w), __fdividef(v2Proj.y, v2Proj.w), __fdividef(v2Proj.z, v2Proj.w));
+    glm::vec3 ndcv3Proj = glm::vec3(__fdividef(v3Proj.x, v3Proj.w), __fdividef(v3Proj.y, v3Proj.w), __fdividef(v3Proj.z, v3Proj.w));
+    glm::vec3 ndcv4Proj = glm::vec3(__fdividef(v4Proj.x, v4Proj.w), __fdividef(v4Proj.y, v4Proj.w), __fdividef(v4Proj.z, v4Proj.w));
 
     projectedPoints[0] = glm::vec2(ndcv1Proj);
     projectedPoints[1] = glm::vec2(ndcv2Proj);
@@ -379,7 +378,7 @@ __global__ void cylinderRasterKernel(
         return;
     }
 
-    float aspectRatio = float(cst.screenW) / float(cst.screenH);
+    float aspectRatio = __fdividef(float(cst.screenW), float(cst.screenH));
     float fovRad = glm::radians(cst.fov);
     float fovTan = tanf(fovRad * 0.5f);
     float halfFovTan = fovTan * aspectRatio;
@@ -470,7 +469,7 @@ __global__ void cylinderRasterKernel(
                 if (tnor.x > 0.0f) {
                     float t = tnor.x;
                     glm::vec3 hit = (rayColStart + float(px) * dx) * t;
-                    float depth = fmaf(hit.z, cst.proj[2][2], cst.proj[3][2]) / -hit.z;
+                    float depth = (__fdividef(fmaf(hit.z, cst.proj[2][2], cst.proj[3][2]), -hit.z));
 
                     unsigned int depthU = floatToUintBits(depth);
                     

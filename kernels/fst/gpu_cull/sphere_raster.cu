@@ -108,8 +108,8 @@ __device__ inline bool isSphereBillboardVisible(
 
     // sample mapped coords (like original)
     float downvals[5];
-    float dsW_scrW = float(dsW) / float(cst.screenW);
-    float dsH_scrH = float(dsH) / float(cst.screenH);
+    float dsW_scrW = __fdividef(float(dsW), float(cst.screenW));
+    float dsH_scrH = __fdividef(float(dsH), float(cst.screenH));
 
     #pragma unroll pixelsToCheck
     for (int i = 0; i < pixelsToCheck; ++i) {
@@ -159,7 +159,7 @@ __device__ inline float onSphDepth(const glm::vec3& rd, int px, int py, const gl
     float h = iSphere(cst.cameraPos, rd, spherePos, r);
     glm::vec3 hit = (rayStart + float(px) * dx + float(py) * dy) * h;
     // project depth like GLSL: (hit.z * proj[2].z + proj[3].z) / -hit.z
-    float depth = (fmaf(hit.z, cst.proj[2][2], cst.proj[3][2])) / -hit.z;
+    float depth = __fdividef(fmaf(hit.z, cst.proj[2][2], cst.proj[3][2]), -hit.z);
     return depth;
 }
 
@@ -218,7 +218,7 @@ __global__ void sphereRasterKernel(
     glm::vec3 camImposPos = cameraSpaceSphere - normCamSpaceSphere * posr.w;
 
     // bbox
-    const float sinAngle = posr.w / (glm::length(cameraSpaceSphere) + 1e-6f);
+    const float sinAngle = __fdividef(posr.w, (glm::length(cameraSpaceSphere) + 1e-6f));
     const float tanAngle = tanf(asinf(sinAngle));
     const float quadScale = tanAngle * glm::length(camImposPos);
 
@@ -238,7 +238,7 @@ __global__ void sphereRasterKernel(
     #pragma unroll
     for (int i = 0; i < 4; ++i) {
         glm::vec4 clip = cst.proj * glm::vec4(corners[i], 1.0f);
-        float iw = 1.0f / clip.w;
+        float iw = __fdividef(1.0f, clip.w);
         float x = clip.x * iw;
         float y = clip.y * iw;
         minC.x = fminf(minC.x, x);
@@ -253,8 +253,8 @@ __global__ void sphereRasterKernel(
     int screenMinY = __float2int_rd(fmaf(minC.y, 0.5f, 0.5f) * cst.screenH);
     int screenMaxY = __float2int_ru(fmaf(maxC.y, 0.5f, 0.5f) * cst.screenH);
 
-    float difx = float(screenMaxX - screenMinX);
-    float dify = float(screenMaxY - screenMinY);
+    float difx = __fsub_ru(float(screenMaxX), float(screenMinX));
+    float dify = __fsub_ru(float(screenMaxY), float(screenMinY));
     if (difx * dify <= 2.0f) {
         visibilityFrameBuffer[cst.visibilityFrameBufferIndexOffset + idx].pixels = 0;
         // atomicAdd(frustCullcounter, 1u);
@@ -268,9 +268,9 @@ __global__ void sphereRasterKernel(
     int xcoords[5] = { __float2int_rn(fmaf(-difx, 0.49f, midx)), __float2int_rn(fmaf(difx, 0.49f, midx)), midx, midx, (screenMinX + screenMaxX) / 2 };
     int ycoords[5] = { midy, midy, __float2int_rn(fmaf(-dify, 0.49f, midy)), __float2int_rn(fmaf(dify, 0.49f, midy)), (screenMinY + screenMaxY) / 2 };
 
-    float aspectRatio = float(cst.screenW) / float(cst.screenH);
+    float aspectRatio = __fdividef(float(cst.screenW), float(cst.screenH));
     float fovRad = glm::radians(cst.fov);
-    float fovTan = tanf(fovRad * 0.5f);
+    float fovTan = __tanf(fovRad * 0.5f);
     float halfFovTan = fovTan * aspectRatio;
 
     // ray casting helpers
@@ -325,7 +325,7 @@ __global__ void sphereRasterKernel(
             if (t > 0.0f) {
                 finishedLine = true;
                 glm::vec3 hit = (rayColStart + float(py) * dy) * t;
-                float depth = fmaf(hit.z, proj22, proj32) / -hit.z;
+                float depth = __fdividef(fmaf(hit.z, proj22, proj32), -hit.z);
 
                 unsigned int depthU = floatToUintBits(depth);
                 int index = px + cst.screenW * py;
