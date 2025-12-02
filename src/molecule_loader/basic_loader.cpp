@@ -1,6 +1,7 @@
 #include <filesystem>
 #include <stdexcept>
-
+#include <set>
+#include <tuple>
 #include "molecule_loader/basic_loader.h"
 #include "utils/math_defines.h"
 
@@ -8,6 +9,9 @@ ChemFilesLoader::ChemFilesLoader(const std::filesystem::path & path)
 {
     load(path);
 }
+
+std::set<std::tuple<float,float,float,float>> unique_atoms;
+std::set<std::pair<int,int>> unique_bonds;
 
 void ChemFilesLoader::load(const std::filesystem::path & path)
 {
@@ -35,7 +39,7 @@ void ChemFilesLoader::load(const std::filesystem::path & path)
         int bounds_amount = 0;
         for (size_t i = 0; i < trajectory.nsteps(); ++i) 
         {
-            chemfiles::Frame frame = trajectory.read();
+            chemfiles::Frame frame = trajectory.read_step(i);
 
             // Obtén las posiciones de los átomos
             auto positions = frame.positions();
@@ -52,7 +56,14 @@ void ChemFilesLoader::load(const std::filesystem::path & path)
                 // Obtén el radio del átomo (si está disponible)
                 float radius = SymbolRadius[atom.atomic_number().value_or( 0 )];
 
-                m_positions.push_back({position[0], position[1], position[2], radius * 0.3f}); // Almacena la posición y el radio
+                auto atom_key = std::make_tuple(position[0], position[1], position[2], radius * 0.2f);
+
+                if (unique_atoms.insert(atom_key).second) 
+                {
+                    // Solo se inserta si no estaba antes
+                    m_positions.push_back({position[0], position[1], position[2], radius * 0.2f});
+                    atoms_amount++;
+                }
             }
 
             for (const auto& bond : bonds) 
@@ -60,11 +71,19 @@ void ChemFilesLoader::load(const std::filesystem::path & path)
                 bounds_amount++;
                 auto atom1 = bond[0];
                 auto atom2 = bond[1];
+    
+                if (atom1 > atom2) std::swap(atom1, atom2); // normalizar orden
 
-                // Add atom indexes to the bond vector
-                m_bonds.push_back({atom1, atom2});
+                auto bond_key = std::make_pair(atom1, atom2);
+
+                if (unique_bonds.insert(bond_key).second) 
+                {
+                    m_bonds.push_back(bond_key);
+                    bounds_amount++;
+                }
             }
         }
+
         std::cout << "Atoms amount: " << atoms_amount << std::endl;
         std::cout << "Bonds amount: " << bounds_amount << std::endl;
 
@@ -76,6 +95,13 @@ void ChemFilesLoader::load(const std::filesystem::path & path)
     }
 
 } 
+
+std::pair<glm::vec4, glm::vec4> ChemFilesLoader::getBond(int index) const 
+{ 
+    // std::cout << "Getting bond at index: " << index << std::endl;
+    // std::cout << "Bond atoms indexes: " << m_bonds[index].first << ", " << m_bonds[index].second << std::endl;
+    return {m_positions[m_bonds[index].first], m_positions[m_bonds[index].second]}; 
+}
 
 void ChemFilesLoader::prepareChemfiles()
 {

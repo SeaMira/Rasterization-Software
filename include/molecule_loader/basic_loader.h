@@ -113,7 +113,7 @@ public:
      * @param index The index of the bond/cylinder.
      * @return A pair of glm::vec4 containing the extremes of the bond/cylinder.
      */
-    std::pair<glm::vec4, glm::vec4> getBond(int index) const { return {m_positions[m_bonds[index].first], m_positions[m_bonds[index].second]}; } /**< Returns the cilinder at the given index. */
+    std::pair<glm::vec4, glm::vec4> getBond(int index) const; /**< Returns the cilinder at the given index. */
 
 private:
     std::vector<glm::vec4> m_positions; /**< A vector of glm::vec4 containing the sphere positions and their radius. Each sphere represents an atom. */
