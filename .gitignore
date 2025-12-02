@@ -34,3 +34,4 @@
 /out
 
 /assets/molecules/*.cif
+/benchmark/nsight_gr_results
