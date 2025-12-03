@@ -76,8 +76,8 @@ bool isOnOrForwardPlaneAABB(vec4 plane, BBox3D bbox)
 bool isCylinderInside(vec3 pa, vec3 pb, float radius)
 {
     vec3 a = pb - pa;
-    vec3 e = radius*sqrt( 1.0f - a*a/dot(a,a) );
-    BBox3D bbox3d = BBox3D(min( pa - e, pb - e ), max( pa + e, pb + e ));
+    vec3 e = radius*sqrt( max(1.0f - a*(a/dot(a,a)), 0.0) );
+    BBox3D bbox3d = BBox3D(min( pa, pb ) - e, max( pa, pb ) + e);
 
     return isOnOrForwardPlaneAABB(frustumLeftFace, bbox3d) &&
            isOnOrForwardPlaneAABB(frustumRightFace, bbox3d) &&
