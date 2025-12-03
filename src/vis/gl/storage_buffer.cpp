@@ -38,7 +38,7 @@ void StorageBuffer::generateBufferData(int size, GLuint index,
     GLenum error = glGetError();
     if (error != GL_NO_ERROR) {
         std::cerr << "OpenGL Error: " << error << std::endl;
-    }
+    } else std::cout << "Buffer loaded succesfully" << std::endl;
 }
 
 // void StorageBuffer::generateBufferStorage(int size, GLuint index,
