@@ -1,11 +1,88 @@
 #ifndef _BASIC_LOADER_H_
 #define _BASIC_LOADER_H_
 
-#include <chemfiles.hpp>
-#include <iostream>
-#include <vector>
-#include <string>
-#include <glm/glm.hpp>
+#include <iostream>              // std::cout, std::cerr
+#include <stdexcept>             // std::runtime_error
+#include <filesystem>            // std::filesystem::path, exists
+#include <vector>                // std::vector
+#include <unordered_map>         // std::unordered_map
+#include <unordered_set>         // std::unordered_set
+#include <utility>               // std::pair, std::swap
+#include <functional>            // std::hash
+#include <algorithm>             // std::find (si lo mantienes en alguna parte)
+
+#include <chemfiles.hpp>         // chemfiles::Trajectory, chemfiles::Frame, etc.
+#include <glm/vec4.hpp>          // glm::vec4
+
+/**
+ * @struct BondHash
+ * @brief Hash for pairs of ints representing bonds
+ */
+struct BondHash 
+{
+
+    /**
+     * @brief Hashing operator for integers pairs
+     */
+    std::size_t operator()(const std::pair<int,int>& bond) const noexcept 
+    {
+        // Combina los hashes de los dos enteros
+        std::size_t h1 = std::hash<int>{}(bond.first);
+        std::size_t h2 = std::hash<int>{}(bond.second);
+        return h1 ^ (h2 << 1); // mezcla simple
+    }
+};
+
+/**
+ * @struct BondEqual
+ * @brief Structure for operating equality between bonds
+ */
+struct BondEqual 
+{
+    /**
+     * @brief Equality operator for integer pairs
+     */
+    bool operator()(const std::pair<int,int>& a, const std::pair<int,int>& b) const noexcept 
+    {
+        return a.first == b.first && a.second == b.second;
+    }
+};
+
+// Usamos hash para evitar duplicados rápidamente
+/**
+ * @struct Vec4Hash
+ * @brief Estructura de hashing for vec4 structure (atoms positions and radius)
+ */
+struct Vec4Hash 
+{
+
+    /**
+     * @brief Hashing operator for vec4
+     */
+    std::size_t operator()(const glm::vec4& v) const noexcept 
+    {
+        std::size_t h1 = std::hash<float>{}(v.x);
+        std::size_t h2 = std::hash<float>{}(v.y);
+        std::size_t h3 = std::hash<float>{}(v.z);
+        std::size_t h4 = std::hash<float>{}(v.w);
+        return h1 ^ (h2 << 1) ^ (h3 << 2) ^ (h4 << 3);
+    }
+};
+
+/**
+ * @struct Vec4Equal
+ * @brief Equility operator's structure for hashing vec4 
+ */
+struct Vec4Equal 
+{
+    /**
+     * @brief Equality operator for vec4
+     */
+    bool operator()(const glm::vec4& a, const glm::vec4& b) const noexcept 
+    {
+        return a.x == b.x && a.y == b.y && a.z == b.z && a.w == b.w;
+    }
+};
 
 /**
  * @class ChemFilesLoader
