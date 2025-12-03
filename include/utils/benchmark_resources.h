@@ -82,6 +82,14 @@ extern float radFactor;
  * @brief Global variable that indicates separation between entities on a grid scene.
  */
 extern float separation;
+/** 
+ * @brief Global variable that indicates sphere radius in a synthetic scene.
+ */
+extern float sphereRadius;
+/** 
+ * @brief (Temporary) global variable that indicates cylinders radius in a scene.
+ */
+extern float cylinderRadius;
 
 /**
  * @brief Load a scene from a file utilizing a basic chemfiles loader.

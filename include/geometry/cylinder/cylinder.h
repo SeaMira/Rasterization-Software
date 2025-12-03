@@ -23,7 +23,9 @@ struct Cylinder
      * @param pb extreme B of the cylinder
      * @param radius radius of the cylinder
      */
-    Cylinder(const glm::vec3& pa, const glm::vec3& pb, float radius) : pa_r(glm::vec4(pa, radius)), pb_r(glm::vec4(pb, radius)) {}
+    Cylinder(const glm::vec3& pa, const glm::vec3& pb, float radius) : 
+        pa_r(glm::vec4(pa.x, pa.y, pa.z, radius)), pb_r(glm::vec4(pb.x, pb.y, pb.z, radius)) 
+        {}
 
     /**
      * @brief Construct a new Cylinder object with default values.
