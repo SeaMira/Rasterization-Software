@@ -18,6 +18,10 @@ StorageBuffer::StorageBuffer(GLenum target, int size, GLuint index,
 StorageBuffer::~StorageBuffer()
 {
     glDeleteBuffers(1, &m_id);
+    GLenum error = glGetError();
+    if (error != GL_NO_ERROR) {
+        std::cerr << "OpenGL Error: " << error << std::endl;
+    } else std::cout << "Buffer " << m_id << " deleted succesfully" << std::endl;
 }
 
 void StorageBuffer::setup(GLenum target, int size, GLuint index,
@@ -38,7 +42,7 @@ void StorageBuffer::generateBufferData(int size, GLuint index,
     GLenum error = glGetError();
     if (error != GL_NO_ERROR) {
         std::cerr << "OpenGL Error: " << error << std::endl;
-    } else std::cout << "Buffer loaded succesfully" << std::endl;
+    } else std::cout << "Buffer " << m_id<< " loaded succesfully" << std::endl;
 }
 
 // void StorageBuffer::generateBufferStorage(int size, GLuint index,

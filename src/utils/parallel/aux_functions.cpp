@@ -95,3 +95,10 @@ void dispatchComputeShaderWithLabel(GLuint numGroupsX, GLuint numGroupsY, const 
         glMemoryBarrier(barrier);
     glPopDebugGroup();
 }
+
+void drawArraysWithLabel(GLenum mode, GLint first, GLsizei count, const std::string& label)
+{
+    glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, label.c_str());
+    glDrawArrays(mode, first, count);
+    glPopDebugGroup();
+}

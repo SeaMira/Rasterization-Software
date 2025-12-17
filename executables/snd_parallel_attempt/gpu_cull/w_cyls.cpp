@@ -111,16 +111,16 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
 
     CameraController camera_controller(window, camera);
     
-    ComputeShader cleaningComputeShader("assets/shaders/snd_parallel_attempt/gpu_cull/set_to_black.compute");
+    ComputeShader cleaningComputeShader("assets/shaders/snd_parallel_attempt/gpu_cull/set_to_black.compute", "Cleaning Shader");
     
-    ComputeShader sphBboxExtractionShader("assets/shaders/snd_parallel_attempt/gpu_cull/sph_bbox_ext_cull.compute");
-    ComputeShader sphBboxIntersectionShader("assets/shaders/snd_parallel_attempt/gpu_cull/sph_bbox_int_cull.compute");
+    ComputeShader sphBboxExtractionShader("assets/shaders/snd_parallel_attempt/gpu_cull/sph_bbox_ext_cull.compute", "Spheres Bbox Extraction Shader");
+    ComputeShader sphBboxIntersectionShader("assets/shaders/snd_parallel_attempt/gpu_cull/sph_bbox_int_cull.compute", "Spheres Bbox Intersection Shader");
     
-    ComputeShader cylBboxExtractionShader("assets/shaders/snd_parallel_attempt/gpu_cull/cyl_bbox_ext_cull.compute");
-    ComputeShader cylBboxIntersectionShader("assets/shaders/snd_parallel_attempt/gpu_cull/cyl_bbox_int_cull.compute");
+    ComputeShader cylBboxExtractionShader("assets/shaders/snd_parallel_attempt/gpu_cull/cyl_bbox_ext_cull.compute", "Cylinders Bbox Extraction Shader");
+    ComputeShader cylBboxIntersectionShader("assets/shaders/snd_parallel_attempt/gpu_cull/cyl_bbox_int_cull.compute", "Cylinders Bbox Intersection Shader");
 
-    ComputeShader hizPyramidComputeShader("assets/shaders/snd_parallel_attempt/gpu_cull/mipmap_gen.compute");
-    ComputeShader pixelCountComputeShader("assets/shaders/snd_parallel_attempt/gpu_cull/pixel_count.compute");
+    ComputeShader hizPyramidComputeShader("assets/shaders/snd_parallel_attempt/gpu_cull/mipmap_gen.compute", "Hiz Pyramid Shader");
+    ComputeShader pixelCountComputeShader("assets/shaders/snd_parallel_attempt/gpu_cull/pixel_count.compute", "Pixel Count Shader");
 
     Canvas canvas(GL_TEXTURE_2D, GL_RGBA8, SCR_WIDTH, SCR_HEIGHT);
     canvas.setFBO(GL_COLOR_ATTACHMENT0);
@@ -132,9 +132,11 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
     StorageBuffer pixelCountFramesBuffer(GL_SHADER_STORAGE_BUFFER, SCR_WIDTH*SCR_HEIGHT * sizeof(GLuint), 4, 
         nullptr, GL_DYNAMIC_COPY);
 
-    std::vector<glm::vec4> spheres = getScene(sphere_count);
+    std::vector<glm::vec4> spheres;
+    std::vector<Cylinder> cylinders;
+    getCompleteScene(spheres, sphere_count, cylinders, cylinder_count);
+
     sphere_count = spheres.size(); 
-    std::vector<Cylinder> cylinders = getCylinderScene(cylinder_count);
     cylinder_count = cylinders.size();
     // SPHERES
     std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints = getCheckpoints(sphere_count, spheres, cylinders);
@@ -154,6 +156,9 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
     StorageBuffer cylinderBillboardBuffer(GL_SHADER_STORAGE_BUFFER, cylinder_count * sizeof(CylinderBillboard), 10,
         nullptr, GL_STATIC_DRAW);
     //////////
+
+    spheres.clear();
+    cylinders.clear();
 
     GLuint zero = 0;
     GLuint resetValue = 0;
@@ -202,6 +207,9 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
     try
     {
         bool isRunning = true;
+        glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Bind Draw Framebuffer");
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+        glPopDebugGroup();
         while ( isRunning )
         {
             camera_controller.cameraUpdate();
@@ -234,18 +242,20 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
             sphBboxExtractionShader.setVec2I("screenResolution", screenResolution);
             setFrustumUniforms(sphBboxExtractionShader, frustum);
             setCameraUniforms(sphBboxExtractionShader, camera);
-            glDispatchCompute(numGroupsXSpheres, numGroupsY, 1);
-            glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+            dispatchComputeShaderWithLabel(numGroupsXSpheres, numGroupsY, "Sphere Bbox Extraction Shader", GL_SHADER_STORAGE_BARRIER_BIT);
+
             
             // bbox intersection shader
             sphBboxIntersectionShader.use();
             sphBboxIntersectionShader.setFloat("far", camera.getFar());
             sphBboxIntersectionShader.setVec2I("screenResolution", screenResolution);
             setCameraUniforms(sphBboxIntersectionShader, camera);
-            glDispatchCompute((SCR_WIDTH + workGroupSizeXPerPixel - 1) / workGroupSizeXPerPixel, 
+            dispatchComputeShaderWithLabel(
+                (SCR_WIDTH + workGroupSizeXPerPixel - 1) / workGroupSizeXPerPixel, 
                 (SCR_HEIGHT + workGroupSizeYPerPixel - 1) / workGroupSizeYPerPixel, 
-                1);
-            glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
+                "Sphere Bbox Intersection Shader", 
+                GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT
+            );
 
             ///// SPHERES //////////
 
@@ -266,26 +276,29 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
             cylBboxExtractionShader.setVec2I("screenResolution", screenResolution);
             setFrustumUniforms(cylBboxExtractionShader, frustum);
             setCameraUniforms(cylBboxExtractionShader, camera);
-            glDispatchCompute(numGroupsXCylinders, numGroupsY, 1);
-            glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+            dispatchComputeShaderWithLabel(numGroupsXCylinders, numGroupsY, "Cylinder Bbox Extraction Shader", GL_SHADER_STORAGE_BARRIER_BIT);
             
             // bbox intersection shader
             cylBboxIntersectionShader.use();
             cylBboxIntersectionShader.setFloat("far", camera.getFar());
             cylBboxIntersectionShader.setVec2I("screenResolution", screenResolution);
             setCameraUniforms(cylBboxIntersectionShader, camera);
-            glDispatchCompute((SCR_WIDTH + workGroupSizeXPerPixel - 1) / workGroupSizeXPerPixel, 
+            dispatchComputeShaderWithLabel(
+                (SCR_WIDTH + workGroupSizeXPerPixel - 1) / workGroupSizeXPerPixel, 
                 (SCR_HEIGHT + workGroupSizeYPerPixel - 1) / workGroupSizeYPerPixel, 
-                1);
-            glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
+                "Cylinder Bbox Intersection Shader", 
+                GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT
+            );
             ///// CYLINDERS //////////
 
             pixelCountComputeShader.use();
             pixelCountComputeShader.setVec2I("screenResolution", screenResolution);
-            glDispatchCompute((SCR_WIDTH + workGroupSizeYPerPixel - 1) / workGroupSizeYPerPixel, 
+            dispatchComputeShaderWithLabel(
+                (SCR_WIDTH + workGroupSizeXPerPixel - 1) / workGroupSizeXPerPixel, 
                 (SCR_HEIGHT + workGroupSizeYPerPixel - 1) / workGroupSizeYPerPixel, 
-                1);
-            glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+                "Pixel Count Shader", 
+                GL_SHADER_STORAGE_BARRIER_BIT
+            );
             
             glBindFramebuffer(GL_READ_FRAMEBUFFER, canvas.getFramebuffer().getId());
             isRunning = window.update();
@@ -349,22 +362,23 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
 
     CameraController camera_controller(window, camera);
     
-    ComputeShader cleaningComputeShader("assets/shaders/snd_parallel_attempt/gpu_cull/set_to_black_no_occ.compute");
+    ComputeShader cleaningComputeShader("assets/shaders/snd_parallel_attempt/gpu_cull/set_to_black_no_occ.compute", "Cleaning Shader");
     
-    ComputeShader sphBboxExtractionShader("assets/shaders/snd_parallel_attempt/gpu_cull/sph_bbox_ext_cull_no_occ.compute");
-    ComputeShader sphBboxIntersectionShader("assets/shaders/snd_parallel_attempt/gpu_cull/sph_bbox_int_cull_no_occ.compute");
+    ComputeShader sphBboxExtractionShader("assets/shaders/snd_parallel_attempt/gpu_cull/sph_bbox_ext_cull_no_occ.compute", "Spheres Bbox Extraction Shader");
+    ComputeShader sphBboxIntersectionShader("assets/shaders/snd_parallel_attempt/gpu_cull/sph_bbox_int_cull_no_occ.compute", "Spheres Bbox Intersection Shader");
     
-    ComputeShader cylBboxExtractionShader("assets/shaders/snd_parallel_attempt/gpu_cull/cyl_bbox_ext_cull_no_occ.compute");
-    ComputeShader cylBboxIntersectionShader("assets/shaders/snd_parallel_attempt/gpu_cull/cyl_bbox_int_cull_no_occ.compute");
-
+    ComputeShader cylBboxExtractionShader("assets/shaders/snd_parallel_attempt/gpu_cull/cyl_bbox_ext_cull_no_occ.compute", "Cylinders Bbox Extraction Shader");
+    ComputeShader cylBboxIntersectionShader("assets/shaders/snd_parallel_attempt/gpu_cull/cyl_bbox_int_cull_no_occ.compute", "Cylinders Bbox Intersection Shader");
     Canvas canvas(GL_TEXTURE_2D, GL_RGBA8, SCR_WIDTH, SCR_HEIGHT);
     canvas.setFBO(GL_COLOR_ATTACHMENT0);
     canvas.setupDepthData(SCR_WIDTH, SCR_HEIGHT);
     canvas.setupCleaningProgram(cleaningComputeShader);
 
-    std::vector<glm::vec4> spheres = getScene(sphere_count);
+    std::vector<glm::vec4> spheres;
+    std::vector<Cylinder> cylinders;
+    getCompleteScene(spheres, sphere_count, cylinders, cylinder_count);
+
     sphere_count = spheres.size(); 
-    std::vector<Cylinder> cylinders = getCylinderScene(cylinder_count);
     cylinder_count = cylinders.size();
     // SPHERES
     std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints = getCheckpoints(sphere_count, spheres, cylinders);
@@ -425,6 +439,9 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
     try
     {
         bool isRunning = true;
+        glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Bind Draw Framebuffer");
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+        glPopDebugGroup();
         while ( isRunning )
         {
             camera_controller.cameraUpdate();
@@ -450,18 +467,19 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
             sphBboxExtractionShader.setVec2I("screenResolution", screenResolution);
             setFrustumUniforms(sphBboxExtractionShader, frustum);
             setCameraUniforms(sphBboxExtractionShader, camera);
-            glDispatchCompute(numGroupsXSpheres, numGroupsY, 1);
-            glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+            dispatchComputeShaderWithLabel(numGroupsXSpheres, numGroupsY, "Sphere Bbox Extraction Shader", GL_SHADER_STORAGE_BARRIER_BIT);
             
             // bbox intersection shader
             sphBboxIntersectionShader.use();
             sphBboxIntersectionShader.setFloat("far", camera.getFar());
             sphBboxIntersectionShader.setVec2I("screenResolution", screenResolution);
             setCameraUniforms(sphBboxIntersectionShader, camera);
-            glDispatchCompute((SCR_WIDTH + workGroupSizeXPerPixel - 1) / workGroupSizeXPerPixel, 
+            dispatchComputeShaderWithLabel(
+                (SCR_WIDTH + workGroupSizeXPerPixel - 1) / workGroupSizeXPerPixel, 
                 (SCR_HEIGHT + workGroupSizeYPerPixel - 1) / workGroupSizeYPerPixel, 
-                1);
-            glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
+                "Sphere Bbox Intersection Shader", 
+                GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT
+            );
 
             ///// SPHERES //////////
 
@@ -477,18 +495,19 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
             cylBboxExtractionShader.setVec2I("screenResolution", screenResolution);
             setFrustumUniforms(cylBboxExtractionShader, frustum);
             setCameraUniforms(cylBboxExtractionShader, camera);
-            glDispatchCompute(numGroupsXCylinders, numGroupsY, 1);
-            glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+            dispatchComputeShaderWithLabel(numGroupsXCylinders, numGroupsY, "Cylinder Bbox Extraction Shader", GL_SHADER_STORAGE_BARRIER_BIT);
             
             // bbox intersection shader
             cylBboxIntersectionShader.use();
             cylBboxIntersectionShader.setFloat("far", camera.getFar());
             cylBboxIntersectionShader.setVec2I("screenResolution", screenResolution);
             setCameraUniforms(cylBboxIntersectionShader, camera);
-            glDispatchCompute((SCR_WIDTH + workGroupSizeXPerPixel - 1) / workGroupSizeXPerPixel, 
+            dispatchComputeShaderWithLabel(
+                (SCR_WIDTH + workGroupSizeXPerPixel - 1) / workGroupSizeXPerPixel, 
                 (SCR_HEIGHT + workGroupSizeYPerPixel - 1) / workGroupSizeYPerPixel, 
-                1);
-            glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
+                "Cylinder Bbox Intersection Shader", 
+                GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT
+            );
             ///// CYLINDERS //////////
 
             

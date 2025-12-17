@@ -18,7 +18,7 @@ int interleaveZ = 5;
 int interleaveY = 5;
 // interleaveAngle*interleaveZ*(interleaveY+1) checkpoints will be created
 float radFactor = 2.0f;
-float separation = 4.0f;
+float separation = 2.0f;
 
 float sphereRadius = 0.5f;
 float cylinderRadius = 0.2f;
@@ -74,8 +74,8 @@ std::vector<Cylinder> cylinder_grid_scene(int gridWidth, int cylinder_count)
     for (int i = 0; i < cylinder_count; i++)
     {
         cylinders.push_back(
-            {{(float)(i%gridWidth)*separation, (float)(i/gridWidth) * separation, 1.0f},
-            {(float)(i%gridWidth + 1)*separation, (float)(i/gridWidth) * separation, 1.0f},
+            {{(float)(i%gridWidth)*separation + sphereRadius, (float)(i/gridWidth) * separation, 1.0f},
+            {(float)(i%gridWidth + 1)*separation - sphereRadius, (float)(i/gridWidth) * separation, 1.0f},
             cylinderRadius}
         );
     }
@@ -90,28 +90,21 @@ void complete_grid_scene(int gridWidth, std::vector<glm::vec4>& spheres, int sph
     spheres.reserve(sphere_count);
     cylinders.reserve(cylinder_count);
 
+    int n_entities = std::max(sphere_count, cylinder_count);
+    int sn_entities = std::sqrt(n_entities) + 1;
+
     for (int i = 0; i < sphere_count; i++)
     {
-        spheres.push_back({(float)(i%gridWidth)*separation, (float)(i/gridWidth) * separation, 1.0f, sphereRadius});
+        spheres.push_back({(float)(i%sn_entities)*separation, (float)(i/sn_entities) * separation, 1.0f, sphereRadius});
     }
     for (int i = 0; i < cylinder_count; i++)
     {
-        float d_x = (float)(i%gridWidth);
+        float d_x = (float)(i%sn_entities);
         cylinders.push_back(
-            Cylinder(glm::vec3(d_x*separation + 0.2f, (float)(i/gridWidth) * separation, 1.0f),
-            glm::vec3((d_x + 1.0f)*separation - 0.1f, (float)(i/gridWidth) * separation, 1.0f),
+            Cylinder(glm::vec3(d_x*separation + sphereRadius, (float)(i/sn_entities) * separation, 1.0f),
+            glm::vec3((d_x + 1.0f)*separation - sphereRadius, (float)(i/sn_entities) * separation, 1.0f),
             cylinderRadius)
         );
-        // std::cout << "Cylinder PA: " <<
-        // cylinders[i].pa_r.x << ", " <<
-        // cylinders[i].pa_r.y << ", " <<
-        // cylinders[i].pa_r.z << ", " <<
-        // cylinders[i].pa_r.w << std::endl;
-        // std::cout << "Cylinder PB: " <<
-        // cylinders[i].pb_r.x << ", " <<
-        // cylinders[i].pb_r.y << ", " <<
-        // cylinders[i].pb_r.z << ", " <<
-        // cylinders[i].pb_r.w << std::endl;
     }
 }
 
@@ -203,8 +196,8 @@ std::vector<std::pair<glm::vec3, glm::vec3>> benchmark1_structured_grid(int& sph
         {
             chkPoints.push_back(
                 {
-                    glm::vec3(w_delta*(float)i + 1.0f, h_delta*(float)j, w_delta*(float)i - 3.0f), 
-                    glm::vec3(w_delta*(float)i, h_delta*(float)j, w_delta*(float)i)
+                    glm::vec3(w_delta*(float)i, h_delta*(float)j, - 3.0f), 
+                    glm::vec3(w_delta*(float)i, h_delta*(float)j, 1.0f)
                 }
             );
         }
@@ -216,12 +209,24 @@ std::vector<std::pair<glm::vec3, glm::vec3>> benchmark1_structured_grid(int& sph
         {
             chkPoints.push_back(
                 {
-                    glm::vec3(w_delta*(float)i + (float)j + 1.0f, h_delta*interleaveH/2.0f, w_delta*(float)i - (float)j - 1.0f), 
-                    glm::vec3(w_delta*(float)i, h_delta*interleaveH/2.0f, w_delta*(float)i)
+                    glm::vec3(w_delta*(float)i, h_delta*interleaveH/2.0f,  - (float)j - 1.0f), 
+                    glm::vec3(w_delta*(float)i, h_delta*interleaveH/2.0f, 0.0f)
                 }
             );
         }
     }
+
+    int sn_entities = std::sqrt(sphere_count);
+    for (int j = 0; j < sn_entities; j++)
+    {
+        chkPoints.push_back(
+            {
+                glm::vec3(separation*(sn_entities/2), separation*(sn_entities/2),  - (float)j*separation - 1.0f), 
+                glm::vec3(separation*(sn_entities/2), separation*(sn_entities/2), 0.0f)
+            }
+        );
+    }
+
     return chkPoints;
 }
 
@@ -462,8 +467,6 @@ void getCompleteScene(std::vector<glm::vec4>& spheres, int sphere_count, std::ve
         complete_grid_scene(gridWidth, spheres, sphere_count, cylinders, cylinder_count);
         break;
     }
-    std::cout << "Atoms amount: " << spheres.size() << std::endl;
-    std::cout << "Bonds amount: " << cylinders.size() << std::endl;
 }
 
 std::vector<std::pair<glm::vec3, glm::vec3>> getCheckpoints(int& sphere_count, std::vector<glm::vec4>& spheres, std::vector<Cylinder>& cylinders)

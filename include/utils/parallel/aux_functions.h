@@ -161,4 +161,16 @@ void setFrustumUniforms(ComputeShader& shader, Frustum& frustum);
  */
 void dispatchComputeShaderWithLabel(GLuint numGroupsX, GLuint numGroupsY, const std::string& label, GLbitfield barrier = 0);
 
+/**
+ * @brief Launches a shaders pipeline with label.
+ * 
+ * Launches a draw call of a shaders pipeline with a label for debugging purposes..
+ * 
+ * @param mode Specifies what kind of primitives to render. See khronos specifications.
+ * @param first Specifies the starting index in the enabled arrays.
+ * @param count Specifies the number of elements to be rendered.
+ * @param label The label to be used for debugging.
+ * 
+ */
+void drawArraysWithLabel(GLenum mode, GLint first, GLsizei count, const std::string& label);
 #endif // _AUX_PARALLEL_H_

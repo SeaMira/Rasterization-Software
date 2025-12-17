@@ -70,6 +70,10 @@ Texture::Texture(GLenum target, GLenum internalFormat, GLsizei width, GLsizei he
 
 Texture::~Texture() {
     glDeleteTextures(1, &m_id);
+    GLenum error = glGetError();
+    if (error != GL_NO_ERROR) {
+        std::cerr << "OpenGL Error: " << error << std::endl;
+    } else std::cout << "Texture " << m_id << " deleted succesfully" << std::endl;
 }
 
 void Texture::setup(GLenum target, GLenum internalFormat, GLsizei width, GLsizei height, GLenum format, GLenum type, GLuint unit, void* data) 

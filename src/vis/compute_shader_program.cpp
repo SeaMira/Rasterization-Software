@@ -36,6 +36,8 @@ ComputeShader::ComputeShader(const char* computePath, const char* computeName)
     glShaderSource(compute, 1, &cShaderCode, NULL);
     glCompileShader(compute);
     checkCompileErrors(compute, "COMPUTE");
+
+    glObjectLabel(GL_SHADER, compute, -1, computeName);
     
     // shader Program
     ID = glCreateProgram();

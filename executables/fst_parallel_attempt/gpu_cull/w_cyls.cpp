@@ -31,8 +31,8 @@ using uint = unsigned int;
 // Settings
 int SCR_WIDTH = 1024;
 int SCR_HEIGHT = 1024;
-int sphere_count = 126;
-int cylinder_count = 142;
+int sphere_count = 552008;
+int cylinder_count = 519767;
 
 std::string title = "First Parallel Version: Spheres and Cylinders - GPU Frustum Culling"; 
 

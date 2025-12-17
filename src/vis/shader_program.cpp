@@ -1,22 +1,24 @@
 #include "vis/shader_program.h"
 
 
-ShaderProgram::ShaderProgram(const char* vertexPath, const char* fragmentPath, const char* geometryPath, const char* shaderName)
+ShaderProgram::ShaderProgram(const char* vertexPath, const char* fragmentPath, const char* geometryPath, const char* shaderProgramName,
+const char* vertexShaderName, const char* fragmentShaderName, const char* geometryShaderName)
 {
-    m_shaderName = shaderName;
+    m_shaderProgramName = shaderProgramName;
     ID = glCreateProgram();
+    glObjectLabel(GL_PROGRAM, ID, -1, m_shaderProgramName.c_str());
     // vertex shader
     if (vertexPath != "")
-        attachShader(vertexPath, GL_VERTEX_SHADER);
+        attachShader(vertexPath, GL_VERTEX_SHADER, vertexShaderName);
     // fragment shader
     if (fragmentPath != "")
-        attachShader(fragmentPath, GL_FRAGMENT_SHADER);
+        attachShader(fragmentPath, GL_FRAGMENT_SHADER, fragmentShaderName);
     // if geometry shader
     if (geometryPath != "")
-        attachShader(geometryPath, GL_GEOMETRY_SHADER);
+        attachShader(geometryPath, GL_GEOMETRY_SHADER, geometryShaderName);
 }
 
-void ShaderProgram::attachShader(const char* shaderPath, GLenum shaderType)
+void ShaderProgram::attachShader(const char* shaderPath, GLenum shaderType, const char* shaderName)
 {
     // 1. retrieve the vertex/fragment source code from filePath
     std::string shaderCode;
@@ -49,6 +51,9 @@ void ShaderProgram::attachShader(const char* shaderPath, GLenum shaderType)
     checkCompileErrors(shader, "SHADER");
     
     glAttachShader(ID, shader);
+
+    glObjectLabel(GL_SHADER, shader, -1, shaderName);
+    
     glDeleteShader(shader);
 }
 

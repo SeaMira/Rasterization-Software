@@ -33,8 +33,8 @@ using uint = unsigned int;
 // Settings
 int SCR_WIDTH = 1024;
 int SCR_HEIGHT = 1024;
-int sphere_count = 4000000;
-int cylinder_count = 4000000;
+int sphere_count = 126;
+int cylinder_count = 142;
 
 std::string title = "First Parallel CUDA Version: Spheres and Cylinders - GPU Frustum Culling"; 
 
@@ -286,10 +286,11 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
     unsigned int* pixelOwnershipBufferPtr = pixelCountFramesBufferCUDAWrapper.getDevicePointer<unsigned int>();
 
 
-    std::vector<Sphere> spheres = getScene(sphere_count);
-    sphere_count = spheres.size(); 
+    std::vector<Sphere> spheres;
+    std::vector<Cylinder> cylinders;
+    getCompleteScene(spheres, sphere_count, cylinders, cylinder_count);
 
-    std::vector<Cylinder> cylinders = getCylinderScene(cylinder_count);
+    sphere_count = spheres.size(); 
     cylinder_count = cylinders.size(); 
 
     std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints = getCheckpoints(sphere_count, spheres, cylinders);
@@ -655,10 +656,11 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
     if (glerr) std::cout << "GL error: 0x" << std::hex << glerr << std::dec << std::endl;
 
 
-    std::vector<Sphere> spheres = getScene(sphere_count);
-    sphere_count = spheres.size(); 
+    std::vector<Sphere> spheres;
+    std::vector<Cylinder> cylinders;
+    getCompleteScene(spheres, sphere_count, cylinders, cylinder_count);
 
-    std::vector<Cylinder> cylinders = getCylinderScene(cylinder_count);
+    sphere_count = spheres.size(); 
     cylinder_count = cylinders.size(); 
 
     std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints = getCheckpoints(sphere_count, spheres, cylinders);
@@ -676,13 +678,15 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
     StorageBufferCUDAWrapper sphereBufferCUDAWrapper(sphereBuffer);
     sphereBufferCUDAWrapper.cudaMapResources();
     Sphere * sphereBufferPtr = sphereBufferCUDAWrapper.getDevicePointer<Sphere>();
-
+    spheres.clear();
+    
     std::cout << "Cylinders Buffer" << std::endl;
     StorageBuffer cylinderBuffer(GL_SHADER_STORAGE_BUFFER, cylinder_count * sizeof(Cylinder), 7, 
         cylinders.data(), GL_STATIC_DRAW);
     StorageBufferCUDAWrapper cylinderBufferCUDAWrapper(cylinderBuffer);
     cylinderBufferCUDAWrapper.cudaMapResources();
     Cylinder * cylinderBufferPtr = cylinderBufferCUDAWrapper.getDevicePointer<Cylinder>();
+    cylinders.clear();
     
     GLuint zero = 0;
     GLuint resetValue = 0;
