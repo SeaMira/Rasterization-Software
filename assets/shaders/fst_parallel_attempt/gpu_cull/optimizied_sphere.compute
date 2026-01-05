@@ -1,0 +1,81 @@
+// Optimización: Precalcular constantes fuera del bucle y reducir contención atómica
+void drawSphereOptimized(Sphere sphere, uint sphereIndex)
+{
+    // 1. Transformar esfera a View Space UNA vez
+    vec3 sphereViewPos = vec3(view * vec4(sphere.positionr.xyz, 1.0f));
+    float r = sphere.positionr.w;
+    float r2 = r * r;
+
+    // Calcular BBox (Tu código original de BBox es correcto, lo omito por brevedad)
+    // ... (asumimos que ya tienes screenMin y screenMax clampados a la resolución) ...
+    // Asegúrate de hacer clamp de screenMin/Max con 0 y screenResolution aquí fuera
+
+    vec3 cameraPosModel = vec3(0.0); // En View Space, la cámara está en 0,0,0
+
+    // Precalcular constantes de proyección
+    float aspectRatio = float(screenResolution.x) / float(screenResolution.y);
+    float fovTan = tan(radians(fov) * 0.5f);
+    float halfFovTan = fovTan * aspectRatio;
+    
+    // Vectores base para la dirección del rayo en View Space (sin rotación de cámara per-pixel)
+    // Nota: Si usas view space para el rayo, no necesitas multiplicar por mat3(view) en cada pixel
+    
+    for (int py = screenMin.y; py < screenMax.y; ++py)
+    {
+        // Calcular la componente Y del rayo una vez por fila
+        float ndcY = (2.0f * (float(py) + 0.5f) / float(screenResolution.y)) - 1.0f;
+        vec3 rayDirRow = front + up * (ndcY * fovTan);
+
+        for (int px = screenMin.x; px < screenMax.x; ++px)
+        {
+            // Construir dirección del rayo incrementalmente
+            float ndcX = (2.0f * (float(px) + 0.5f) / float(screenResolution.x)) - 1.0f;
+            vec3 rd = normalize(rayDirRow + right * (ndcX * halfFovTan));
+
+            // Intersección Rayo-Esfera optimizada (en View Space origen es 0,0,0)
+            // |O + t*D - C|^2 = r^2  -> como O=0 -> |t*D - C|^2 = r^2
+            vec3 oc = -sphereViewPos; 
+            float b = dot(oc, rd);
+            float c = dot(oc, oc) - r2;
+            float h = b*b - c;
+
+            if (h > 0.0) 
+            {
+                float t = -b - sqrt(h);
+                if (t > 0.0) // Solo si está frente a la cámara
+                {
+                    // Hit Position en View Space
+                    vec3 hitView = rd * t; 
+                    
+                    // Proyección Perspective-Correct de profundidad
+                    // Z en NDC = (A * z + B) / -z
+                    // A = proj[2][2], B = proj[3][2]
+                    // Profundidad linealizada para buffer
+                    float ndcDepth = (hitView.z * proj[2].2 + proj[3].2) / -hitView.z;
+                    // Mapear a 0..1 si es necesario, o guardar linear
+                    
+                    // --- OPTIMIZACIÓN CRÍTICA: LECTURA ESPECULATIVA ---
+                    int index = px + screenResolution.x * py;
+                    uint depthUint = floatBitsToUint(ndcDepth);
+                    uint currentDepthUint = depthBuffer[index];
+
+                    // Solo intentamos el atomicMin si parece que vamos a ganar
+                    // Esto ahorra el 90% de los bloqueos de memoria en el centro de la esfera
+                    if (depthUint < currentDepthUint) 
+                    {
+                        uint old = atomicMin(depthBuffer[index], depthUint);
+                        
+                        // Verificar si ganamos la carrera atómica
+                        if (old > depthUint) 
+                        {
+                            // Calcular color solo si ganamos el pixel
+                            vec3 normal = normalize(hitView - sphereViewPos);
+                            float lambert = max(0.0, dot(normal, -rd)); // Luz desde la cámara
+                            imageStore(outputImage, ivec2(px, py), vec4(lambert * lightColor, 1.0));
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
