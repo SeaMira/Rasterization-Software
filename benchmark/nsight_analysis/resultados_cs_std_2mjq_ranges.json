@@ -4,7 +4,7 @@
             "Range": "Sphere Culling Shader",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.030060486377195786,
-            "Real_Duration_ms_Avg": 0.06473869632620885,
+            "Real_Duration_ms_Avg": 0.0731000691092488,
             "Rules": [
                 {
                     "Name": "GPU Engines Active [%]",
@@ -875,7 +875,7 @@
             "Range": "Draw Spheres",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.37934870719929853,
-            "Real_Duration_ms_Avg": 0.8003919368483522,
+            "Real_Duration_ms_Avg": 0.9234545247759123,
             "Rules": [
                 {
                     "Name": "GPU Engines Active [%]",
@@ -1795,7 +1795,7 @@
             "Range": "Cylinder Culling Shader",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.04982476004660748,
-            "Real_Duration_ms_Avg": 0.1073111424995088,
+            "Real_Duration_ms_Avg": 0.12148356912064694,
             "Rules": [
                 {
                     "Name": "GPU Engines Active [%]",
@@ -2448,7 +2448,7 @@
             "Range": "Draw Cylinders",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.0013602928693282953,
-            "Real_Duration_ms_Avg": 0.0026664127264923124,
+            "Real_Duration_ms_Avg": 0.0033123931049392694,
             "Rules": [
                 {
                     "Name": "GPU Engines Active [%]",
@@ -2918,7 +2918,7 @@
             "Range": "Blit Framebuffer",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.23046843078615006,
-            "Real_Duration_ms_Avg": 0.44335738647272144,
+            "Real_Duration_ms_Avg": 0.5680310380982598,
             "Rules": [
                 {
                     "Name": "GPU Engines Active [%]",
@@ -3388,7 +3388,7 @@
             "Range": "Swap Window",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.264146290804457,
-            "Real_Duration_ms_Avg": 0.5189975079594833,
+            "Real_Duration_ms_Avg": 0.6462880383415229,
             "Rules": []
         }
     ],
@@ -3397,7 +3397,7 @@
             "Range": "Sphere Culling Shader",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.042312813269310794,
-            "Real_Duration_ms_Avg": 0.1148403004428981,
+            "Real_Duration_ms_Avg": 0.12766451799991005,
             "Rules": [
                 {
                     "Name": "GPU Engines Active [%]",
@@ -4221,7 +4221,7 @@
             "Range": "Draw Spheres",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.5070572923329717,
-            "Real_Duration_ms_Avg": 1.277119801253793,
+            "Real_Duration_ms_Avg": 1.4496709783292447,
             "Rules": [
                 {
                     "Name": "GPU Engines Active [%]",
@@ -5141,7 +5141,7 @@
             "Range": "Cylinder Culling Shader",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.0620241366531439,
-            "Real_Duration_ms_Avg": 0.14929236530330006,
+            "Real_Duration_ms_Avg": 0.18241523175486837,
             "Rules": [
                 {
                     "Name": "GPU Engines Active [%]",
@@ -5843,7 +5843,7 @@
             "Range": "Draw Cylinders",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.06549474724200406,
-            "Real_Duration_ms_Avg": 0.16276811847566203,
+            "Real_Duration_ms_Avg": 0.20034905542882084,
             "Rules": [
                 {
                     "Name": "GPU Engines Active [%]",
@@ -6730,7 +6730,7 @@
             "Range": "Blit Framebuffer",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.08268816383503363,
-            "Real_Duration_ms_Avg": 0.18126210677133536,
+            "Real_Duration_ms_Avg": 0.2436318294118117,
             "Rules": [
                 {
                     "Name": "GPU Engines Active [%]",
@@ -7313,7 +7313,7 @@
             "Range": "Swap Window",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.20174816321422778,
-            "Real_Duration_ms_Avg": 0.4579056831793717,
+            "Real_Duration_ms_Avg": 0.5842661292863852,
             "Rules": []
         }
     ],
@@ -7322,7 +7322,7 @@
             "Range": "Sphere Culling Shader",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.03552417947290629,
-            "Real_Duration_ms_Avg": 0.10002149038312297,
+            "Real_Duration_ms_Avg": 0.11255288287926503,
             "Rules": [
                 {
                     "Name": "GPU Engines Active [%]",
@@ -8160,7 +8160,7 @@
             "Range": "Draw Spheres",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.45808902666931356,
-            "Real_Duration_ms_Avg": 1.2090972502749944,
+            "Real_Duration_ms_Avg": 1.3837403827727173,
             "Rules": [
                 {
                     "Name": "GPU Engines Active [%]",
@@ -9080,7 +9080,7 @@
             "Range": "Cylinder Culling Shader",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.06459198825846645,
-            "Real_Duration_ms_Avg": 0.17884029948403718,
+            "Real_Duration_ms_Avg": 0.2072432312432548,
             "Rules": [
                 {
                     "Name": "GPU Engines Active [%]",
@@ -9782,7 +9782,7 @@
             "Range": "Draw Cylinders",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.04355200524222117,
-            "Real_Duration_ms_Avg": 0.1008461229781805,
+            "Real_Duration_ms_Avg": 0.12495301248877755,
             "Rules": [
                 {
                     "Name": "GPU Engines Active [%]",
@@ -10662,7 +10662,7 @@
             "Range": "Blit Framebuffer",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.11920120384235532,
-            "Real_Duration_ms_Avg": 0.3302255391748019,
+            "Real_Duration_ms_Avg": 0.39838716065066215,
             "Rules": [
                 {
                     "Name": "No ZCULL, High EarlyZ",
@@ -11266,7 +11266,7 @@
             "Range": "Swap Window",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.24157269134939321,
-            "Real_Duration_ms_Avg": 0.604544093899946,
+            "Real_Duration_ms_Avg": 0.7702043104867604,
             "Rules": []
         }
     ],
@@ -11275,7 +11275,7 @@
             "Range": "Sphere Culling Shader",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.030991368161865006,
-            "Real_Duration_ms_Avg": 0.06551619343208963,
+            "Real_Duration_ms_Avg": 0.0763341745019432,
             "Rules": [
                 {
                     "Name": "GPU Engines Active [%]",
@@ -12146,7 +12146,7 @@
             "Range": "Draw Spheres",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.41947612621448893,
-            "Real_Duration_ms_Avg": 0.8939656318880697,
+            "Real_Duration_ms_Avg": 1.031147918762251,
             "Rules": [
                 {
                     "Name": "GPU Engines Active [%]",
@@ -13108,7 +13108,7 @@
             "Range": "Cylinder Culling Shader",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.05037353185823215,
-            "Real_Duration_ms_Avg": 0.10922481199509826,
+            "Real_Duration_ms_Avg": 0.12424219808606084,
             "Rules": [
                 {
                     "Name": "GPU Engines Active [%]",
@@ -13789,7 +13789,7 @@
             "Range": "Draw Cylinders",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.03775014184565775,
-            "Real_Duration_ms_Avg": 0.07436068356983545,
+            "Real_Duration_ms_Avg": 0.0930719161215482,
             "Rules": [
                 {
                     "Name": "GPU Engines Active [%]",
@@ -14676,7 +14676,7 @@
             "Range": "Blit Framebuffer",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.16967919632156278,
-            "Real_Duration_ms_Avg": 0.34097146830470393,
+            "Real_Duration_ms_Avg": 0.42301127239637065,
             "Rules": [
                 {
                     "Name": "No ZCULL, High EarlyZ",
@@ -15320,7 +15320,7 @@
             "Range": "Swap Window",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.24580289523775495,
-            "Real_Duration_ms_Avg": 0.48799285923203506,
+            "Real_Duration_ms_Avg": 0.608455445239222,
             "Rules": []
         }
     ],
@@ -15329,7 +15329,7 @@
             "Range": "Sphere Culling Shader",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.05114808737230378,
-            "Real_Duration_ms_Avg": 0.12720872991310309,
+            "Real_Duration_ms_Avg": 0.13803718970159834,
             "Rules": [
                 {
                     "Name": "GPU Engines Active [%]",
@@ -16254,7 +16254,7 @@
             "Range": "Draw Spheres",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.2768593841079133,
-            "Real_Duration_ms_Avg": 0.6361878188027016,
+            "Real_Duration_ms_Avg": 0.720085463029257,
             "Rules": [
                 {
                     "Name": "GPU Engines Active [%]",
@@ -17216,7 +17216,7 @@
             "Range": "Cylinder Culling Shader",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.08165206039317326,
-            "Real_Duration_ms_Avg": 0.20196836627599313,
+            "Real_Duration_ms_Avg": 0.22102950671234037,
             "Rules": [
                 {
                     "Name": "GPU Engines Active [%]",
@@ -17946,7 +17946,7 @@
             "Range": "Draw Cylinders",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.02510460458339959,
-            "Real_Duration_ms_Avg": 0.051332004657638895,
+            "Real_Duration_ms_Avg": 0.06475822115739306,
             "Rules": [
                 {
                     "Name": "GPU Engines Active [%]",
@@ -18833,7 +18833,7 @@
             "Range": "Blit Framebuffer",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.2406669813803443,
-            "Real_Duration_ms_Avg": 0.48859749545905323,
+            "Real_Duration_ms_Avg": 0.6468098761313668,
             "Rules": [
                 {
                     "Name": "No ZCULL, High EarlyZ",
@@ -19458,7 +19458,7 @@
             "Range": "Swap Window",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.2815308024132114,
-            "Real_Duration_ms_Avg": 0.5942777098696834,
+            "Real_Duration_ms_Avg": 0.742439111697556,
             "Rules": []
         }
     ]

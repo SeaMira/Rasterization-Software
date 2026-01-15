@@ -4,7 +4,7 @@
             "Range": "Cleaning Shader",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.0013112331863540671,
-            "Real_Duration_ms_Avg": 0.06381937783384421,
+            "Real_Duration_ms_Avg": 0.08848619250243447,
             "Rules": [
                 {
                     "Name": "GPU Engines Active [%]",
@@ -805,7 +805,7 @@
             "Range": "Sphere Bbox Extraction Shader",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.00026672971517388767,
-            "Real_Duration_ms_Avg": 0.012549140671103336,
+            "Real_Duration_ms_Avg": 0.017920361855095032,
             "Rules": [
                 {
                     "Name": "GPU Engines Active [%]",
@@ -1669,7 +1669,7 @@
             "Range": "Sphere Bbox Intersection Shader",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.9832330936956025,
-            "Real_Duration_ms_Avg": 48.43381172047291,
+            "Real_Duration_ms_Avg": 66.87609162215736,
             "Rules": [
                 {
                     "Name": "No ZCULL, High EarlyZ",
@@ -2720,7 +2720,7 @@
             "Range": "Cylinder Bbox Extraction Shader",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.00012894207705136003,
-            "Real_Duration_ms_Avg": 0.0065491520032788806,
+            "Real_Duration_ms_Avg": 0.008728218577262936,
             "Rules": [
                 {
                     "Name": "GPU Engines Active [%]",
@@ -3462,7 +3462,7 @@
             "Range": "Cylinder Bbox Intersection Shader",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.0006167099223547992,
-            "Real_Duration_ms_Avg": 0.030953480692433772,
+            "Real_Duration_ms_Avg": 0.04179240179157392,
             "Rules": [
                 {
                     "Name": "GPU Engines Active [%]",
@@ -4291,7 +4291,7 @@
             "Range": "Blit Framebuffer",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.0046985926640007725,
-            "Real_Duration_ms_Avg": 0.211498111164518,
+            "Real_Duration_ms_Avg": 0.32256205433824725,
             "Rules": [
                 {
                     "Name": "No ZCULL, High EarlyZ",
@@ -5080,7 +5080,7 @@
             "Range": "Swap Window",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.009603754614801395,
-            "Real_Duration_ms_Avg": 0.4347318571700939,
+            "Real_Duration_ms_Avg": 0.6490077827732349,
             "Rules": []
         }
     ],
@@ -5089,7 +5089,7 @@
             "Range": "Cleaning Shader",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.0024214857891718304,
-            "Real_Duration_ms_Avg": 0.6100139986065689,
+            "Real_Duration_ms_Avg": 0.7536242733401812,
             "Rules": [
                 {
                     "Name": "GPU Engines Active [%]",
@@ -5911,7 +5911,7 @@
             "Range": "Sphere Bbox Extraction Shader",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 8.241514151627598e-05,
-            "Real_Duration_ms_Avg": 0.019225083068904233,
+            "Real_Duration_ms_Avg": 0.026269153728229317,
             "Rules": [
                 {
                     "Name": "GPU Engines Active [%]",
@@ -6803,7 +6803,7 @@
             "Range": "Sphere Bbox Intersection Shader",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.851830145208169,
-            "Real_Duration_ms_Avg": 198.4352516598089,
+            "Real_Duration_ms_Avg": 271.66143813695015,
             "Rules": [
                 {
                     "Name": "GPU Engines Active [%]",
@@ -7744,7 +7744,7 @@
             "Range": "Cylinder Bbox Extraction Shader",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 4.344830922320404e-05,
-            "Real_Duration_ms_Avg": 0.010257868309234966,
+            "Real_Duration_ms_Avg": 0.014001065269743346,
             "Rules": [
                 {
                     "Name": "GPU Engines Active [%]",
@@ -8544,7 +8544,7 @@
             "Range": "Cylinder Bbox Intersection Shader",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.14543328071982328,
-            "Real_Duration_ms_Avg": 36.520505885240475,
+            "Real_Duration_ms_Avg": 49.55715999812676,
             "Rules": [
                 {
                     "Name": "GPU Engines Active [%]",
@@ -9396,7 +9396,7 @@
             "Range": "Blit Framebuffer",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.0001242510161718702,
-            "Real_Duration_ms_Avg": 0.026567517073778885,
+            "Real_Duration_ms_Avg": 0.039688529973147604,
             "Rules": [
                 {
                     "Name": "No ZCULL, High EarlyZ",
@@ -10381,7 +10381,7 @@
             "Range": "Swap Window",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 5.1305711213666395e-05,
-            "Real_Duration_ms_Avg": 0.010785259400689064,
+            "Real_Duration_ms_Avg": 0.016398220806045187,
             "Rules": []
         }
     ],
@@ -10390,7 +10390,7 @@
             "Range": "Cleaning Shader",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.0010777014107010174,
-            "Real_Duration_ms_Avg": 0.42899594831996046,
+            "Real_Duration_ms_Avg": 0.5699791048333086,
             "Rules": [
                 {
                     "Name": "GPU Engines Active [%]",
@@ -11275,7 +11275,7 @@
             "Range": "Sphere Bbox Extraction Shader",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 7.869410875185045e-05,
-            "Real_Duration_ms_Avg": 0.03135306033276432,
+            "Real_Duration_ms_Avg": 0.04161849157015612,
             "Rules": [
                 {
                     "Name": "GPU Engines Active [%]",
@@ -12209,7 +12209,7 @@
             "Range": "Sphere Bbox Intersection Shader",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.8534718852606177,
-            "Real_Duration_ms_Avg": 330.8582850615303,
+            "Real_Duration_ms_Avg": 451.80141348016133,
             "Rules": [
                 {
                     "Name": "No ZCULL, High EarlyZ",
@@ -13260,7 +13260,7 @@
             "Range": "Cylinder Bbox Extraction Shader",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 2.8133256133902597e-05,
-            "Real_Duration_ms_Avg": 0.01097378002819195,
+            "Real_Duration_ms_Avg": 0.014813867869866507,
             "Rules": [
                 {
                     "Name": "GPU Engines Active [%]",
@@ -14074,7 +14074,7 @@
             "Range": "Cylinder Bbox Intersection Shader",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.1452307667880327,
-            "Real_Duration_ms_Avg": 56.88970914290676,
+            "Real_Duration_ms_Avg": 76.8986136287711,
             "Rules": [
                 {
                     "Name": "No ZCULL, High EarlyZ",
@@ -15092,7 +15092,7 @@
             "Range": "Blit Framebuffer",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 7.526294209705941e-05,
-            "Real_Duration_ms_Avg": 0.026785929642977258,
+            "Real_Duration_ms_Avg": 0.039682136326484485,
             "Rules": [
                 {
                     "Name": "No ZCULL, High EarlyZ",
@@ -16056,7 +16056,7 @@
             "Range": "Swap Window",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 2.9639435839757685e-05,
-            "Real_Duration_ms_Avg": 0.010576966560539016,
+            "Real_Duration_ms_Avg": 0.015607467871682821,
             "Rules": []
         }
     ],
@@ -16065,7 +16065,7 @@
             "Range": "Cleaning Shader",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.0008127950698261104,
-            "Real_Duration_ms_Avg": 0.38381629168929177,
+            "Real_Duration_ms_Avg": 0.5065198367076311,
             "Rules": [
                 {
                     "Name": "No ZCULL, High EarlyZ",
@@ -16992,7 +16992,7 @@
             "Range": "Sphere Bbox Extraction Shader",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 7.617399890074751e-05,
-            "Real_Duration_ms_Avg": 0.03567933713327045,
+            "Real_Duration_ms_Avg": 0.047533587107144386,
             "Rules": [
                 {
                     "Name": "GPU Engines Active [%]",
@@ -17863,7 +17863,7 @@
             "Range": "Sphere Bbox Intersection Shader",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.8526098147237661,
-            "Real_Duration_ms_Avg": 389.4271389297146,
+            "Real_Duration_ms_Avg": 537.2650433921618,
             "Rules": [
                 {
                     "Name": "No ZCULL, High EarlyZ",
@@ -18914,7 +18914,7 @@
             "Range": "Cylinder Bbox Extraction Shader",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 2.5290503027207253e-05,
-            "Real_Duration_ms_Avg": 0.011710111462148903,
+            "Real_Duration_ms_Avg": 0.01586902818231818,
             "Rules": [
                 {
                     "Name": "GPU Engines Active [%]",
@@ -19775,7 +19775,7 @@
             "Range": "Cylinder Bbox Intersection Shader",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 0.14638002433160105,
-            "Real_Duration_ms_Avg": 68.96780607544189,
+            "Real_Duration_ms_Avg": 91.78600200334937,
             "Rules": [
                 {
                     "Name": "No ZCULL, High EarlyZ",
@@ -20793,7 +20793,7 @@
             "Range": "Blit Framebuffer",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 6.376905520048453e-05,
-            "Real_Duration_ms_Avg": 0.027561162900975014,
+            "Real_Duration_ms_Avg": 0.039686382752582836,
             "Rules": [
                 {
                     "Name": "No ZCULL, High EarlyZ",
@@ -21701,7 +21701,7 @@
             "Range": "Swap Window",
             "Total_Muestras": 45,
             "RelativeFrameDuration_Avg": 2.5351371776574273e-05,
-            "Real_Duration_ms_Avg": 0.01101411768269707,
+            "Real_Duration_ms_Avg": 0.015823432867409226,
             "Rules": []
         }
     ],
