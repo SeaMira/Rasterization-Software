@@ -1,148 +1,126 @@
+# ==============================================================================
+# CMakeLists.txt - Proyecto de Rasterización por Software
+# ==============================================================================
+#
+# Este proyecto implementa varias versiones de un rasterizador:
+#
+#   1. SEQUENTIAL    - Rasterización en CPU (SDL Renderer)
+#   2. FST_PARALLEL  - Primera versión con OpenGL compute shaders
+#   3. SND_PARALLEL  - Segunda versión con OpenGL compute shaders
+#   4. STANDARD      - Pipeline estándar de OpenGL
+#   5. CUDA          - Interop CUDA-OpenGL para kernels de rasterización
+#
+# Uso:
+#   cmake -B build -DBUILD_SEQUENTIAL_VERSION=ON -DBUILD_CUDA_VERSION=OFF
+#   cmake --build build
+#
+# ==============================================================================
+
 cmake_minimum_required(VERSION 3.20)
 
-project(compute_shaders_project LANGUAGES CXX C CUDA)
-set(CXX_STANDARD 20)
-set(CMAKE_CUDA_STANDARD 17)
+# Detectar si CUDA está disponible para habilitarlo condicionalmente
+include(CheckLanguage)
+check_language(CUDA)
 
-set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+if(CMAKE_CUDA_COMPILER)
+    project(rasterization_software LANGUAGES CXX C CUDA)
+    set(CUDA_AVAILABLE ON)
+else()
+    project(rasterization_software LANGUAGES CXX C)
+    set(CUDA_AVAILABLE OFF)
+    message(STATUS "CUDA no encontrado - versiones CUDA deshabilitadas")
+endif()
 
-find_package(OpenGL REQUIRED)
+# ==============================================================================
+# OPCIONES DE BUILD
+# ==============================================================================
+# Activa/desactiva las versiones que deseas compilar
 
-# ===============================
-# Arch GPU para CUDA
-# ===============================
-find_package(CUDA REQUIRED)
-set(CUDA_ARCH "75;86;89") # ajusta según tus tarjetas
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-relaxed-constexpr")
+option(BUILD_SEQUENTIAL_VERSION   "Compilar versión secuencial (CPU)"              ON)
+option(BUILD_FST_PARALLEL_VERSION "Compilar primera versión paralela (OpenGL)"     ON)
+option(BUILD_SND_PARALLEL_VERSION "Compilar segunda versión paralela (OpenGL)"     ON)
+option(BUILD_STANDARD_VERSION     "Compilar versión estándar del pipeline OpenGL"  ON)
+option(BUILD_CUDA_VERSION         "Compilar versiones con CUDA interop"            ${CUDA_AVAILABLE})
+
+# Validar que CUDA esté disponible si se solicita BUILD_CUDA_VERSION
+if(BUILD_CUDA_VERSION AND NOT CUDA_AVAILABLE)
+    message(WARNING "CUDA no está disponible - BUILD_CUDA_VERSION se desactivará")
+    set(BUILD_CUDA_VERSION OFF)
+endif()
+
+# ==============================================================================
+# INFORMACIÓN DE CONFIGURACIÓN
+# ==============================================================================
+
+message(STATUS "")
+message(STATUS "============================================================")
+message(STATUS "  Proyecto de Rasterización por Software")
+message(STATUS "============================================================")
+message(STATUS "")
+message(STATUS "Versiones a compilar:")
+message(STATUS "  - Sequential (CPU):       ${BUILD_SEQUENTIAL_VERSION}")
+message(STATUS "  - First Parallel (OpenGL): ${BUILD_FST_PARALLEL_VERSION}")
+message(STATUS "  - Second Parallel (OpenGL): ${BUILD_SND_PARALLEL_VERSION}")
+message(STATUS "  - Standard Pipeline:       ${BUILD_STANDARD_VERSION}")
+message(STATUS "  - CUDA Interop:            ${BUILD_CUDA_VERSION}")
+message(STATUS "")
+
+# ==============================================================================
+# INCLUIR MÓDULOS CMAKE
+# ==============================================================================
+
+# Configuración de compiladores (C++20, CUDA 17)
+include(${CMAKE_SOURCE_DIR}/cmake/CompilerSettings.cmake)
+
+# Configuración de CUDA (arquitecturas, flags)
+if(BUILD_CUDA_VERSION)
+    include(${CMAKE_SOURCE_DIR}/cmake/CUDASettings.cmake)
+endif()
+
+# Dependencias externas (OpenGL, SDL3, GLM, ImGui, chemfiles)
+include(${CMAKE_SOURCE_DIR}/cmake/Dependencies.cmake)
+
+# Funciones helper para crear targets
+include(${CMAKE_SOURCE_DIR}/cmake/BuildTargets.cmake)
+
+# Configuración de directorios de salida
+include(${CMAKE_SOURCE_DIR}/cmake/OutputDirectories.cmake)
+
+# ==============================================================================
+# BIBLIOTECAS DEL PROYECTO
+# ==============================================================================
 
 add_subdirectory(src)
-add_subdirectory(extern)
 
-# Define SDL3 as static lib
-set(SDL_SHARED OFF CACHE BOOL "" FORCE)   # Deactivates dynamic version
-set(SDL_STATIC ON CACHE BOOL "" FORCE)    # Activates static version
+# ==============================================================================
+# EJECUTABLES
+# ==============================================================================
 
-target_link_libraries(raster_dependencies PUBLIC  glad glm chemfiles)
-target_link_libraries(sequential_dependencies PUBLIC glm)
-target_link_libraries(parallel_dependencies PUBLIC glm glad)
+add_subdirectory(executables)
 
-function(add_subproject project_name executable)
-	add_executable(${project_name} ${executable})
-	target_link_libraries(${project_name} PUBLIC raster_dependencies SDL3-static glad imgui)
-	target_include_directories(${project_name} PUBLIC ${OPENGL_INCLUDE_DIRS} extern/SDL/include extern/imgui)
-endfunction()
+# ==============================================================================
+# POST-BUILD: Assets y directorios
+# ==============================================================================
 
-function(add_cuda_subproject project_name executable kernel_dir)
-    file(GLOB KERNEL_SOURCES CONFIGURE_DEPENDS "${kernel_dir}/*.cu")
+# Copiar assets al directorio de build
+setup_assets_copy()
 
-	add_executable(${project_name} ${executable} ${KERNEL_SOURCES})
+# Crear estructura de directorios para media
+setup_media_directories()
 
-    set_source_files_properties(${KERNEL_SOURCES} PROPERTIES LANGUAGE CUDA)
+# ==============================================================================
+# RESUMEN FINAL
+# ==============================================================================
 
-	target_link_libraries(${project_name} PUBLIC raster_dependencies SDL3-static glad imgui)
-	target_include_directories(${project_name} PUBLIC ${OPENGL_INCLUDE_DIRS} extern/SDL/include extern/imgui)
-endfunction()
-
-# Sequential attempt define
-add_subproject(brute_sequencial "${CMAKE_SOURCE_DIR}/executables/seq_version/brute_sequencial.cpp")
-
-# Sequential cylinder projection attempt define
-add_subproject(cylinder_projection_cpu "${CMAKE_SOURCE_DIR}/executables/seq_version/cylinder_projection_cpu.cpp")
-
-# First parallel attempt define
-add_subproject(fst_cpu "${CMAKE_SOURCE_DIR}/executables/fst_parallel_attempt/cpu_cull/sphs.cpp")
-add_subproject(fst_cpu_w_cylinders "${CMAKE_SOURCE_DIR}/executables/fst_parallel_attempt/cpu_cull/w_cyls.cpp")
-add_subproject(fst_gpu "${CMAKE_SOURCE_DIR}/executables/fst_parallel_attempt/gpu_cull/sphs.cpp")
-add_subproject(fst_gpu_w_cylinders "${CMAKE_SOURCE_DIR}/executables/fst_parallel_attempt/gpu_cull/w_cyls.cpp")
-
-# Second parallel attempt define
-add_subproject(snd_cpu "${CMAKE_SOURCE_DIR}/executables/snd_parallel_attempt/cpu_cull/sphs.cpp")
-add_subproject(snd_cpu_w_cylinders "${CMAKE_SOURCE_DIR}/executables/snd_parallel_attempt/cpu_cull/w_cyls.cpp")
-add_subproject(snd_gpu "${CMAKE_SOURCE_DIR}/executables/snd_parallel_attempt/gpu_cull/sphs.cpp")
-add_subproject(snd_gpu_w_cylinders "${CMAKE_SOURCE_DIR}/executables/snd_parallel_attempt/gpu_cull/w_cyls.cpp")
-
-# Standard pipeline version
-add_subproject(standard_pipeline "${CMAKE_SOURCE_DIR}/executables/standard_version/gpu_cull/standard_version.cpp")
-add_subproject(standard_pipeline_cpu_cull "${CMAKE_SOURCE_DIR}/executables/standard_version/cpu_cull/standard_version.cpp")
-
-
-# First CUDA version
-add_cuda_subproject(CUDA_fst 
-    "${CMAKE_SOURCE_DIR}/executables/cuda_fst/gpu_cull/w_cyls.cpp"
-    "${CMAKE_SOURCE_DIR}/kernels/fst/gpu_cull"    
-)
-
-target_link_libraries(brute_sequencial PUBLIC sequential_dependencies)
-target_link_libraries(cylinder_projection_cpu PUBLIC sequential_dependencies)
-
-function(add_cuda_props project_name )
-	target_compile_options(${project_name} PRIVATE 
-        $<$<COMPILE_LANGUAGE:CUDA>:-allow-unsupported-compiler>
-    )
-	set_target_properties(${project_name} PROPERTIES CUDA_ARCHITECTURES "${CUDA_ARCH}")
-	target_link_libraries(${project_name} PUBLIC 
-        parallel_dependencies
-        "${CUDA_TOOLKIT_ROOT_DIR}/lib/x64/cuda.lib"
-        "${CUDA_TOOLKIT_ROOT_DIR}/lib/x64/cudart_static.lib"
-    )
-endfunction()
-
-
-target_link_libraries(fst_cpu PUBLIC parallel_dependencies)
-target_link_libraries(fst_cpu_w_cylinders PUBLIC parallel_dependencies)
-target_link_libraries(fst_gpu PUBLIC parallel_dependencies)
-target_link_libraries(fst_gpu_w_cylinders PUBLIC parallel_dependencies)
-
-target_link_libraries(snd_cpu PUBLIC parallel_dependencies)
-target_link_libraries(snd_cpu_w_cylinders PUBLIC parallel_dependencies)
-target_link_libraries(snd_gpu PUBLIC parallel_dependencies)
-target_link_libraries(snd_gpu_w_cylinders PUBLIC parallel_dependencies)
-
-target_link_libraries(standard_pipeline PUBLIC parallel_dependencies)
-target_link_libraries(standard_pipeline_cpu_cull PUBLIC parallel_dependencies)
-
-
-add_cuda_props(CUDA_fst)
-
-
-
-add_custom_command(
-    OUTPUT "${CMAKE_BINARY_DIR}/assets"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets ${CMAKE_BINARY_DIR}/assets
-    DEPENDS ${CMAKE_SOURCE_DIR}/assets
-)
-
-add_custom_target(copy_assets ALL DEPENDS "${CMAKE_BINARY_DIR}/assets")
-
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/csv/seq)
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/csv/seq_w_cyl)
-
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/csv/fst_parallel/cpu_cull)
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/csv/fst_parallel/gpu_cull)
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/csv/fst_parallel_w_cyl/cpu_cull)
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/csv/fst_parallel_w_cyl/gpu_cull)
-
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/csv/scnd_parallel/cpu_cull)
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/csv/scnd_parallel/gpu_cull)
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/csv/scnd_parallel_w_cyl/cpu_cull)
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/csv/scnd_parallel_w_cyl/gpu_cull)
-
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/csv/standard_version/cpu_cull)
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/csv/standard_version/gpu_cull)
-
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/img/seq)
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/img/seq_w_cyl)
-
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/img/fst_parallel/cpu_cull)
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/img/fst_parallel/gpu_cull)
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/img/fst_parallel_w_cyl/cpu_cull)
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/img/fst_parallel_w_cyl/gpu_cull)
-
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/img/scnd_parallel/cpu_cull)
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/img/scnd_parallel/gpu_cull)
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/img/scnd_parallel_w_cyl/cpu_cull)
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/img/scnd_parallel_w_cyl/gpu_cull)
-
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/img/standard_version/cpu_cull)
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/media/img/standard_version/gpu_cull)
+message(STATUS "")
+message(STATUS "============================================================")
+message(STATUS "  Configuración completada")
+message(STATUS "============================================================")
+message(STATUS "")
+message(STATUS "Directorio de build:    ${CMAKE_BINARY_DIR}")
+message(STATUS "Ejecutables en:         ${CMAKE_BINARY_DIR}/bin/")
+message(STATUS "")
+if(BUILD_CUDA_VERSION)
+    message(STATUS "Arquitecturas CUDA:     ${CUDA_ARCH}")
+endif()
+message(STATUS "")

@@ -5,8 +5,8 @@
 
     
 
-Window::Window( std::string& title, std::size_t width, std::size_t height, bool shown ) :
-    m_title( std::move( title ) ), m_width( width ), m_height( height ), io(nullptr)
+Window::Window( const std::string& title, std::size_t width, std::size_t height, bool shown ) :
+    m_title( title ), m_width( width ), m_height( height ), io(nullptr)
 {
     if (!SDL_Init( SDL_INIT_VIDEO ))
         throw std::runtime_error( SDL_GetError() );

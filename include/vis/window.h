@@ -40,7 +40,7 @@ class Window
      * @param height height of the window.
      * @param shown boolean to know if image should start showing.
      */
-    Window( std::string& title, std::size_t width = 1280, std::size_t height = 720, bool shown = true );
+    Window( const std::string& title, std::size_t width = 1280, std::size_t height = 720, bool shown = true );
 
     /**
      * @brief Copy Window operator.

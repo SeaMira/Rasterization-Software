@@ -1,4 +1,8 @@
 #pragma once
+
+// Este archivo solo debe incluirse en compilaciones CUDA
+#ifdef __CUDACC__
+
 #include <cuda_runtime.h>
 #include <glm/glm.hpp>
 
@@ -51,3 +55,4 @@ __device__ __constant__ float diffuse = 0.9f;
 //     /* 39: Y */ make_float3(0.58f, 1.0f, 1.0f),  // Azul claro
 //     /* 40: Zr*/ make_float3(0.58f, 0.88f, 0.88f)// Azul grisáceo
 // };
+#endif // __CUDACC__
