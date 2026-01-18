@@ -112,7 +112,7 @@ set(CORE_SOURCES
     ${CMAKE_SOURCE_DIR}/src/appSDLRenderer.cpp
 )
 
-add_library(lib_core STATIC ${CORE_HEADERS} ${CORE_SOURCES})
+add_library(lib_core STATIC ${CORE_HEADERS} ${CORE_SOURCES} ${EXTERN_INCLUDE_DIRS})
 
 target_include_directories(lib_core PUBLIC 
     ${CMAKE_SOURCE_DIR}/include
@@ -185,13 +185,12 @@ add_library(lib_parallel STATIC ${PARALLEL_HEADERS} ${PARALLEL_SOURCES})
 
 target_include_directories(lib_parallel PUBLIC 
     ${CMAKE_SOURCE_DIR}/include
-    ${EXTERN_INCLUDE_DIRS}
-    ${OPENGL_INCLUDE_DIRS}
+    # ${EXTERN_INCLUDE_DIRS}
+    # ${OPENGL_INCLUDE_DIRS}
 )
 
 target_link_libraries(lib_parallel PUBLIC 
     glm 
-    glad
 )
 
 set_target_properties(lib_parallel PROPERTIES

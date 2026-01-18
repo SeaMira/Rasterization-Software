@@ -24,7 +24,6 @@ set(EXTERN_INCLUDE_DIRS
     ${CMAKE_SOURCE_DIR}/extern/SDL/include
     ${CMAKE_SOURCE_DIR}/extern/imgui
     ${CMAKE_SOURCE_DIR}/extern/imgui/backends
-    CACHE INTERNAL "External include directories"
 )
 
 # Bibliotecas comunes para versiones gráficas
@@ -34,5 +33,4 @@ set(COMMON_GRAPHICS_LIBS
     SDL3-static
     imgui
     ${OPENGL_LIBRARIES}
-    CACHE INTERNAL "Common graphics libraries"
 )

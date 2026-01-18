@@ -64,6 +64,7 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window);
 
 int main(int argc, char* argv[]) 
 {
+    std::cout << "Starting application..." << std::endl;
     startTime = std::chrono::high_resolution_clock::now();
     AppOpenGL window { title + (withOcclusionCulling ? " - With Occlusion Culling" : " - Without Occlusion Culling"), SCR_WIDTH, SCR_HEIGHT, shown };
 

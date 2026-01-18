@@ -31,6 +31,7 @@ target_include_directories(std_cpu_cull PRIVATE
 
 set_target_properties(std_cpu_cull PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${STD_OUTPUT_DIR}/cpu_cull"
+    VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
 
 # ------------------------------------------------------------------------------
@@ -52,6 +53,7 @@ target_include_directories(std_gpu_cull PRIVATE
 
 set_target_properties(std_gpu_cull PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${STD_OUTPUT_DIR}/gpu_cull"
+    VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
 
 message(STATUS "  - std_cpu_cull")

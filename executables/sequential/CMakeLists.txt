@@ -30,6 +30,7 @@ target_include_directories(seq_brute_force PRIVATE
 set_target_properties(seq_brute_force PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/sequential"
     OUTPUT_NAME "brute_sequencial"
+    VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
 
 # ------------------------------------------------------------------------------
@@ -52,6 +53,7 @@ target_include_directories(seq_cylinder_proj PRIVATE
 set_target_properties(seq_cylinder_proj PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/sequential"
     OUTPUT_NAME "cylinder_projection_cpu"
+    VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
 
 message(STATUS "  - seq_brute_force")

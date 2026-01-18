@@ -33,6 +33,7 @@ target_include_directories(fst_cpu_spheres PRIVATE
 
 set_target_properties(fst_cpu_spheres PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${FST_OUTPUT_DIR}/cpu_cull"
+    VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
 
 # ------------------------------------------------------------------------------
@@ -54,6 +55,7 @@ target_include_directories(fst_cpu_cylinders PRIVATE
 
 set_target_properties(fst_cpu_cylinders PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${FST_OUTPUT_DIR}/cpu_cull"
+    VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
 
 # ------------------------------------------------------------------------------
@@ -75,6 +77,7 @@ target_include_directories(fst_gpu_spheres PRIVATE
 
 set_target_properties(fst_gpu_spheres PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${FST_OUTPUT_DIR}/gpu_cull"
+    VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
 
 # ------------------------------------------------------------------------------
@@ -96,6 +99,7 @@ target_include_directories(fst_gpu_cylinders PRIVATE
 
 set_target_properties(fst_gpu_cylinders PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${FST_OUTPUT_DIR}/gpu_cull"
+    VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
 
 message(STATUS "  - fst_cpu_spheres")

@@ -66,25 +66,28 @@ message(STATUS "  - CUDA Interop:            ${BUILD_CUDA_VERSION}")
 message(STATUS "")
 
 # ==============================================================================
-# BIBLIOTECAS DEL PROYECTO
-# ==============================================================================
-
-add_subdirectory(src)
-
-# ==============================================================================
 # INCLUIR MÓDULOS CMAKE
 # ==============================================================================
 
 # Configuración de compiladores (C++20, CUDA 17)
 include(${CMAKE_SOURCE_DIR}/cmake/CompilerSettings.cmake)
 
+# ==============================================================================
+# BIBLIOTECAS DEL PROYECTO
+# ==============================================================================
+
+add_subdirectory(src)
+
+# Dependencias externas (OpenGL, SDL3, GLM, ImGui, chemfiles)
+include(${CMAKE_SOURCE_DIR}/cmake/Dependencies.cmake)
+
+
+
 # Configuración de CUDA (arquitecturas, flags)
 if(BUILD_CUDA_VERSION)
     include(${CMAKE_SOURCE_DIR}/cmake/CUDASettings.cmake)
 endif()
 
-# Dependencias externas (OpenGL, SDL3, GLM, ImGui, chemfiles)
-include(${CMAKE_SOURCE_DIR}/cmake/Dependencies.cmake)
 
 # Funciones helper para crear targets
 include(${CMAKE_SOURCE_DIR}/cmake/BuildTargets.cmake)
