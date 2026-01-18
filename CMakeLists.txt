@@ -66,6 +66,12 @@ message(STATUS "  - CUDA Interop:            ${BUILD_CUDA_VERSION}")
 message(STATUS "")
 
 # ==============================================================================
+# BIBLIOTECAS DEL PROYECTO
+# ==============================================================================
+
+add_subdirectory(src)
+
+# ==============================================================================
 # INCLUIR MÓDULOS CMAKE
 # ==============================================================================
 
@@ -86,11 +92,6 @@ include(${CMAKE_SOURCE_DIR}/cmake/BuildTargets.cmake)
 # Configuración de directorios de salida
 include(${CMAKE_SOURCE_DIR}/cmake/OutputDirectories.cmake)
 
-# ==============================================================================
-# BIBLIOTECAS DEL PROYECTO
-# ==============================================================================
-
-add_subdirectory(src)
 
 # ==============================================================================
 # EJECUTABLES
