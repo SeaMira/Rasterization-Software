@@ -10,6 +10,7 @@
 
 #include "utils/parallel/aux_functions.h"
 #include "utils/benchmark_resources.h"
+#include "utils/scene_config_loader.h"
 
 #include "ux/input.h"
 #include "ux/camera_controller.h"
@@ -46,6 +47,26 @@ int downsampleLevel = 4;
 int downsampleWorkGroupSizeX = 16/downsampleLevel;
 int downsampleWorkGroupSizeY = 16/downsampleLevel;
 
+double timerDuration = 48.0;
+
+void loadConfiguration()
+{
+    SceneSettings settings = SceneConfigLoader::loadDefault();
+    SceneConfigLoader::applyToGlobals(settings);
+    
+    SCR_WIDTH = settings.screenWidth;
+    SCR_HEIGHT = settings.screenHeight;
+    sphere_count = settings.sphereCount;
+    downsampleLevel = settings.downsampleLevel;
+    workGroupSizeXPerPixel = settings.workGroupSizePerPixelX;
+    workGroupSizeYPerPixel = settings.workGroupSizePerPixelY;
+    workGroupSizeXPerSphere = settings.workGroupSizePerSphere;
+    timerDuration = settings.timerDuration;
+    
+    downsampleWorkGroupSizeX = 16/downsampleLevel;
+    downsampleWorkGroupSizeY = 16/downsampleLevel;
+}
+
 struct SphereBillboard 
 {
     glm::vec4 sphPosR;   // 16b - camera space position of the sphere and radius
@@ -58,6 +79,8 @@ struct SphereBillboard
 
 int main(int argc, char* argv[]) 
 {
+    loadConfiguration();
+    
     std::unordered_map<std::string, int*> scene_data = {
         {"Screen width", &SCR_WIDTH},
         {"Screen height", &SCR_HEIGHT},

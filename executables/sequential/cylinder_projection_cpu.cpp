@@ -16,6 +16,7 @@
 #include "algorithms/frustum_cull.h"
 
 #include "utils/benchmark_resources.h"
+#include "utils/scene_config_loader.h"
 #include "utils/sequential/aux_functions_cylinder.h"
 #include "utils/sequential/aux_functions_sphere.h"
 
@@ -76,6 +77,18 @@ std::unordered_map<int, int> buildPixelCount(const std::vector<int>& pixelOwners
 }
 
 std::unordered_map<int, int> ownedPixelsMap = buildPixelCount(pixelOwnership);
+
+void loadConfiguration() {
+    SceneSettings settings = SceneConfigLoader::loadDefault();
+    SceneConfigLoader::applyToGlobals(settings);
+    
+    SCR_WIDTH = settings.screenWidth;
+    SCR_HEIGHT = settings.screenHeight;
+    sphere_count = settings.sphereCount;
+    cylinder_count = settings.cylinderCount;
+    withOcclusionCulling = settings.withOcclusionCulling;
+    topLevel = settings.downsampleLevel;
+}
 
 void renderFrameWithOcclusionCulling(std::vector<uint32_t>& framebuffer, 
     std::vector<float>& depthBuffer, 
@@ -204,6 +217,7 @@ void renderFrameWithoutOcclusionCulling(std::vector<uint32_t>& framebuffer,
 
 int main(int argc, char* argv[]) 
 {
+    loadConfiguration();
     startTime = std::chrono::high_resolution_clock::now();
     std::unordered_map<std::string, int*> scene_data = {
         {"Screen width", &SCR_WIDTH},

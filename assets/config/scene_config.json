@@ -1,0 +1,40 @@
+{
+  "scene": {
+    "type": "PACKAGE_SCENE",
+    "file": "1AGA.mmtf",
+    "sphere_count": 552008,
+    "cylinder_count": 519767
+  },
+  "grid": {
+    "width": 10,
+    "height": 10,
+    "depth": 10
+  },
+  "benchmark": {
+    "interleave_width": 5,
+    "interleave_height": 5,
+    "interleave_angle": 8,
+    "interleave_z": 5,
+    "interleave_y": 5,
+    "radius_factor": 2.0
+  },
+  "geometry": {
+    "separation": 2.0,
+    "sphere_radius": 0.5,
+    "cylinder_radius": 0.2
+  },
+  "render": {
+    "screen_width": 1024,
+    "screen_height": 1024,
+    "with_occlusion_culling": false,
+    "downsample_level": 4,
+    "work_group_size_per_pixel_x": 16,
+    "work_group_size_per_pixel_y": 16,
+    "work_group_size_per_sphere": 256,
+    "work_group_size_per_cylinder": 256
+  },
+  "profiler": {
+    "timer_duration": 48.0,
+    "benchmarking_enabled": false
+  }
+}

@@ -29,42 +29,52 @@
 
 // Utility includes
 #include "utils/benchmark_resources.h"
+#include "utils/scene_config_loader.h"
+
+// Global settings loaded from config file
+static SceneSettings g_settings;
 
 /**
- * @brief Creates the render configuration.
+ * @brief Creates the render configuration from loaded settings.
  * 
  * Uses the Builder pattern for clean, readable configuration.
  * 
- * @param withOcclusion Whether to enable occlusion culling.
  * @return Configured RenderConfig object.
  */
-RenderConfig createRenderConfig(bool withOcclusion)
+RenderConfig createRenderConfig()
 {
     return RenderConfig::Builder()
-        .screenWidth(1024)
-        .screenHeight(1024)
+        .screenWidth(g_settings.screenWidth)
+        .screenHeight(g_settings.screenHeight)
         .title("First Parallel Version: Spheres and Cylinders - GPU Frustum Culling")
         .shown(true)
-        .occlusionCulling(withOcclusion)
-        .workGroupSizePerPixel(16, 16)
-        .workGroupSizePerSphere(256)
-        .workGroupSizePerCylinder(256)
-        .downsampleLevel(4)
+        .occlusionCulling(g_settings.withOcclusionCulling)
+        .workGroupSizePerPixel(g_settings.workGroupSizePerPixelX, g_settings.workGroupSizePerPixelY)
+        .workGroupSizePerSphere(g_settings.workGroupSizePerSphere)
+        .workGroupSizePerCylinder(g_settings.workGroupSizePerCylinder)
+        .downsampleLevel(g_settings.downsampleLevel)
         .build();
 }
 
 /**
- * @brief Creates the scene configuration.
+ * @brief Creates the scene configuration from loaded settings.
  * 
  * @return Configured SceneConfig object.
  */
 SceneConfig createSceneConfig()
 {
+    SceneSourceType sourceType = SceneSourceType::FILE_LOADED;
+    if (g_settings.sceneType == "GRID_SCENE") {
+        sourceType = SceneSourceType::GRID_GENERATED;
+    } else if (g_settings.sceneType == "PACKAGE_SCENE") {
+        sourceType = SceneSourceType::PACKED_SCENE;
+    }
+    
     return SceneConfig::Builder()
-        .sourceType(SceneSourceType::FILE_LOADED)
-        .filePath(scene_path)
-        .sphereCount(552008)
-        .cylinderCount(519767)
+        .sourceType(sourceType)
+        .filePath(g_settings.getScenePath())
+        .sphereCount(g_settings.sphereCount)
+        .cylinderCount(g_settings.cylinderCount)
         .buildConfig();
 }
 
@@ -158,11 +168,14 @@ int main(int argc, char* argv[])
     
     try
     {
-        // Configuration
-        constexpr bool withOcclusionCulling = false;
+        // Load configuration from file (no recompilation needed!)
+        g_settings = SceneConfigLoader::loadDefault();
+        
+        // Apply settings to global variables for backwards compatibility
+        SceneConfigLoader::applyToGlobals(g_settings);
         
         // Create configurations using Builder pattern
-        RenderConfig renderConfig = createRenderConfig(withOcclusionCulling);
+        RenderConfig renderConfig = createRenderConfig();
         SceneConfig sceneConfig = createSceneConfig();
         
         // Create render pipeline
@@ -181,15 +194,15 @@ int main(int argc, char* argv[])
         pipeline.enableBenchmark(checkpoints);
 
         // Create and inject the renderer (Dependency Injection)
-        auto renderer = std::make_unique<GPUCullRenderer>(withOcclusionCulling);
+        auto renderer = std::make_unique<GPUCullRenderer>(g_settings.withOcclusionCulling);
         pipeline.setRenderer(std::move(renderer));
 
         // Initialize pipeline with scene
         pipeline.initialize(std::move(scene));
         
         // Enable profiling
-        auto [frameTimesPath, processTimesPath] = getProfilerPaths(sceneConfig, withOcclusionCulling);
-        pipeline.enableProfiling(frameTimesPath, processTimesPath, 48.0);
+        auto [frameTimesPath, processTimesPath] = getProfilerPaths(sceneConfig, g_settings.withOcclusionCulling);
+        pipeline.enableProfiling(frameTimesPath, processTimesPath, g_settings.timerDuration);
         
         // Optional: Set frame callback for custom per-frame logic
         pipeline.setFrameCallback([](const RenderStatistics& stats) {

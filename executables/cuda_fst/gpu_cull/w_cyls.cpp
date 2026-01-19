@@ -15,6 +15,7 @@
 
 #include "utils/parallel/aux_functions.h"
 #include "utils/benchmark_resources.h"
+#include "utils/scene_config_loader.h"
 
 #include "ux/input.h"
 #include "ux/camera_controller.h"
@@ -60,6 +61,8 @@ int notOccludedCylindersCount = 0;
 int downsampleLevel = 4;
 int downsampleWorkGroupSizeX = (1 << downsampleLevel);
 int downsampleWorkGroupSizeY = (1 << downsampleLevel);
+
+double timerDuration = 48.0;
 
 std::chrono::steady_clock::time_point startTime = std::chrono::high_resolution_clock::now();
 
@@ -229,12 +232,24 @@ void pixelCount(
 }
 #endif
 
+void loadConfiguration() {
+    SceneConfigLoader configLoader;
+    if (configLoader.loadConfig("assets/config/scene_config.json")) {
+        SCR_WIDTH = configLoader.getScreenWidth();
+        SCR_HEIGHT = configLoader.getScreenHeight();
+        timerDuration = configLoader.getTimerDuration();
+        downsampleLevel = configLoader.getDownsampleLevel();
+        downsampleWorkGroupSizeX = (1 << downsampleLevel);
+        downsampleWorkGroupSizeY = (1 << downsampleLevel);
+    }
+}
 
 void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window);
 void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window);
 
 int main(int argc, char* argv[]) 
 {
+    loadConfiguration();
     startTime = std::chrono::high_resolution_clock::now();
     AppOpenGL window { title + (withOcclusionCulling ? " - With Occlusion Culling" : " - Without Occlusion Culling"), SCR_WIDTH, SCR_HEIGHT, shown };
 
@@ -375,7 +390,7 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
     std::string process_times_path = base_path + "_process_times.csv";
     Profiler profiler(window, 
         frame_times_path, 
-        process_times_path, sphere_count, cylinder_count, downsampleLevel, 48.0f);
+        process_times_path, sphere_count, cylinder_count, downsampleLevel, timerDuration);
 
     window.setupSceneInfoGui("Scene Info", scene_data);
     window.setupCameraGui("Camera Info", &camera);
@@ -719,7 +734,7 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
     std::string process_times_path = base_path + "_process_times.csv";
     Profiler profiler(window, 
         frame_times_path, 
-        process_times_path, sphere_count, cylinder_count, downsampleLevel, 48.0f);
+        process_times_path, sphere_count, cylinder_count, downsampleLevel, timerDuration);
 
     window.setupSceneInfoGui("Scene Info", scene_data);
     window.setupCameraGui("Camera Info", &camera);

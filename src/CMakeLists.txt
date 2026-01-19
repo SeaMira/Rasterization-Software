@@ -38,6 +38,7 @@ set(CORE_HEADERS
     # Utils
     ${CMAKE_SOURCE_DIR}/include/utils/math_defines.h
     ${CMAKE_SOURCE_DIR}/include/utils/benchmark_resources.h
+    ${CMAKE_SOURCE_DIR}/include/utils/scene_config_loader.h
     # scene_descriptor.h es específico de CUDA
     
     # UX
@@ -115,6 +116,7 @@ set(CORE_SOURCES
     # Utils
     ${CMAKE_SOURCE_DIR}/src/utils/math_defines.cpp
     ${CMAKE_SOURCE_DIR}/src/utils/benchmark_resources.cpp
+    ${CMAKE_SOURCE_DIR}/src/utils/scene_config_loader.cpp
     # scene_descriptor.cpp es específico de CUDA
     
     # UX

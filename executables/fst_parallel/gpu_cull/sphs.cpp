@@ -10,6 +10,7 @@
 
 #include "utils/parallel/aux_functions.h"
 #include "utils/benchmark_resources.h"
+#include "utils/scene_config_loader.h"
 
 #include "ux/input.h"
 #include "ux/camera_controller.h"
@@ -46,8 +47,28 @@ int downsampleLevel = 4;
 int downsampleWorkGroupSizeX = 16/downsampleLevel;
 int downsampleWorkGroupSizeY = 16/downsampleLevel;
 
+double timerDuration = 48.0;
+
+void loadConfiguration()
+{
+    SceneSettings settings = SceneConfigLoader::loadDefault();
+    SceneConfigLoader::applyToGlobals(settings);
+    
+    SCR_WIDTH = settings.screenWidth;
+    SCR_HEIGHT = settings.screenHeight;
+    sphere_count = settings.sphereCount;
+    workGroupSizeXPerPixel = settings.workGroupSizePerPixelX;
+    workGroupSizeYPerPixel = settings.workGroupSizePerPixelY;
+    workGroupSizeXPerSphere = settings.workGroupSizePerSphere;
+    downsampleLevel = settings.downsampleLevel;
+    downsampleWorkGroupSizeX = 16 / downsampleLevel;
+    downsampleWorkGroupSizeY = 16 / downsampleLevel;
+    timerDuration = settings.timerDuration;
+}
+
 int main(int argc, char* argv[]) 
 {
+    loadConfiguration();
 
     std::unordered_map<std::string, int*> scene_data = {
         {"Screen width", &SCR_WIDTH},

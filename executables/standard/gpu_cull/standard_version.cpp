@@ -11,6 +11,7 @@
 
 #include "utils/parallel/aux_functions.h"
 #include "utils/benchmark_resources.h"
+#include "utils/scene_config_loader.h"
 
 #include "ux/input.h"
 #include "ux/camera_controller.h"
@@ -53,6 +54,31 @@ int downsampleLevel = 4;
 int downsampleWorkGroupSizeX = 16/downsampleLevel;
 int downsampleWorkGroupSizeY = 16/downsampleLevel;
 
+double timerDuration = 48.0;
+
+void loadConfiguration() {
+    try {
+        SceneSettings settings = SceneConfigLoader::loadDefault();
+        SCR_WIDTH = settings.screenWidth;
+        SCR_HEIGHT = settings.screenHeight;
+        sphere_count = settings.sphereCount;
+        cylinder_count = settings.cylinderCount;
+        withOcclusionCulling = settings.withOcclusionCulling;
+        downsampleLevel = settings.downsampleLevel;
+        downsampleWorkGroupSizeX = 16 / downsampleLevel;
+        downsampleWorkGroupSizeY = 16 / downsampleLevel;
+        workGroupSizeXPerPixel = settings.workGroupSizePerPixelX;
+        workGroupSizeYPerPixel = settings.workGroupSizePerPixelY;
+        workGroupSizeXPerSphere = settings.workGroupSizePerSphere;
+        workGroupSizeXPerCylinder = settings.workGroupSizePerCylinder;
+        timerDuration = settings.timerDuration;
+        std::cout << "Configuration loaded successfully." << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "Failed to load configuration: " << e.what() << std::endl;
+        std::cerr << "Using default values." << std::endl;
+    }
+}
+
 void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window);
 void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window);
 
@@ -60,6 +86,7 @@ std::chrono::steady_clock::time_point startTime = std::chrono::high_resolution_c
 
 int main(int argc, char* argv[]) 
 {
+    loadConfiguration();
     
     startTime = std::chrono::high_resolution_clock::now();
     AppOpenGL window { title + (withOcclusionCulling ? " - With Occlusion Culling" : " - Without Occlusion Culling"), SCR_WIDTH, SCR_HEIGHT, shown };
@@ -187,7 +214,7 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
     std::string process_times_path = base_path + "_process_times.csv";
     Profiler profiler(window, 
         frame_times_path, 
-        process_times_path, sphere_count, cylinder_count, downsampleLevel, 48.0f);
+        process_times_path, sphere_count, cylinder_count, downsampleLevel, timerDuration);
 
     window.setupSceneInfoGui("Scene Info", scene_data);
     window.setupCameraGui("Camera Info", &camera);
@@ -466,7 +493,7 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
     std::string process_times_path = base_path + "_process_times.csv";
     Profiler profiler(window, 
         frame_times_path, 
-        process_times_path, sphere_count, cylinder_count, 0, 48.0f);
+        process_times_path, sphere_count, cylinder_count, 0, timerDuration);
 
     window.setupSceneInfoGui("Scene Info", scene_data);
     window.setupCameraGui("Camera Info", &camera);
