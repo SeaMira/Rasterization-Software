@@ -1,0 +1,106 @@
+#version 460
+
+// ==============================================================================
+// Sphere Frustum Culling Shader (Indirect Dispatch Version)
+// ==============================================================================
+// Este shader realiza únicamente el frustum culling de las esferas.
+// Las esferas visibles se escriben en un buffer de índices que será usado
+// por el shader de rasterización mediante Indirect Dispatch.
+// ==============================================================================
+
+layout(local_size_x = 256) in;
+
+struct Sphere 
+{
+    vec4 positionr;  // (x, y, z, r)
+};
+
+// Input: todas las esferas
+layout(std430, binding = 6) buffer SphereBuffer 
+{
+    Sphere spheres[];
+};
+
+// Output: índices de esferas visibles
+layout(std430, binding = 10) buffer VisibleSphereIndices 
+{
+    uint visibleSphereIndices[];
+};
+
+// Contador atómico para el número de esferas visibles
+layout(std430, binding = 11) buffer VisibleSphereCount 
+{
+    uint visibleSphereCount;
+};
+
+// Buffer para Indirect Dispatch (num_groups_x, num_groups_y, num_groups_z)
+layout(std430, binding = 12) buffer IndirectDispatchBuffer 
+{
+    uint numGroupsX;
+    uint numGroupsY;
+    uint numGroupsZ;
+};
+
+// Frustum planes
+uniform vec4 frustumTopFace;
+uniform vec4 frustumBottomFace;
+uniform vec4 frustumRightFace;
+uniform vec4 frustumLeftFace;
+uniform vec4 frustumFarFace;
+uniform vec4 frustumNearFace;
+
+uniform int sphereCount;
+uniform int benchmark;
+uniform uint workGroupSize;  // Para calcular el número de grupos de trabajo
+
+// Contador para benchmarking
+layout(binding = 8) buffer CounterBuffer {
+    uint counter;
+};
+
+// ============================================================================
+// Frustum Culling Functions
+// ============================================================================
+
+bool isOnOrForwardOfPlane(vec4 plane, vec4 sphere)
+{
+    return dot(vec3(plane), vec3(sphere)) - plane.w >= -sphere.w;
+}
+
+bool isSphereInside(Sphere sph)
+{
+    return isOnOrForwardOfPlane(frustumLeftFace, sph.positionr) &&
+           isOnOrForwardOfPlane(frustumRightFace, sph.positionr) &&
+           isOnOrForwardOfPlane(frustumFarFace, sph.positionr) &&
+           isOnOrForwardOfPlane(frustumNearFace, sph.positionr) &&
+           isOnOrForwardOfPlane(frustumTopFace, sph.positionr) &&
+           isOnOrForwardOfPlane(frustumBottomFace, sph.positionr);
+}
+
+void main() 
+{
+    uint index = gl_GlobalInvocationID.x;
+
+    // Check if the index is out of bounds
+    if (index >= sphereCount) {
+        return;
+    }
+
+    // Get sphere
+    Sphere s = spheres[index];
+    
+    if (isSphereInside(s)) 
+    {
+        // Atomically increment counter and get the index for this visible sphere
+        uint visibleIndex = atomicAdd(visibleSphereCount, 1);
+        visibleSphereIndices[visibleIndex] = index;
+        
+        if (benchmark == 1) {
+            atomicAdd(counter, 1);
+        }
+        
+        // Update indirect dispatch buffer (calculate num_groups based on visible count)
+        uint newGroupsX = (visibleIndex + workGroupSize) / workGroupSize;
+        atomicMax(numGroupsX, newGroupsX);
+    }
+}

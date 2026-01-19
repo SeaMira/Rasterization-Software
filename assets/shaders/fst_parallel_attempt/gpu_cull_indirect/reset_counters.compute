@@ -1,0 +1,54 @@
+#version 460
+
+// ==============================================================================
+// Reset Counters Shader (Indirect Dispatch Version)
+// ==============================================================================
+// Este shader se ejecuta con UN SOLO thread antes del frustum culling
+// para resetear los contadores y buffers de indirect dispatch.
+// Separado del shader de limpieza de píxeles para evitar race conditions.
+// ==============================================================================
+
+layout(local_size_x = 1) in;
+
+// Contadores de esferas visibles
+layout(std430, binding = 11) buffer VisibleSphereCount 
+{
+    uint visibleSphereCount;
+};
+
+// Buffer para Indirect Dispatch de esferas
+layout(std430, binding = 12) buffer SphereIndirectDispatchBuffer 
+{
+    uint sphereNumGroupsX;
+    uint sphereNumGroupsY;
+    uint sphereNumGroupsZ;
+};
+
+// Contadores de cilindros visibles
+layout(std430, binding = 14) buffer VisibleCylinderCount 
+{
+    uint visibleCylinderCount;
+};
+
+// Buffer para Indirect Dispatch de cilindros
+layout(std430, binding = 15) buffer CylinderIndirectDispatchBuffer 
+{
+    uint cylinderNumGroupsX;
+    uint cylinderNumGroupsY;
+    uint cylinderNumGroupsZ;
+};
+
+void main() 
+{
+    // Reset sphere counters and indirect dispatch
+    visibleSphereCount = 0u;
+    sphereNumGroupsX = 1u;  // Mínimo 1 grupo para evitar dispatch de 0
+    sphereNumGroupsY = 1u;
+    sphereNumGroupsZ = 1u;
+    
+    // Reset cylinder counters and indirect dispatch
+    visibleCylinderCount = 0u;
+    cylinderNumGroupsX = 1u;  // Mínimo 1 grupo para evitar dispatch de 0
+    cylinderNumGroupsY = 1u;
+    cylinderNumGroupsZ = 1u;
+}

@@ -1,0 +1,237 @@
+#version 460
+
+// ==============================================================================
+// Sphere Rasterization Shader (Indirect Dispatch Version)
+// ==============================================================================
+// Este shader procesa únicamente las esferas que pasaron el frustum culling.
+// Lee los índices del buffer de esferas visibles y realiza la rasterización.
+// Se ejecuta mediante Indirect Dispatch basado en el número de esferas visibles.
+// ==============================================================================
+
+layout(local_size_x = 256) in;
+layout(rgba8, binding = 0) uniform image2D outputImage;
+
+layout(std430, binding = 3) buffer DepthBuffer 
+{
+    uint depthBuffer[];
+};
+
+struct Sphere 
+{
+    vec4 positionr;  // (x, y, z, r)
+};
+
+// Todas las esferas
+layout(std430, binding = 6) buffer SphereBuffer 
+{
+    Sphere spheres[];
+};
+
+// Índices de esferas visibles (del frustum culling)
+layout(std430, binding = 10) buffer VisibleSphereIndices 
+{
+    uint visibleSphereIndices[];
+};
+
+// Contador de esferas visibles
+layout(std430, binding = 11) buffer VisibleSphereCount 
+{
+    uint visibleSphereCount;
+};
+
+uniform mat4 view;
+uniform mat4 proj;
+
+uniform vec3 front;
+uniform vec3 up;
+uniform vec3 right;
+uniform vec3 cameraPos;
+
+uniform ivec2 screenResolution;
+uniform float fov;
+
+vec3 lightColor = vec3(0.01, 1.0, 0.05);
+float diffuseI = 0.9;
+
+// ============================================================================
+// Ray Casting Structures
+// ============================================================================
+
+struct bboxCorners
+{
+    vec2 minCorner;
+    vec2 maxCorner;
+};
+
+struct ScreenRayCasting
+{
+    vec3 rayStart;
+    vec3 dx;
+    vec3 dy;
+};
+
+ScreenRayCasting makeScreenRayCasting(float aspectRatio)
+{
+    float fovRad = radians(fov);
+    float fovTan = tan(fovRad * 0.5f);
+    float halfFovTan = fovTan * aspectRatio;
+
+    vec3 corner00 = normalize((-1.0f * halfFovTan) * right + (-1.0f * fovTan) * up + front);
+    vec3 corner10 = normalize(( 1.0f * halfFovTan) * right + (-1.0f * fovTan) * up + front);
+    vec3 corner01 = normalize((-1.0f * halfFovTan) * right + ( 1.0f * fovTan) * up + front);
+
+    vec3 wCorner00 = mat3(view) * corner00;
+    vec3 wCorner10 = mat3(view) * corner10;
+    vec3 wCorner01 = mat3(view) * corner01;
+
+    vec3 dx = (wCorner10 - wCorner00) / float(screenResolution.x);
+    vec3 dy = (wCorner01 - wCorner00) / float(screenResolution.y);
+
+    return ScreenRayCasting(wCorner00, dx, dy);
+}
+
+// ============================================================================
+// Sphere Intersection
+// ============================================================================
+
+float iSphere(vec3 ro, vec3 rd, vec3 sph, float radius)
+{
+    vec3 oc = ro - sph;
+    float b = dot(oc, rd);
+    float c = dot(oc, oc) - radius * radius;
+    float h = b * b - c;
+    if (h < 0.0) return -1.0;
+    return -b - sqrt(h);
+}
+
+// ============================================================================
+// Bounding Box Calculation
+// ============================================================================
+
+bboxCorners getSphereBbox(const vec3 cameraSpaceSphere, const vec3 camImposPos, 
+    const vec3 normCamSpaceSphere, const float sphRadius)
+{
+    const float sinAngle = sphRadius / (length(cameraSpaceSphere) + 1e-6f);
+    const float tanAngle = tan(asin(sinAngle));
+    const float quadScale = tanAngle * length(camImposPos);
+
+    vec3 impU = normalize(cross(normCamSpaceSphere, up));
+    vec3 impV = cross(impU, normCamSpaceSphere) * quadScale;
+    impU *= quadScale;
+
+    const vec3 upRightCorner = camImposPos + impU + impV;
+    const vec3 upLeftCorner = camImposPos - impU + impV;
+    const vec3 downRightCorner = camImposPos + impU - impV;
+    const vec3 downLeftCorner = camImposPos - impU - impV;
+
+    const vec4 upRight = proj * vec4(upRightCorner, 1.0f);
+    const vec4 upLeft = proj * vec4(upLeftCorner, 1.0f);
+    const vec4 downRight = proj * vec4(downRightCorner, 1.0f);
+    const vec4 downLeft = proj * vec4(downLeftCorner, 1.0f);
+    
+    const vec3 ndcUpRight = vec3(upRight.x / upRight.w, upRight.y / upRight.w, upRight.z / upRight.w);
+    const vec3 ndcUpLeft = vec3(upLeft.x / upLeft.w, upLeft.y / upLeft.w, upLeft.z / upLeft.w);
+    const vec3 ndcDownRight = vec3(downRight.x / downRight.w, downRight.y / downRight.w, downRight.z / downRight.w);
+    const vec3 ndcDownLeft = vec3(downLeft.x / downLeft.w, downLeft.y / downLeft.w, downLeft.z / downLeft.w);
+
+    vec2 minCorner = min(min(ndcUpRight.xy, ndcUpLeft.xy), min(ndcDownRight.xy, ndcDownLeft.xy));
+    vec2 maxCorner = max(max(ndcUpRight.xy, ndcUpLeft.xy), max(ndcDownRight.xy, ndcDownLeft.xy));
+
+    return bboxCorners(minCorner, maxCorner); 
+}
+
+vec3 computeRd(int px, int py, float fovTan, float halfFovTan)
+{
+    vec2 p = (-vec2(screenResolution.x, screenResolution.y) + 2.0f * vec2(px, py)) / vec2(screenResolution.x, screenResolution.y);
+    return normalize(p.x * right * halfFovTan + p.y * up * fovTan + front);
+}
+
+// ============================================================================
+// Sphere Drawing
+// ============================================================================
+
+void drawSphere(Sphere sphere, uint sphereIndex)
+{
+    vec3 cameraSpaceSphere = vec3(view * vec4(sphere.positionr.xyz, 1.0f));
+    vec3 normCamSpaceSphere = normalize(cameraSpaceSphere);
+    vec3 camImposPos = cameraSpaceSphere - normCamSpaceSphere * sphere.positionr.w;
+
+    bboxCorners sphereBbox = getSphereBbox(cameraSpaceSphere, camImposPos,
+        normCamSpaceSphere, sphere.positionr.w);
+    
+    float aspectRatio = float(screenResolution.x) / float(screenResolution.y);
+    ivec2 screenMin, screenMax;
+
+    screenMin.x = int(((sphereBbox.minCorner.x) * 0.5f + 0.5f) * float(screenResolution.x));
+    screenMin.y = int((sphereBbox.minCorner.y * 0.5f + 0.5f) * float(screenResolution.y));
+    screenMax.x = int(((sphereBbox.maxCorner.x) * 0.5f + 0.5f) * float(screenResolution.x));
+    screenMax.y = int((sphereBbox.maxCorner.y * 0.5f + 0.5f) * float(screenResolution.y));
+
+    const float difx = screenMax.x - screenMin.x;
+    const float dify = screenMax.y - screenMin.y;
+
+    if (difx * dify <= 2) return;
+
+    float fovRad = radians(fov);
+    float fovTan = tan(fovRad * 0.5f);
+    float halfFovTan = fovTan * aspectRatio;
+
+    ScreenRayCasting screenRayCasting = makeScreenRayCasting(aspectRatio);
+
+    vec3 dx = screenRayCasting.dx;
+    vec3 dy = screenRayCasting.dy;
+    vec3 rayStart = screenRayCasting.rayStart;
+    
+    for (int px = max(0, screenMin.x); px < min(screenMax.x, screenResolution.x); px++)
+    {
+        vec3 rayColStart = rayStart + float(px) * dx;
+        bool finishedLine = false;
+        for (int py = max(0, screenMin.y); py < min(screenResolution.y, screenMax.y); py++)
+        {
+            const vec3 rd = computeRd(px, py, fovTan, halfFovTan);
+            const float h = iSphere(cameraPos, rd, sphere.positionr.xyz, sphere.positionr.w);
+
+            if (h > 0.0f) 
+            {
+                if (!finishedLine) finishedLine = true;
+                
+                const vec3 hit = (rayColStart + float(py) * dy) * h;
+                const float depth = (hit.z * proj[2].z + proj[3].z) / -hit.z;
+                const uint depthUint = floatBitsToUint(depth);
+                int index = px + screenResolution.x * py;
+                uint old = atomicMin(depthBuffer[index], depthUint);
+                if (uintBitsToFloat(old) > depth) 
+                {
+                    const vec3 normal = normalize(cameraPos + rd * h - sphere.positionr.xyz);
+                    const float lambertCos = dot(normal, -normalize(rd * h));
+                    imageStore(outputImage, ivec2(px, py), vec4(lambertCos * lightColor * diffuseI, 1.0));
+                } 
+            } 
+            else if (finishedLine)
+            {
+                break;
+            }
+        }
+    }
+}
+
+// ============================================================================
+// Main
+// ============================================================================
+
+void main() 
+{
+    uint visibleIndex = gl_GlobalInvocationID.x;
+
+    // Check if the index is out of bounds
+    if (visibleIndex >= visibleSphereCount) {
+        return;
+    }
+
+    // Get the original sphere index from the visible indices buffer
+    uint originalIndex = visibleSphereIndices[visibleIndex];
+    
+    // Get and draw the sphere
+    Sphere s = spheres[originalIndex];
+    drawSphere(s, originalIndex);
+}

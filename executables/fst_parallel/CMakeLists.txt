@@ -102,7 +102,34 @@ set_target_properties(fst_gpu_cylinders PROPERTIES
     VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
 
+# ------------------------------------------------------------------------------
+# GPU Culling - Con cilindros (Indirect Dispatch)
+# ------------------------------------------------------------------------------
+# Esta versión separa el frustum culling de la rasterización en shaders
+# diferentes, utilizando Indirect Dispatch para ejecutar el shader de
+# rasterización solo con el número necesario de work groups.
+# ------------------------------------------------------------------------------
+add_executable(fst_gpu_cylinders_indirect
+    ${CMAKE_SOURCE_DIR}/executables/fst_parallel/gpu_cull_indirect/w_cyls.cpp
+)
+
+target_link_libraries(fst_gpu_cylinders_indirect PRIVATE 
+    lib_core
+    lib_parallel
+)
+
+target_include_directories(fst_gpu_cylinders_indirect PRIVATE 
+    ${CMAKE_SOURCE_DIR}/include
+    ${EXTERN_INCLUDE_DIRS}
+)
+
+set_target_properties(fst_gpu_cylinders_indirect PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${FST_OUTPUT_DIR}/gpu_cull_indirect"
+    VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
+)
+
 message(STATUS "  - fst_cpu_spheres")
 message(STATUS "  - fst_cpu_cylinders")
 message(STATUS "  - fst_gpu_spheres")
 message(STATUS "  - fst_gpu_cylinders")
+message(STATUS "  - fst_gpu_cylinders_indirect")

@@ -1,0 +1,130 @@
+#version 460
+
+// ==============================================================================
+// Cylinder Frustum Culling Shader (Indirect Dispatch Version)
+// ==============================================================================
+// Este shader realiza únicamente el frustum culling de los cilindros.
+// Los cilindros visibles se escriben en un buffer de índices que será usado
+// por el shader de rasterización mediante Indirect Dispatch.
+// ==============================================================================
+
+layout(local_size_x = 256) in;
+
+struct Cylinder 
+{
+    vec4 pa_r;  // punto A + radio
+    vec4 pb_r;  // punto B + radio (unused)
+};
+
+// Input: todos los cilindros
+layout(std430, binding = 7) buffer CylinderBuffer 
+{
+    Cylinder cylinders[];
+};
+
+// Output: índices de cilindros visibles
+layout(std430, binding = 13) buffer VisibleCylinderIndices 
+{
+    uint visibleCylinderIndices[];
+};
+
+// Contador atómico para el número de cilindros visibles
+layout(std430, binding = 14) buffer VisibleCylinderCount 
+{
+    uint visibleCylinderCount;
+};
+
+// Buffer para Indirect Dispatch (num_groups_x, num_groups_y, num_groups_z)
+layout(std430, binding = 15) buffer IndirectDispatchBuffer 
+{
+    uint numGroupsX;
+    uint numGroupsY;
+    uint numGroupsZ;
+};
+
+// Frustum planes
+uniform vec4 frustumTopFace;
+uniform vec4 frustumBottomFace;
+uniform vec4 frustumRightFace;
+uniform vec4 frustumLeftFace;
+uniform vec4 frustumFarFace;
+uniform vec4 frustumNearFace;
+
+uniform int cylinderCount;
+uniform int benchmark;
+uniform uint workGroupSize;  // Para calcular el número de grupos de trabajo
+
+// Contador para benchmarking
+layout(binding = 8) buffer CounterBuffer {
+    uint counter;
+};
+
+// ============================================================================
+// Frustum Culling Functions (AABB-based for cylinders)
+// ============================================================================
+
+struct BBox3D
+{
+    vec3 mMin;
+    vec3 mMax;
+};
+
+bool isOnOrForwardPlaneAABB(vec4 plane, BBox3D bbox) 
+{
+    vec3 negativeVertex = bbox.mMin;
+    vec3 normal = plane.xyz;
+    float distance = plane.w;
+
+    if (normal.x >= 0) negativeVertex.x = bbox.mMax.x;
+        else negativeVertex.x = bbox.mMin.x;
+
+    if (normal.y >= 0) negativeVertex.y = bbox.mMax.y;
+        else negativeVertex.y = bbox.mMin.y;
+
+    if (normal.z >= 0) negativeVertex.z = bbox.mMax.z;
+        else negativeVertex.z = bbox.mMin.z;
+
+    return dot(normal, negativeVertex) - distance >= 0;
+}
+
+bool isCylinderInside(vec3 pa, vec3 pb, float radius)
+{
+    vec3 a = pb - pa;
+    vec3 e = radius * sqrt(max(1.0f - a * (a / dot(a, a)), 0.0));
+    BBox3D bbox3d = BBox3D(min(pa, pb) - e, max(pa, pb) + e);
+
+    return isOnOrForwardPlaneAABB(frustumLeftFace, bbox3d) &&
+           isOnOrForwardPlaneAABB(frustumRightFace, bbox3d) &&
+           isOnOrForwardPlaneAABB(frustumFarFace, bbox3d) &&
+           isOnOrForwardPlaneAABB(frustumNearFace, bbox3d) &&
+           isOnOrForwardPlaneAABB(frustumTopFace, bbox3d) &&
+           isOnOrForwardPlaneAABB(frustumBottomFace, bbox3d);
+}
+
+void main() 
+{
+    uint index = gl_GlobalInvocationID.x;
+
+    // Check if the index is out of bounds
+    if (index >= cylinderCount) {
+        return;
+    }
+
+    // Get cylinder
+    Cylinder c = cylinders[index];
+    
+    if (isCylinderInside(c.pa_r.xyz, c.pb_r.xyz, c.pa_r.w)) 
+    {
+        // Atomically increment counter and get the index for this visible cylinder
+        uint visibleIndex = atomicAdd(visibleCylinderCount, 1);
+        visibleCylinderIndices[visibleIndex] = index;
+        
+        if (benchmark == 1) {
+            atomicAdd(counter, 1);
+        }
+        
+        // Update indirect dispatch buffer (calculate num_groups based on visible count)
+        uint newGroupsX = (visibleIndex + workGroupSize) / workGroupSize;
+        atomicMax(numGroupsX, newGroupsX);
+    }
+}

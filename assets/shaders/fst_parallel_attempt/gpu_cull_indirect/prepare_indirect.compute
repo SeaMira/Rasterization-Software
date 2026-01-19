@@ -1,0 +1,60 @@
+#version 460
+
+// ==============================================================================
+// Prepare Indirect Dispatch Shader
+// ==============================================================================
+// Este shader se ejecuta con UN SOLO thread después del frustum culling
+// para calcular correctamente el número de work groups necesarios.
+// Se puede usar para esferas o cilindros según el uniform 'mode'.
+// ==============================================================================
+
+layout(local_size_x = 1) in;
+
+// Contador de esferas visibles
+layout(std430, binding = 11) buffer VisibleSphereCount 
+{
+    uint visibleSphereCount;
+};
+
+// Buffer para Indirect Dispatch de esferas
+layout(std430, binding = 12) buffer SphereIndirectDispatchBuffer 
+{
+    uint sphereNumGroupsX;
+    uint sphereNumGroupsY;
+    uint sphereNumGroupsZ;
+};
+
+// Contador de cilindros visibles
+layout(std430, binding = 14) buffer VisibleCylinderCount 
+{
+    uint visibleCylinderCount;
+};
+
+// Buffer para Indirect Dispatch de cilindros
+layout(std430, binding = 15) buffer CylinderIndirectDispatchBuffer 
+{
+    uint cylinderNumGroupsX;
+    uint cylinderNumGroupsY;
+    uint cylinderNumGroupsZ;
+};
+
+uniform uint workGroupSize;
+uniform int mode;  // 0 = spheres, 1 = cylinders
+
+void main() 
+{
+    if (mode == 0)
+    {
+        // Calcular número de work groups para esferas
+        sphereNumGroupsX = max(1u, (visibleSphereCount + workGroupSize - 1u) / workGroupSize);
+        sphereNumGroupsY = 1u;
+        sphereNumGroupsZ = 1u;
+    }
+    else
+    {
+        // Calcular número de work groups para cilindros
+        cylinderNumGroupsX = max(1u, (visibleCylinderCount + workGroupSize - 1u) / workGroupSize);
+        cylinderNumGroupsY = 1u;
+        cylinderNumGroupsZ = 1u;
+    }
+}

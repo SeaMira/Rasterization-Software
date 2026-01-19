@@ -1,0 +1,79 @@
+#version 430
+
+// ==============================================================================
+// Clear/Reset Shader (Indirect Dispatch Version)
+// ==============================================================================
+// Este shader limpia los buffers de imagen y profundidad, y resetea los
+// contadores y buffers de indirect dispatch para el siguiente frame.
+// ==============================================================================
+
+layout(local_size_x = 16, local_size_y = 16) in;
+layout(rgba8, binding = 0) uniform image2D outputImage;
+
+layout(std430, binding = 3) buffer DepthBuffer 
+{
+    uint depthBuffer[];
+};
+
+// Contadores de esferas visibles
+layout(std430, binding = 11) buffer VisibleSphereCount 
+{
+    uint visibleSphereCount;
+};
+
+// Buffer para Indirect Dispatch de esferas
+layout(std430, binding = 12) buffer SphereIndirectDispatchBuffer 
+{
+    uint sphereNumGroupsX;
+    uint sphereNumGroupsY;
+    uint sphereNumGroupsZ;
+};
+
+// Contadores de cilindros visibles
+layout(std430, binding = 14) buffer VisibleCylinderCount 
+{
+    uint visibleCylinderCount;
+};
+
+// Buffer para Indirect Dispatch de cilindros
+layout(std430, binding = 15) buffer CylinderIndirectDispatchBuffer 
+{
+    uint cylinderNumGroupsX;
+    uint cylinderNumGroupsY;
+    uint cylinderNumGroupsZ;
+};
+
+uniform float far;
+uniform ivec2 screenResolution;
+
+void main() 
+{
+    ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
+    
+    // Solo procesar píxeles dentro de la pantalla
+    if (coords.x >= screenResolution.x || coords.y >= screenResolution.y) {
+        return;
+    }
+    
+    // Limpiar depth buffer
+    depthBuffer[coords.x + screenResolution.x * coords.y] = floatBitsToUint(far);
+    
+    // Limpiar imagen (amarillo para visualizar áreas no renderizadas)
+    imageStore(outputImage, coords, vec4(1.0, 1.0, 0.0, 1.0));
+    
+    // El primer thread resetea los contadores y buffers de indirect dispatch
+    if (coords.x == 0 && coords.y == 0) 
+    {
+        // Reset sphere counters and indirect dispatch
+        visibleSphereCount = 0;
+        sphereNumGroupsX = 1;  // Mínimo 1 grupo
+        sphereNumGroupsY = 1;
+        sphereNumGroupsZ = 1;
+        
+        // Reset cylinder counters and indirect dispatch
+        visibleCylinderCount = 0;
+        cylinderNumGroupsX = 1;  // Mínimo 1 grupo
+        cylinderNumGroupsY = 1;
+        cylinderNumGroupsZ = 1;
+    }
+}
