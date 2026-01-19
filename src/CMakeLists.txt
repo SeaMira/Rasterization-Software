@@ -62,6 +62,34 @@ set(CORE_HEADERS
     # Application
     ${CMAKE_SOURCE_DIR}/include/appSDLGL.h
     ${CMAKE_SOURCE_DIR}/include/appSDLRenderer.h
+
+    # ==== NEW SOLID Architecture ====
+    # Core - Main include
+    ${CMAKE_SOURCE_DIR}/include/core/core.h
+    
+    # Core - Interfaces
+    ${CMAKE_SOURCE_DIR}/include/core/interfaces/i_renderable.h
+    ${CMAKE_SOURCE_DIR}/include/core/interfaces/i_cullable.h
+    ${CMAKE_SOURCE_DIR}/include/core/interfaces/i_shader.h
+    ${CMAKE_SOURCE_DIR}/include/core/interfaces/i_scene_loader.h
+    ${CMAKE_SOURCE_DIR}/include/core/interfaces/i_culling_strategy.h
+    ${CMAKE_SOURCE_DIR}/include/core/interfaces/i_renderer.h
+    
+    # Core - Configuration
+    ${CMAKE_SOURCE_DIR}/include/core/config/render_config.h
+    ${CMAKE_SOURCE_DIR}/include/core/config/scene_config.h
+    
+    # Core - Scene Management
+    ${CMAKE_SOURCE_DIR}/include/core/scene/scene.h
+    ${CMAKE_SOURCE_DIR}/include/core/scene/scene_builder.h
+    
+    # Core - Rendering
+    ${CMAKE_SOURCE_DIR}/include/core/rendering/base_compute_renderer.h
+    ${CMAKE_SOURCE_DIR}/include/core/rendering/render_pipeline.h
+    ${CMAKE_SOURCE_DIR}/include/core/rendering/gpu_cull_renderer.h
+    
+    # Core - Shaders
+    ${CMAKE_SOURCE_DIR}/include/core/shader/shader_base.h
 )
 
 set(CORE_SOURCES
@@ -85,6 +113,7 @@ set(CORE_SOURCES
     ${CMAKE_SOURCE_DIR}/src/ui/component.cpp
     
     # Utils
+    ${CMAKE_SOURCE_DIR}/src/utils/math_defines.cpp
     ${CMAKE_SOURCE_DIR}/src/utils/benchmark_resources.cpp
     # scene_descriptor.cpp es específico de CUDA
     
@@ -110,6 +139,19 @@ set(CORE_SOURCES
     # Application
     ${CMAKE_SOURCE_DIR}/src/appSDLGL.cpp
     ${CMAKE_SOURCE_DIR}/src/appSDLRenderer.cpp
+
+    # ==== NEW SOLID Architecture ====
+    # Core - Scene Management
+    ${CMAKE_SOURCE_DIR}/src/core/scene/scene.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/scene/scene_builder.cpp
+    
+    # Core - Rendering
+    ${CMAKE_SOURCE_DIR}/src/core/rendering/base_compute_renderer.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/rendering/render_pipeline.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/rendering/gpu_cull_renderer.cpp
+    
+    # Core - Shaders
+    ${CMAKE_SOURCE_DIR}/src/core/shader/shader_base.cpp
 )
 
 add_library(lib_core STATIC ${CORE_HEADERS} ${CORE_SOURCES} ${EXTERN_INCLUDE_DIRS})
@@ -191,6 +233,7 @@ target_include_directories(lib_parallel PUBLIC
 
 target_link_libraries(lib_parallel PUBLIC 
     glm 
+    glad
 )
 
 set_target_properties(lib_parallel PROPERTIES

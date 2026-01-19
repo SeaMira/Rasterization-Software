@@ -1,7 +1,7 @@
 #ifndef SPHERE_H
 #define SPHERE_H
 
-#include "utils/math_defines"
+#include "utils/math_defines.h"
 #include <glm/glm.hpp>  // Usamos glm para representar vectores y operaciones matemáticas
 
 
@@ -15,6 +15,8 @@
  * 
  * It may also contain color and visibility attributes.
  */
+namespace geometry {
+
 class Sphere 
 {
 public:
@@ -79,5 +81,7 @@ public:
      */
     float getVolume() const { return (4.0f / 3.0f) * _PI * m_radius * m_radius * m_radius; }
 };
+
+} // namespace geometry
 
 #endif // SPHERE_H

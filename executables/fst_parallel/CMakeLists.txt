@@ -128,8 +128,37 @@ set_target_properties(fst_gpu_cylinders_indirect PROPERTIES
     VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
 
+# ------------------------------------------------------------------------------
+# GPU Culling - REFACTORED (SOLID Architecture Example)
+# ------------------------------------------------------------------------------
+# This version demonstrates the new SOLID-compliant architecture:
+#   - RenderConfig/SceneConfig: Builder pattern for configuration
+#   - Scene/SceneBuilder: Clean scene management
+#   - RenderPipeline: Facade for orchestration
+#   - GPUCullRenderer: Concrete renderer implementation
+# ------------------------------------------------------------------------------
+add_executable(fst_gpu_refactored
+    ${CMAKE_SOURCE_DIR}/executables/fst_parallel/gpu_cull/main_refactored.cpp
+)
+
+target_link_libraries(fst_gpu_refactored PRIVATE 
+    lib_core
+    lib_parallel
+)
+
+target_include_directories(fst_gpu_refactored PRIVATE 
+    ${CMAKE_SOURCE_DIR}/include
+    ${EXTERN_INCLUDE_DIRS}
+)
+
+set_target_properties(fst_gpu_refactored PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${FST_OUTPUT_DIR}/gpu_cull"
+    VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
+)
+
 message(STATUS "  - fst_cpu_spheres")
 message(STATUS "  - fst_cpu_cylinders")
 message(STATUS "  - fst_gpu_spheres")
 message(STATUS "  - fst_gpu_cylinders")
 message(STATUS "  - fst_gpu_cylinders_indirect")
+message(STATUS "  - fst_gpu_refactored (SOLID Architecture)")

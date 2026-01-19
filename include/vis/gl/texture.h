@@ -197,9 +197,9 @@ public:
     GLuint getId() const;
 
 private:
-    GLuint m_id; ///< Id of the texture.
-    GLuint m_unit; ///< Unit of the texture.
-    GLenum m_target; ///< target texture to set.
+    GLuint m_id = 0; ///< Id of the texture.
+    GLuint m_unit = 0; ///< Unit of the texture.
+    GLenum m_target = 0; ///< target texture to set.
     friend class Canvas; ///< Friend class Canvas so it can access private atributes.
     friend class TextureCUDAWrapper; ///< Friend class TextureCUDAWrapper so it can access private atributes.
 };

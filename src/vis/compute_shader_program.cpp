@@ -46,6 +46,7 @@ ComputeShader::ComputeShader(const char* computePath, const char* computeName)
     checkCompileErrors(ID, "PROGRAM");
     // delete the shaders as they're linked into our program now and no longer necessary
     glDeleteShader(compute);
+    std::cout << "Loaded Compute Shader: " << computeName << "\n";
 }
 void ComputeShader::use() 
 { 
