@@ -339,7 +339,7 @@ __global__ void sphereRasterKernel(
                     pixelOwnershipBuffer[index] = (unsigned int)idx;
                     glm::vec3 normal = glm::normalize(glm::vec3(cst.cameraPos) + rd * t - glm::vec3(posr));
                     float lambert = glm::max(0.0f, glm::dot(normal, -glm::normalize(rd * t)));
-                    glm::vec3 color = glm::vec3(atomsColor.x, atomsColor.y, atomsColor.z) * lambert * diffuse;
+                    glm::vec3 color = glm::vec3(atomsColor[0], atomsColor[1], atomsColor[2]) * lambert * diffuse;
                     uchar4 ucharColor = make_uchar4(color.x*255, color.y*255, color.z*255, 255); 
                     surf2Dwrite(ucharColor, outputImage, px * sizeof(uchar4), py); 
                 }

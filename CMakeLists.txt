@@ -76,18 +76,15 @@ include(${CMAKE_SOURCE_DIR}/cmake/CompilerSettings.cmake)
 # BIBLIOTECAS DEL PROYECTO
 # ==============================================================================
 
-add_subdirectory(src)
-
 # Dependencias externas (OpenGL, SDL3, GLM, ImGui, chemfiles)
 include(${CMAKE_SOURCE_DIR}/cmake/Dependencies.cmake)
 
-
-
 # Configuración de CUDA (arquitecturas, flags)
 if(BUILD_CUDA_VERSION)
-    include(${CMAKE_SOURCE_DIR}/cmake/CUDASettings.cmake)
+include(${CMAKE_SOURCE_DIR}/cmake/CUDASettings.cmake)
 endif()
 
+add_subdirectory(src)
 
 # Funciones helper para crear targets
 include(${CMAKE_SOURCE_DIR}/cmake/BuildTargets.cmake)

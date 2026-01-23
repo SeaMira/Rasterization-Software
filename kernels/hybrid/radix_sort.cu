@@ -6,11 +6,8 @@
  * Sorts billboards by center depth to enable early-Z rejection during tiled rendering.
  */
 
-#define GLM_FORCE_CUDA
-#define GLM_ENABLE_EXPERIMENTAL
-#define GLM_FORCE_INLINE
-
 #include <cuda_runtime.h>
+#include <cuda.h>  // Required for CUDA_VERSION definition before GLM
 #include <device_launch_parameters.h>
 #include <cub/cub.cuh>
 #include <glm/glm.hpp>
@@ -107,31 +104,48 @@ struct RadixSortTempStorage {
     size_t max_elements;
 };
 
+// Helper macro for CUDA error checking
+#define CUDA_CHECK(call) do { \
+    cudaError_t err = call; \
+    if (err != cudaSuccess) { \
+        printf("CUDA error %d [%s, %d]: %s\n", err, __FILE__, __LINE__, cudaGetErrorString(err)); \
+    } \
+} while(0)
+
 extern "C" void allocateRadixSortTempStorage(
     RadixSortTempStorage** storage,
     size_t maxElements,
     cudaStream_t stream)
 {
+    // Clear any previous CUDA errors
+    cudaGetLastError();
+    
     RadixSortTempStorage* s = new RadixSortTempStorage();
     s->max_elements = maxElements;
     
     // Allocate key/value buffers
-    cudaMalloc(&s->d_keys_in, maxElements * sizeof(unsigned int));
-    cudaMalloc(&s->d_keys_out, maxElements * sizeof(unsigned int));
-    cudaMalloc(&s->d_values_in, maxElements * sizeof(unsigned int));
-    cudaMalloc(&s->d_values_out, maxElements * sizeof(unsigned int));
+    CUDA_CHECK(cudaMalloc(&s->d_keys_in, maxElements * sizeof(unsigned int)));
+    CUDA_CHECK(cudaMalloc(&s->d_keys_out, maxElements * sizeof(unsigned int)));
+    CUDA_CHECK(cudaMalloc(&s->d_values_in, maxElements * sizeof(unsigned int)));
+    CUDA_CHECK(cudaMalloc(&s->d_values_out, maxElements * sizeof(unsigned int)));
+    
+    // Initialize buffers to zero to avoid uninitialized memory issues
+    CUDA_CHECK(cudaMemset(s->d_keys_in, 0, maxElements * sizeof(unsigned int)));
+    CUDA_CHECK(cudaMemset(s->d_keys_out, 0, maxElements * sizeof(unsigned int)));
+    CUDA_CHECK(cudaMemset(s->d_values_in, 0, maxElements * sizeof(unsigned int)));
+    CUDA_CHECK(cudaMemset(s->d_values_out, 0, maxElements * sizeof(unsigned int)));
     
     // Determine temporary storage size
     s->d_temp_storage = nullptr;
     s->temp_storage_bytes = 0;
-    cub::DeviceRadixSort::SortPairs(
+    CUDA_CHECK(cub::DeviceRadixSort::SortPairs(
         s->d_temp_storage, s->temp_storage_bytes,
         s->d_keys_in, s->d_keys_out,
         s->d_values_in, s->d_values_out,
-        maxElements);
+        (int)maxElements));
     
     // Allocate temporary storage
-    cudaMalloc(&s->d_temp_storage, s->temp_storage_bytes);
+    CUDA_CHECK(cudaMalloc(&s->d_temp_storage, s->temp_storage_bytes));
     
     *storage = s;
 }
@@ -156,23 +170,32 @@ extern "C" void launchSphereBillboardSort(
 {
     if (count == 0) return;
     
+    // Ensure count doesn't exceed allocated storage
+    if (count > storage->max_elements) {
+        printf("Warning: Sort count %u exceeds max elements %zu, clamping\n", 
+               count, storage->max_elements);
+        count = (unsigned int)storage->max_elements;
+    }
+    
     dim3 block(256);
     dim3 grid((count + block.x - 1) / block.x);
     
     // Extract keys
     extractSphereSortKeysKernel<<<grid, block, 0, stream>>>(
         d_billboards_in, storage->d_keys_in, storage->d_values_in, count);
+    CUDA_CHECK(cudaGetLastError());
     
     // Sort
-    cub::DeviceRadixSort::SortPairs(
+    CUDA_CHECK(cub::DeviceRadixSort::SortPairs(
         storage->d_temp_storage, storage->temp_storage_bytes,
         storage->d_keys_in, storage->d_keys_out,
         storage->d_values_in, storage->d_values_out,
-        count, 0, 32, stream);
+        (int)count, 0, 32, stream));
     
     // Reorder billboards
     reorderSphereBillboardsKernel<<<grid, block, 0, stream>>>(
         d_billboards_in, storage->d_values_out, d_billboards_out, count);
+    CUDA_CHECK(cudaGetLastError());
 }
 
 extern "C" void launchCylinderBillboardSort(
@@ -184,21 +207,30 @@ extern "C" void launchCylinderBillboardSort(
 {
     if (count == 0) return;
     
+    // Ensure count doesn't exceed allocated storage
+    if (count > storage->max_elements) {
+        printf("Warning: Sort count %u exceeds max elements %zu, clamping\n", 
+               count, storage->max_elements);
+        count = (unsigned int)storage->max_elements;
+    }
+    
     dim3 block(256);
     dim3 grid((count + block.x - 1) / block.x);
     
     // Extract keys
     extractCylinderSortKeysKernel<<<grid, block, 0, stream>>>(
         d_billboards_in, storage->d_keys_in, storage->d_values_in, count);
+    CUDA_CHECK(cudaGetLastError());
     
     // Sort
-    cub::DeviceRadixSort::SortPairs(
+    CUDA_CHECK(cub::DeviceRadixSort::SortPairs(
         storage->d_temp_storage, storage->temp_storage_bytes,
         storage->d_keys_in, storage->d_keys_out,
         storage->d_values_in, storage->d_values_out,
-        count, 0, 32, stream);
+        (int)count, 0, 32, stream));
     
     // Reorder billboards
     reorderCylinderBillboardsKernel<<<grid, block, 0, stream>>>(
         d_billboards_in, storage->d_values_out, d_billboards_out, count);
+    CUDA_CHECK(cudaGetLastError());
 }

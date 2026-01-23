@@ -7,11 +7,8 @@
  * Entities are sorted front-to-back for early-Z rejection.
  */
 
-#define GLM_FORCE_CUDA
-#define GLM_ENABLE_EXPERIMENTAL
-#define GLM_FORCE_INLINE
-
 #include <cuda_runtime.h>
+#include <cuda.h>  // Required for CUDA_VERSION definition before GLM
 #include <device_launch_parameters.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>

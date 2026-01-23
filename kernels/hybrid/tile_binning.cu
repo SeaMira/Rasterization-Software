@@ -6,11 +6,8 @@
  * Uses atomic operations to build per-tile entity lists.
  */
 
-#define GLM_FORCE_CUDA
-#define GLM_ENABLE_EXPERIMENTAL
-#define GLM_FORCE_INLINE
-
 #include <cuda_runtime.h>
+#include <cuda.h>  // Required for CUDA_VERSION definition before GLM
 #include <device_launch_parameters.h>
 #include <glm/glm.hpp>
 
@@ -154,6 +151,14 @@ struct TileBinningData {
     unsigned int maxEntriesPerType;
 };
 
+// Helper macro for CUDA error checking
+#define CUDA_CHECK_BINNING(call) do { \
+    cudaError_t err = call; \
+    if (err != cudaSuccess) { \
+        printf("CUDA error %d [%s, %d]: %s\n", err, __FILE__, __LINE__, cudaGetErrorString(err)); \
+    } \
+} while(0)
+
 extern "C" void allocateTileBinningData(
     TileBinningData** data,
     unsigned int tilesX,
@@ -161,24 +166,33 @@ extern "C" void allocateTileBinningData(
     unsigned int maxEntities,
     cudaStream_t stream)
 {
+    // Clear any previous CUDA errors
+    cudaGetLastError();
+    
     TileBinningData* d = new TileBinningData();
     d->tileCount = tilesX * tilesY;
     // Each entity can span multiple tiles, estimate max entries
     d->maxEntriesPerType = maxEntities * 16; // Assume average 16 tiles per large entity
     
     // Sphere binning
-    cudaMalloc(&d->d_sphereTileCounts, d->tileCount * sizeof(unsigned int));
-    cudaMalloc(&d->d_sphereTileOffsets, d->tileCount * sizeof(unsigned int));
-    cudaMalloc(&d->d_sphereTileCurrentCounts, d->tileCount * sizeof(unsigned int));
-    cudaMalloc(&d->d_sphereTileEntityIndices, d->maxEntriesPerType * sizeof(unsigned int));
-    cudaMalloc(&d->d_sphereTotalEntries, sizeof(unsigned int));
+    CUDA_CHECK_BINNING(cudaMalloc(&d->d_sphereTileCounts, d->tileCount * sizeof(unsigned int)));
+    CUDA_CHECK_BINNING(cudaMalloc(&d->d_sphereTileOffsets, d->tileCount * sizeof(unsigned int)));
+    CUDA_CHECK_BINNING(cudaMalloc(&d->d_sphereTileCurrentCounts, d->tileCount * sizeof(unsigned int)));
+    CUDA_CHECK_BINNING(cudaMalloc(&d->d_sphereTileEntityIndices, d->maxEntriesPerType * sizeof(unsigned int)));
+    CUDA_CHECK_BINNING(cudaMalloc(&d->d_sphereTotalEntries, sizeof(unsigned int)));
     
     // Cylinder binning
-    cudaMalloc(&d->d_cylinderTileCounts, d->tileCount * sizeof(unsigned int));
-    cudaMalloc(&d->d_cylinderTileOffsets, d->tileCount * sizeof(unsigned int));
-    cudaMalloc(&d->d_cylinderTileCurrentCounts, d->tileCount * sizeof(unsigned int));
-    cudaMalloc(&d->d_cylinderTileEntityIndices, d->maxEntriesPerType * sizeof(unsigned int));
-    cudaMalloc(&d->d_cylinderTotalEntries, sizeof(unsigned int));
+    CUDA_CHECK_BINNING(cudaMalloc(&d->d_cylinderTileCounts, d->tileCount * sizeof(unsigned int)));
+    CUDA_CHECK_BINNING(cudaMalloc(&d->d_cylinderTileOffsets, d->tileCount * sizeof(unsigned int)));
+    CUDA_CHECK_BINNING(cudaMalloc(&d->d_cylinderTileCurrentCounts, d->tileCount * sizeof(unsigned int)));
+    CUDA_CHECK_BINNING(cudaMalloc(&d->d_cylinderTileEntityIndices, d->maxEntriesPerType * sizeof(unsigned int)));
+    CUDA_CHECK_BINNING(cudaMalloc(&d->d_cylinderTotalEntries, sizeof(unsigned int)));
+    
+    // Initialize to zero
+    CUDA_CHECK_BINNING(cudaMemset(d->d_sphereTileCounts, 0, d->tileCount * sizeof(unsigned int)));
+    CUDA_CHECK_BINNING(cudaMemset(d->d_sphereTileOffsets, 0, d->tileCount * sizeof(unsigned int)));
+    CUDA_CHECK_BINNING(cudaMemset(d->d_cylinderTileCounts, 0, d->tileCount * sizeof(unsigned int)));
+    CUDA_CHECK_BINNING(cudaMemset(d->d_cylinderTileOffsets, 0, d->tileCount * sizeof(unsigned int)));
     
     *data = d;
 }

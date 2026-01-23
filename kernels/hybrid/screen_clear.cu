@@ -3,8 +3,6 @@
  * @brief Screen clearing kernel for the hybrid pipeline
  */
 
-#define GLM_FORCE_CUDA
-
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
 

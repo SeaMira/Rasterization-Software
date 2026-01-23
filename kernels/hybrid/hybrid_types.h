@@ -160,7 +160,7 @@ struct SortKeyValue {
 // Color and shading constants
 // ============================================================================
 
-__device__ __constant__ static const glm::vec3 atomsColor = glm::vec3(0.01f, 1.0f, 0.05f);
+__device__ __constant__ static const float3 atomsColor = {0.8f, 0.1f, 0.1f};
 __device__ __constant__ static const float diffuse = 0.9f;
 
 #endif // HYBRID_TYPES_H

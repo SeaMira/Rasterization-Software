@@ -148,7 +148,7 @@ public:
         const Cylinder* d_cylinders,
         unsigned int* d_depthBuffer,
         cudaSurfaceObject_t outputImage,
-        const Camera& camera,
+        Camera& camera,
         const Frustum& frustum,
         cudaStream_t stream)
     {
@@ -196,7 +196,7 @@ public:
     }
     
 private:
-    void uploadFrameConstants(const Camera& camera, const Frustum& frustum, cudaStream_t stream) {
+    void uploadFrameConstants(Camera& camera, const Frustum& frustum, cudaStream_t stream) {
         HybridConstants constants;
         
         constants.view = camera.getView();

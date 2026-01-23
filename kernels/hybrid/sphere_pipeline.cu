@@ -3,11 +3,8 @@
  * @brief Complete sphere processing pipeline implementation
  */
 
-#define GLM_FORCE_CUDA
-#define GLM_ENABLE_EXPERIMENTAL
-#define GLM_FORCE_INLINE
-
 #include <cuda_runtime.h>
+#include <cuda.h>  // Required for CUDA_VERSION definition before GLM
 #include <device_launch_parameters.h>
 #include <nvtx3/nvToolsExt.h>
 #include <glm/glm.hpp>
@@ -112,30 +109,46 @@ struct TileBinningData {
 // Pipeline Resource Management
 // ============================================================================
 
+// Helper macro for CUDA error checking
+#define CUDA_CHECK_PIPELINE(call) do { \
+    cudaError_t err = call; \
+    if (err != cudaSuccess) { \
+        printf("CUDA error %d [%s, %d]: %s\n", err, __FILE__, __LINE__, cudaGetErrorString(err)); \
+    } \
+} while(0)
+
 void initSpherePipelineResources(
     SpherePipelineResources* resources,
     int maxSpheres,
     int tilesX,
     int tilesY)
 {
+    // Clear any previous CUDA errors
+    cudaGetLastError();
+    
     resources->maxSpheres = maxSpheres;
     resources->tilesX = tilesX;
     resources->tilesY = tilesY;
     
     // Classification output buffers
-    cudaMalloc(&resources->d_smallIndices, maxSpheres * sizeof(unsigned int));
-    cudaMalloc(&resources->d_smallCount, sizeof(unsigned int));
-    cudaMalloc(&resources->d_largeCount, sizeof(unsigned int));
-    cudaMalloc(&resources->d_largeBillboards, maxSpheres * sizeof(SphereBillboard));
-    cudaMalloc(&resources->d_largeSorted, maxSpheres * sizeof(SphereBillboard));
+    CUDA_CHECK_PIPELINE(cudaMalloc(&resources->d_smallIndices, maxSpheres * sizeof(unsigned int)));
+    CUDA_CHECK_PIPELINE(cudaMalloc(&resources->d_smallCount, sizeof(unsigned int)));
+    CUDA_CHECK_PIPELINE(cudaMalloc(&resources->d_largeCount, sizeof(unsigned int)));
+    CUDA_CHECK_PIPELINE(cudaMalloc(&resources->d_largeBillboards, maxSpheres * sizeof(SphereBillboard)));
+    CUDA_CHECK_PIPELINE(cudaMalloc(&resources->d_largeSorted, maxSpheres * sizeof(SphereBillboard)));
     
     // Statistics
-    cudaMalloc(&resources->d_frustumPassedCount, sizeof(unsigned int));
+    CUDA_CHECK_PIPELINE(cudaMalloc(&resources->d_frustumPassedCount, sizeof(unsigned int)));
     
     // Host pinned memory for readback
-    cudaHostAlloc(&resources->h_smallCount, sizeof(unsigned int), cudaHostAllocDefault);
-    cudaHostAlloc(&resources->h_largeCount, sizeof(unsigned int), cudaHostAllocDefault);
-    cudaHostAlloc(&resources->h_frustumPassedCount, sizeof(unsigned int), cudaHostAllocDefault);
+    CUDA_CHECK_PIPELINE(cudaHostAlloc(&resources->h_smallCount, sizeof(unsigned int), cudaHostAllocDefault));
+    CUDA_CHECK_PIPELINE(cudaHostAlloc(&resources->h_largeCount, sizeof(unsigned int), cudaHostAllocDefault));
+    CUDA_CHECK_PIPELINE(cudaHostAlloc(&resources->h_frustumPassedCount, sizeof(unsigned int), cudaHostAllocDefault));
+    
+    // Initialize counters to zero
+    CUDA_CHECK_PIPELINE(cudaMemset(resources->d_smallCount, 0, sizeof(unsigned int)));
+    CUDA_CHECK_PIPELINE(cudaMemset(resources->d_largeCount, 0, sizeof(unsigned int)));
+    CUDA_CHECK_PIPELINE(cudaMemset(resources->d_frustumPassedCount, 0, sizeof(unsigned int)));
     
     // Radix sort storage
     allocateRadixSortTempStorage(&resources->sortStorage, maxSpheres, nullptr);

@@ -9,11 +9,8 @@
  * 4. Output to separate buffers for each path
  */
 
-#define GLM_FORCE_CUDA
-#define GLM_ENABLE_EXPERIMENTAL
-#define GLM_FORCE_INLINE
-
 #include <cuda_runtime.h>
+#include <cuda.h>  // Required for CUDA_VERSION definition before GLM
 #include <device_launch_parameters.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -236,13 +233,17 @@ __global__ void sphereFrustumBBoxClassifyKernel(
         bb.centerDepth = centerDepth;
         bb.originalIndex = idx;
         
-        // Compute tile range
-        bb.tileMinX = (unsigned int)(screenMin.x) >> TILE_SIZE_SHIFT;
-        bb.tileMinY = (unsigned int)(screenMin.y) >> TILE_SIZE_SHIFT;
-        bb.tileMaxX = (unsigned int)(screenMax.x - 1) >> TILE_SIZE_SHIFT;
-        bb.tileMaxY = (unsigned int)(screenMax.y - 1) >> TILE_SIZE_SHIFT;
+        // Compute tile range (ensure non-negative before cast)
+        bb.tileMinX = (unsigned int)fmaxf(0.0f, screenMin.x) >> TILE_SIZE_SHIFT;
+        bb.tileMinY = (unsigned int)fmaxf(0.0f, screenMin.y) >> TILE_SIZE_SHIFT;
+        float maxXForTile = fmaxf(0.0f, screenMax.x - 1.0f);
+        float maxYForTile = fmaxf(0.0f, screenMax.y - 1.0f);
+        bb.tileMaxX = (unsigned int)maxXForTile >> TILE_SIZE_SHIFT;
+        bb.tileMaxY = (unsigned int)maxYForTile >> TILE_SIZE_SHIFT;
         
         // Clamp tile coords
+        bb.tileMinX = min(bb.tileMinX, (unsigned int)(hybridCst.tilesX - 1));
+        bb.tileMinY = min(bb.tileMinY, (unsigned int)(hybridCst.tilesY - 1));
         bb.tileMaxX = min(bb.tileMaxX, (unsigned int)(hybridCst.tilesX - 1));
         bb.tileMaxY = min(bb.tileMaxY, (unsigned int)(hybridCst.tilesY - 1));
     }
@@ -309,13 +310,17 @@ __global__ void cylinderFrustumBBoxClassifyKernel(
         bb.centerDepth = centerDepth;
         bb.originalIndex = idx;
         
-        // Compute tile range
-        bb.tileMinX = (unsigned int)(screenMin.x) >> TILE_SIZE_SHIFT;
-        bb.tileMinY = (unsigned int)(screenMin.y) >> TILE_SIZE_SHIFT;
-        bb.tileMaxX = (unsigned int)(screenMax.x - 1) >> TILE_SIZE_SHIFT;
-        bb.tileMaxY = (unsigned int)(screenMax.y - 1) >> TILE_SIZE_SHIFT;
+        // Compute tile range (ensure non-negative before cast)
+        bb.tileMinX = (unsigned int)fmaxf(0.0f, screenMin.x) >> TILE_SIZE_SHIFT;
+        bb.tileMinY = (unsigned int)fmaxf(0.0f, screenMin.y) >> TILE_SIZE_SHIFT;
+        float maxXForTile = fmaxf(0.0f, screenMax.x - 1.0f);
+        float maxYForTile = fmaxf(0.0f, screenMax.y - 1.0f);
+        bb.tileMaxX = (unsigned int)maxXForTile >> TILE_SIZE_SHIFT;
+        bb.tileMaxY = (unsigned int)maxYForTile >> TILE_SIZE_SHIFT;
         
         // Clamp tile coords
+        bb.tileMinX = min(bb.tileMinX, (unsigned int)(hybridCst.tilesX - 1));
+        bb.tileMinY = min(bb.tileMinY, (unsigned int)(hybridCst.tilesY - 1));
         bb.tileMaxX = min(bb.tileMaxX, (unsigned int)(hybridCst.tilesX - 1));
         bb.tileMaxY = min(bb.tileMaxY, (unsigned int)(hybridCst.tilesY - 1));
     }
