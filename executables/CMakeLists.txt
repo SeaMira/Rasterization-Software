@@ -30,4 +30,5 @@ endif()
 
 if(BUILD_CUDA_VERSION)
     add_subdirectory(cuda)
+    add_subdirectory(cuda_hybrid)
 endif()
