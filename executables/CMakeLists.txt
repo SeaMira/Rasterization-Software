@@ -8,6 +8,7 @@
 #   - Second Parallel:  Segunda versión con OpenGL compute shaders
 #   - Standard:         Pipeline estándar de OpenGL
 #   - CUDA:             Versiones con interop CUDA-OpenGL
+#   - Hybrid GLSL:      Versión híbrida con OpenGL compute shaders
 #
 # ==============================================================================
 
@@ -31,4 +32,9 @@ endif()
 if(BUILD_CUDA_VERSION)
     add_subdirectory(cuda)
     add_subdirectory(cuda_hybrid)
+endif()
+
+# Hybrid GLSL version - uses same dependencies as FST_PARALLEL
+if(BUILD_FST_PARALLEL_VERSION)
+    add_subdirectory(hybrid_glsl)
 endif()

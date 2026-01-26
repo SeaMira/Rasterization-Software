@@ -20,6 +20,17 @@ void AppUI::addBenchmarkInfoComponent(std::string name, Benchmark* benchmark)
     components.push_back(std::make_unique<BenchmarkInfoComponent>(name, benchmark));
 }
 
+void AppUI::addPipelineConfigComponent(std::string name, 
+                                       int& smallThreshold,
+                                       int& tileSize,
+                                       int& maxEntitiesPerTile,
+                                       int& tilesX,
+                                       int& tilesY)
+{
+    components.push_back(std::make_unique<PipelineConfigComponent>(
+        name, smallThreshold, tileSize, maxEntitiesPerTile, tilesX, tilesY));
+}
+
 void AppUI::render()
 {
     for (auto& component : components)

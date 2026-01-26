@@ -1,0 +1,82 @@
+#version 460
+
+// =============================================================================
+// screen_clear.compute - Clear framebuffer, depth buffer, and all counters
+// =============================================================================
+//
+// Dispatch: (screenWidth/16, screenHeight/16, 1)
+// =============================================================================
+
+layout(local_size_x = 16, local_size_y = 16) in;
+
+// -----------------------------------------------------------------------------
+// Output Bindings
+// -----------------------------------------------------------------------------
+
+layout(rgba8, binding = 0) uniform image2D outputImage;
+
+layout(std430, binding = 1) buffer DepthBuffer {
+    uint depthBuffer[];
+};
+
+// Tile counters
+layout(std430, binding = 2) buffer TileSphereCounts {
+    uint tileSphereCounts[];
+};
+
+layout(std430, binding = 3) buffer TileCylinderCounts {
+    uint tileCylinderCounts[];
+};
+
+// Small entity counters (single value each)
+layout(std430, binding = 10) buffer SmallSphereCounter {
+    uint smallSphereCount;
+};
+
+layout(std430, binding = 11) buffer SmallCylinderCounter {
+    uint smallCylinderCount;
+};
+
+// -----------------------------------------------------------------------------
+// Uniforms
+// -----------------------------------------------------------------------------
+
+uniform ivec2 screenResolution;
+uniform float farPlane;
+uniform int tilesX;
+uniform int tilesY;
+
+// -----------------------------------------------------------------------------
+// Main
+// -----------------------------------------------------------------------------
+
+void main() {
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    
+    // Clear color to black
+    if (pixel.x < screenResolution.x && pixel.y < screenResolution.y) {
+        imageStore(outputImage, pixel, vec4(0.0, 0.0, 0.0, 1.0));
+        
+        // Clear depth to far plane
+        int pixelIndex = pixel.y * screenResolution.x + pixel.x;
+        depthBuffer[pixelIndex] = floatBitsToUint(farPlane);
+    }
+    
+    // Reset tile counters (first thread of each tile)
+    if (gl_LocalInvocationID.x == 0 && gl_LocalInvocationID.y == 0) {
+        int tileX = int(gl_WorkGroupID.x);
+        int tileY = int(gl_WorkGroupID.y);
+        
+        if (tileX < tilesX && tileY < tilesY) {
+            int tileIndex = tileY * tilesX + tileX;
+            tileSphereCounts[tileIndex] = 0;
+            tileCylinderCounts[tileIndex] = 0;
+        }
+        
+        // Reset small entity counters (only first work group)
+        if (gl_WorkGroupID.x == 0 && gl_WorkGroupID.y == 0) {
+            smallSphereCount = 0;
+            smallCylinderCount = 0;
+        }
+    }
+}

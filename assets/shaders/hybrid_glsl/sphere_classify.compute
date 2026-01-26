@@ -1,0 +1,233 @@
+#version 460
+
+// =============================================================================
+// sphere_classify.compute - Sphere Classification Only
+// =============================================================================
+//
+// This shader ONLY classifies spheres, it does NOT rasterize.
+//
+// For each sphere:
+//   1. Frustum culling
+//   2. BBox extraction
+//   3. Classification by area:
+//      - SMALL: Store index in small sphere list
+//      - LARGE: Store original index in each overlapping tile
+//
+// Dispatch: (sphereCount / 256, 1, 1)
+// =============================================================================
+
+layout(local_size_x = 256) in;
+
+// -----------------------------------------------------------------------------
+// Constants
+// -----------------------------------------------------------------------------
+
+#define TILE_SIZE 16
+#define TILE_SIZE_SHIFT 4
+#define MAX_ENTITIES_PER_TILE 256
+
+// -----------------------------------------------------------------------------
+// Tile Bindings
+// -----------------------------------------------------------------------------
+
+layout(std430, binding = 2) buffer TileSphereCounts {
+    uint tileSphereCounts[];
+};
+
+layout(std430, binding = 4) buffer TileSphereIndices {
+    uint tileSphereIndices[];  // [tileIndex * MAX_ENTITIES_PER_TILE + localIndex]
+};
+
+// -----------------------------------------------------------------------------
+// Small Sphere Output
+// -----------------------------------------------------------------------------
+
+layout(std430, binding = 10) buffer SmallSphereCounter {
+    uint smallSphereCount;
+};
+
+layout(std430, binding = 12) buffer SmallSphereIndices {
+    uint smallSphereIndices[];  // List of sphere indices that are "small"
+};
+
+// -----------------------------------------------------------------------------
+// Input Bindings
+// -----------------------------------------------------------------------------
+
+layout(std430, binding = 6) buffer SphereBuffer {
+    vec4 spheres[];  // xyz = position, w = radius
+};
+
+// -----------------------------------------------------------------------------
+// Uniforms
+// -----------------------------------------------------------------------------
+
+uniform mat4 view;
+uniform mat4 proj;
+
+uniform vec4 frustumTopFace;
+uniform vec4 frustumBottomFace;
+uniform vec4 frustumRightFace;
+uniform vec4 frustumLeftFace;
+uniform vec4 frustumFarFace;
+uniform vec4 frustumNearFace;
+
+uniform ivec2 screenResolution;
+
+uniform int sphereCount;
+uniform int smallEntityThreshold;
+uniform int tilesX;
+uniform int tilesY;
+
+// -----------------------------------------------------------------------------
+// Frustum Culling
+// -----------------------------------------------------------------------------
+
+bool isOnOrForwardOfPlane(vec4 plane, vec4 spherePosR) {
+    return dot(plane.xyz, spherePosR.xyz) - plane.w >= -spherePosR.w;
+}
+
+bool isSphereInFrustum(vec4 spherePosR) {
+    return isOnOrForwardOfPlane(frustumLeftFace, spherePosR) &&
+           isOnOrForwardOfPlane(frustumRightFace, spherePosR) &&
+           isOnOrForwardOfPlane(frustumFarFace, spherePosR) &&
+           isOnOrForwardOfPlane(frustumNearFace, spherePosR) &&
+           isOnOrForwardOfPlane(frustumTopFace, spherePosR) &&
+           isOnOrForwardOfPlane(frustumBottomFace, spherePosR);
+}
+
+// -----------------------------------------------------------------------------
+// BBox Computation
+// -----------------------------------------------------------------------------
+
+void computeSphereBBox(vec4 spherePosR, out ivec2 screenMin, out ivec2 screenMax) {
+    // Transform to camera space
+    vec3 cameraSpaceSphere = vec3(view * vec4(spherePosR.xyz, 1.0));
+    vec3 normCamSpaceSphere = normalize(cameraSpaceSphere);
+    vec3 camImposPos = cameraSpaceSphere - normCamSpaceSphere * spherePosR.w;
+    
+    // Compute billboard scale
+    float dist = length(cameraSpaceSphere) + 1e-6;
+    float sinAngle = spherePosR.w / dist;
+    float tanAngle = tan(asin(min(sinAngle, 0.999)));
+    float quadScale = tanAngle * length(camImposPos);
+    
+    // Compute billboard vectors
+    vec3 impU = normalize(cross(normCamSpaceSphere, vec3(0.0, 1.0, 0.0)));
+    if (length(impU) < 0.001) impU = vec3(1.0, 0.0, 0.0);
+    vec3 impV = cross(impU, normCamSpaceSphere) * quadScale;
+    impU *= quadScale;
+    
+    // Compute and project corners
+    vec3 corners[4];
+    corners[0] = camImposPos + impU + impV;
+    corners[1] = camImposPos - impU + impV;
+    corners[2] = camImposPos + impU - impV;
+    corners[3] = camImposPos - impU - impV;
+    
+    vec2 minC = vec2(1e6);
+    vec2 maxC = vec2(-1e6);
+    
+    for (int i = 0; i < 4; i++) {
+        vec4 clip = proj * vec4(corners[i], 1.0);
+        if (clip.w > 0.001) {
+            vec2 ndc = clip.xy / clip.w;
+            minC = min(minC, ndc);
+            maxC = max(maxC, ndc);
+        }
+    }
+    
+    // Convert to screen coordinates
+    screenMin.x = int(floor((minC.x * 0.5 + 0.5) * float(screenResolution.x)));
+    screenMin.y = int(floor((minC.y * 0.5 + 0.5) * float(screenResolution.y)));
+    screenMax.x = int(ceil((maxC.x * 0.5 + 0.5) * float(screenResolution.x)));
+    screenMax.y = int(ceil((maxC.y * 0.5 + 0.5) * float(screenResolution.y)));
+    
+    // Clamp to screen
+    screenMin = max(screenMin, ivec2(0));
+    screenMax = min(screenMax, screenResolution);
+}
+
+// -----------------------------------------------------------------------------
+// Tile Assignment for Large Spheres
+// -----------------------------------------------------------------------------
+
+void assignToTiles(uint sphereIndex, ivec2 screenMin, ivec2 screenMax) {
+    // Compute tile range
+    int tileMinX = screenMin.x >> TILE_SIZE_SHIFT;
+    int tileMinY = screenMin.y >> TILE_SIZE_SHIFT;
+    int tileMaxX = max(0, screenMax.x - 1) >> TILE_SIZE_SHIFT;
+    int tileMaxY = max(0, screenMax.y - 1) >> TILE_SIZE_SHIFT;
+    
+    // Clamp to valid tile range
+    tileMinX = clamp(tileMinX, 0, tilesX - 1);
+    tileMinY = clamp(tileMinY, 0, tilesY - 1);
+    tileMaxX = clamp(tileMaxX, 0, tilesX - 1);
+    tileMaxY = clamp(tileMaxY, 0, tilesY - 1);
+    
+    // Assign ORIGINAL sphere index to each overlapping tile
+    for (int ty = tileMinY; ty <= tileMaxY; ty++) {
+        for (int tx = tileMinX; tx <= tileMaxX; tx++) {
+            int tileIndex = ty * tilesX + tx;
+            
+            uint slot = atomicAdd(tileSphereCounts[tileIndex], 1u);
+            
+            if (slot < MAX_ENTITIES_PER_TILE) {
+                tileSphereIndices[tileIndex * MAX_ENTITIES_PER_TILE + slot] = sphereIndex;
+            }
+            // Overflow is ignored (rare case)
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Main
+// -----------------------------------------------------------------------------
+
+void main() {
+    uint sphereIndex = gl_GlobalInvocationID.x;
+    
+    if (sphereIndex >= sphereCount) {
+        return;
+    }
+    
+    vec4 spherePosR = spheres[sphereIndex];
+    
+    // =========================================================================
+    // STAGE 1: Frustum Culling
+    // =========================================================================
+    
+    if (!isSphereInFrustum(spherePosR)) {
+        return;
+    }
+    
+    // =========================================================================
+    // STAGE 2: BBox Extraction
+    // =========================================================================
+    
+    ivec2 screenMin, screenMax;
+    computeSphereBBox(spherePosR, screenMin, screenMax);
+    
+    // Compute bbox area
+    int width = screenMax.x - screenMin.x;
+    int height = screenMax.y - screenMin.y;
+    int area = width * height;
+    
+    // Skip tiny spheres
+    if (area < 1) {
+        return;
+    }
+    
+    // =========================================================================
+    // STAGE 3: Classification
+    // =========================================================================
+    
+    if (area <= smallEntityThreshold) {
+        // SMALL: Add to small sphere list for direct rasterization later
+        uint slot = atomicAdd(smallSphereCount, 1u);
+        smallSphereIndices[slot] = sphereIndex;
+    } else {
+        // LARGE: Assign to overlapping tiles for tiled rasterization
+        assignToTiles(sphereIndex, screenMin, screenMax);
+    }
+}

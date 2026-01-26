@@ -183,6 +183,25 @@ class Window
     virtual void setupBenchmarkInfoGui(std::string name, Benchmark* benchmark);
 
     /**
+     * @brief Sets UI Pipeline Config module.
+     * 
+     * Adds a UI component for configuring pipeline parameters like thresholds and tile settings.
+     * 
+     * @param name name of the component.
+     * @param smallThreshold Reference to the small entity threshold value.
+     * @param tileSize Reference to the tile size value.
+     * @param maxEntitiesPerTile Reference to max entities per tile.
+     * @param tilesX Reference to number of tiles in X.
+     * @param tilesY Reference to number of tiles in Y.
+     */
+    virtual void setupPipelineConfigGui(std::string name, 
+                                        int& smallThreshold,
+                                        int& tileSize,
+                                        int& maxEntitiesPerTile,
+                                        int& tilesX,
+                                        int& tilesY);
+
+    /**
      * @brief Start the ImGUI renderer.
      * 
      * Starts to render a new frame for the ImGUI and displays some basic info 

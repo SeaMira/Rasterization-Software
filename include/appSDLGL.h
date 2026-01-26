@@ -155,6 +155,21 @@ public:
         Window::setupBenchmarkInfoGui(name, benchmark);
     }
 
+    /** 
+     * @brief UI Pipeline Config module setup.
+     * 
+     * @copydoc Window::setupPipelineConfigGui
+     */
+    void setupPipelineConfigGui(std::string name, 
+                                int& smallThreshold,
+                                int& tileSize,
+                                int& maxEntitiesPerTile,
+                                int& tilesX,
+                                int& tilesY) override
+    {
+        Window::setupPipelineConfigGui(name, smallThreshold, tileSize, maxEntitiesPerTile, tilesX, tilesY);
+    }
+
     /**
      * @brief Get the GL context handle.
      * 

@@ -10,6 +10,7 @@
 #include "ui/components/camera_info.h"
 #include "ui/components/input_info.h"
 #include "ui/components/benchmark_info.h"
+#include "ui/components/pipeline_config.h"
 
 /**
  * @class AppUI
@@ -50,6 +51,23 @@ public:
      * @param benchmark A pointer to the benchmark object whose data will be displayed in the component.
      */
     void addBenchmarkInfoComponent(std::string name, Benchmark* benchmark);
+
+    /**
+     * @brief Adds a PipelineConfigComponent to the UI app.
+     * 
+     * @param name The name of the component.
+     * @param smallThreshold Reference to the small entity threshold value.
+     * @param tileSize Reference to the tile size value.
+     * @param maxEntitiesPerTile Reference to max entities per tile.
+     * @param tilesX Reference to number of tiles in X.
+     * @param tilesY Reference to number of tiles in Y.
+     */
+    void addPipelineConfigComponent(std::string name, 
+                                    int& smallThreshold,
+                                    int& tileSize,
+                                    int& maxEntitiesPerTile,
+                                    int& tilesX,
+                                    int& tilesY);
 
     /**
      * @brief Renders the UI app by rendering all its associated components.

@@ -293,6 +293,16 @@ void Window::setupBenchmarkInfoGui(std::string name, Benchmark* benchmark)
     m_ui->addBenchmarkInfoComponent(name, benchmark);
 }
 
+void Window::setupPipelineConfigGui(std::string name, 
+                                    int& smallThreshold,
+                                    int& tileSize,
+                                    int& maxEntitiesPerTile,
+                                    int& tilesX,
+                                    int& tilesY)
+{
+    m_ui->addPipelineConfigComponent(name, smallThreshold, tileSize, maxEntitiesPerTile, tilesX, tilesY);
+}
+
 void Window::startRenderImGui() const
 {
     ImGui_ImplSDL3_NewFrame();
