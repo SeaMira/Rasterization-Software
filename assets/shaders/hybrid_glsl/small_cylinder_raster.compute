@@ -4,10 +4,8 @@
 // small_cylinder_raster.compute - Direct Rasterization for Small Cylinders
 // =============================================================================
 //
-// This shader rasterizes "small" cylinders using the 1st version approach:
-// - One thread per cylinder
-// - Each thread iterates over all pixels in its bbox
-// - Efficient for small entities (low pixel count)
+// This shader rasterizes "small" cylinders using scanline rendering
+// over the rotated billboard quad.
 //
 // Dispatch: (smallCylinderCount / 256, 1, 1)
 // =============================================================================
@@ -60,60 +58,26 @@ uniform vec3 cameraPos;
 uniform ivec2 screenResolution;
 uniform float fov;
 
+// Screen ray casting uniforms (computed on CPU)
+uniform vec3 rayStart;  // Bottom-left corner ray direction (world space)
+uniform vec3 rayDx;     // Delta per pixel in X
+uniform vec3 rayDy;     // Delta per pixel in Y
+
 // -----------------------------------------------------------------------------
 // Constants
 // -----------------------------------------------------------------------------
 
-const vec3 lightColor = vec3(0.01, 1.0, 0.05);
+const vec3 lightColor = vec3(1.0, 0.0, 0.0);
 const float diffuseI = 0.9;
 
 // -----------------------------------------------------------------------------
-// BBox Computation
+// Ray-Cylinder Intersection (returns t and normal)
 // -----------------------------------------------------------------------------
 
-void computeCylinderBBox(vec3 pa, vec3 pb, float radius, out ivec2 screenMin, out ivec2 screenMax) {
-    vec3 camA = vec3(view * vec4(pa, 1.0));
-    vec3 camB = vec3(view * vec4(pb, 1.0));
-    
-    vec3 axis = camB - camA;
-    float axisLenSq = dot(axis, axis);
-    vec3 e = radius * sqrt(max(vec3(0.001), vec3(1.0) - axis * axis / axisLenSq));
-    
-    vec3 corners[4];
-    corners[0] = camA + e;
-    corners[1] = camA - e;
-    corners[2] = camB + e;
-    corners[3] = camB - e;
-    
-    vec2 minC = vec2(1e6);
-    vec2 maxC = vec2(-1e6);
-    
-    for (int i = 0; i < 4; i++) {
-        vec4 clip = proj * vec4(corners[i], 1.0);
-        if (clip.w > 0.001) {
-            vec2 ndc = clip.xy / clip.w;
-            minC = min(minC, ndc);
-            maxC = max(maxC, ndc);
-        }
-    }
-    
-    screenMin.x = int(floor((minC.x * 0.5 + 0.5) * float(screenResolution.x)));
-    screenMin.y = int(floor((minC.y * 0.5 + 0.5) * float(screenResolution.y)));
-    screenMax.x = int(ceil((maxC.x * 0.5 + 0.5) * float(screenResolution.x)));
-    screenMax.y = int(ceil((maxC.y * 0.5 + 0.5) * float(screenResolution.y)));
-    
-    screenMin = max(screenMin, ivec2(0));
-    screenMax = min(screenMax, screenResolution);
-}
-
-// -----------------------------------------------------------------------------
-// Ray-Cylinder Intersection
-// -----------------------------------------------------------------------------
-
-vec2 iCylinder(vec3 ro, vec3 rd, vec3 pa, vec3 pb, float ra) {
+vec4 iCylinder(vec3 ro, vec3 rd, vec3 pa, vec3 pb, float ra) {
     vec3 ba = pb - pa;
     vec3 oc = ro - pa;
-    
+
     float baba = dot(ba, ba);
     float bard = dot(ba, rd);
     float baoc = dot(ba, oc);
@@ -123,31 +87,76 @@ vec2 iCylinder(vec3 ro, vec3 rd, vec3 pa, vec3 pb, float ra) {
     float k0 = baba * dot(oc, oc) - baoc * baoc - ra * ra * baba;
     
     float h = k1 * k1 - k2 * k0;
-    if (h < 0.0) return vec2(-1.0);
+    if (h < 0.0) return vec4(-1.0);
     
     h = sqrt(h);
     float t = (-k1 - h) / k2;
-    
+
+    // Body hit - return t and normal
     float y = baoc + t * bard;
     if (y > 0.0 && y < baba) {
-        return vec2(t, y / baba);
+        vec3 normal = oc + t * rd - ba * y / baba;
+        return vec4(t, normal);
     }
     
-    t = ((y < 0.0 ? 0.0 : baba) - baoc) / bard;
-    if (abs(k1 + k2 * t) < h) {
-        return vec2(t, y < 0.0 ? 0.0 : 1.0);
-    }
-    
-    return vec2(-1.0);
+    // No caps for cylinders (bonds)
+    return vec4(-1.0);
 }
 
 // -----------------------------------------------------------------------------
-// Ray Direction
+// Rotated Quad Computation
 // -----------------------------------------------------------------------------
 
-vec3 computeRd(int px, int py, float fovTan, float halfFovTan) {
-    vec2 p = (-vec2(screenResolution) + 2.0 * vec2(px, py)) / vec2(screenResolution);
-    return normalize(p.x * right * halfFovTan + p.y * up * fovTan + front);
+void getCylinderQuad(out vec2 projectedPoints[4], vec3 pa, vec3 pb, vec3 center, float cylRadius) {
+    // Cylinder axis
+    vec3 z = normalize(pb - pa);
+
+    // Find orthonormal axes
+    vec3 x = normalize(cross(center, z));
+    vec3 y = normalize(cross(x, z));
+
+    // Compute impostor construction vectors
+    float dV0 = length(pa);
+    float dV1 = length(pb);
+
+    float sinAngle = cylRadius / dV0;
+    float angle = asin(min(sinAngle, 0.999));
+    vec3 y1 = y * cylRadius;
+    vec3 x2 = x * cylRadius * cos(angle);
+    vec3 y2 = y1 * sinAngle;
+    angle = asin(min(cylRadius / dV1, 0.999));
+    vec3 x3 = x * (dV1 - cylRadius) * tan(angle);
+
+    // Compute impostor vertices
+    vec3 v1 = pa - x2 + y2;
+    vec3 v2 = pa + x2 + y2;
+    vec3 v3 = pb - x3 + y1;
+    vec3 v4 = pb + x3 + y1;
+
+    vec4 v1Proj = proj * vec4(v1, 1.0);
+    vec4 v2Proj = proj * vec4(v2, 1.0);
+    vec4 v3Proj = proj * vec4(v3, 1.0);
+    vec4 v4Proj = proj * vec4(v4, 1.0);
+
+    vec3 ndcv1 = v1Proj.xyz / v1Proj.w;
+    vec3 ndcv2 = v2Proj.xyz / v2Proj.w;
+    vec3 ndcv3 = v3Proj.xyz / v3Proj.w;
+    vec3 ndcv4 = v4Proj.xyz / v4Proj.w;
+
+    projectedPoints[0] = vec2(ndcv1);
+    projectedPoints[1] = vec2(ndcv2);
+    projectedPoints[2] = vec2(ndcv4);  // Note order
+    projectedPoints[3] = vec2(ndcv3);
+}
+
+// -----------------------------------------------------------------------------
+// Scanline intersection helper
+// -----------------------------------------------------------------------------
+
+float intersectX(vec2 a, vec2 b, float y) {
+    if (a.y == b.y) return a.x;
+    float t = (y - a.y) / (b.y - a.y);
+    return a.x + t * (b.x - a.x);
 }
 
 // -----------------------------------------------------------------------------
@@ -165,47 +174,94 @@ void main() {
     Cylinder cyl = cylinders[cylIndex];
     vec3 pa = cyl.pa_r.xyz;
     vec3 pb = cyl.pb_r.xyz;
-    float radius = cyl.pa_r.w;
+    float ra = cyl.pa_r.w;
     
-    // Recompute bbox
-    ivec2 screenMin, screenMax;
-    computeCylinderBBox(pa, pb, radius, screenMin, screenMax);
+    // Transform to camera space
+    vec3 camSpaceCylA = vec3(view * vec4(pa, 1.0));
+    vec3 camSpaceCylB = vec3(view * vec4(pb, 1.0));
+
+    // Order by depth
+    vec3 camImpPosA, camImpPosB;
+    if (camSpaceCylA.z < camSpaceCylB.z) {
+        camImpPosA = camSpaceCylB;
+        camImpPosB = camSpaceCylA;
+    } else {
+        camImpPosA = camSpaceCylA;
+        camImpPosB = camSpaceCylB;
+    }
+
+    vec3 center = normalize((camImpPosA + camImpPosB) * 0.5);
+    
+    // Get rotated quad corners
+    vec2 projectedPoints[4];
+    getCylinderQuad(projectedPoints, camImpPosA, camImpPosB, center, ra);
     
     float aspectRatio = float(screenResolution.x) / float(screenResolution.y);
+    
+    // Convert to screen coordinates and find Y range
+    int minY = screenResolution.y;
+    int maxY = 0;
+    for (int i = 0; i < 4; i++) {
+        projectedPoints[i].x = (projectedPoints[i].x * 0.5 + 0.5) * float(screenResolution.x);
+        projectedPoints[i].y = (projectedPoints[i].y * 0.5 + 0.5) * float(screenResolution.y);
+        
+        minY = min(minY, int(floor(projectedPoints[i].y)));
+        maxY = max(maxY, int(ceil(projectedPoints[i].y)));
+    }
+
     float fovRad = radians(fov);
     float fovTan = tan(fovRad * 0.5);
     float halfFovTan = fovTan * aspectRatio;
     
-    for (int py = screenMin.y; py < screenMax.y; py++) {
-        for (int px = screenMin.x; px < screenMax.x; px++) {
-            vec3 rd = computeRd(px, py, fovTan, halfFovTan);
-            vec2 result = iCylinder(cameraPos, rd, pa, pb, radius);
+    // Scanline rendering over the rotated quad
+    for (int py = min(screenResolution.y - 1, maxY); py >= max(0, minY); --py) {
+        // Find X intersections with quad edges
+        float xIntersections[4];
+        int intersections = 0;
+
+        for (int i = 0; i < 4; ++i) {
+            vec2 a = projectedPoints[i];
+            vec2 b = projectedPoints[(i + 1) % 4];
+
+            if ((py >= a.y && py <= b.y) || (py >= b.y && py <= a.y)) {
+                xIntersections[intersections] = intersectX(a, b, float(py));
+                intersections++;
+            }
+        }
+
+        if (intersections >= 2) {
+            float xMin = xIntersections[0];
+            float xMax = xIntersections[0];
+            for (int i = 1; i < intersections; ++i) {
+                xMin = min(xMin, xIntersections[i]);
+                xMax = max(xMax, xIntersections[i]);
+            }
+
+            vec3 rayColStart = rayStart + float(py) * rayDy;
             
-            if (result.x > 0.0) {
-                vec3 hit = cameraPos + rd * result.x;
-                vec4 hitClip = proj * view * vec4(hit, 1.0);
-                float depth = hitClip.z / hitClip.w;
+            for (int px = max(0, int(ceil(xMin))); px <= min(int(floor(xMax)), screenResolution.x - 1); ++px) {
+                // Create view ray
+                vec2 p = (-vec2(screenResolution) + 2.0 * vec2(px, py)) / vec2(screenResolution);
+                vec3 rd = normalize(p.x * right * halfFovTan + p.y * up * fovTan + front);
+
+                vec4 tnor = iCylinder(cameraPos, rd, pa, pb, ra);
                 
-                uint depthU = floatBitsToUint(depth);
-                int pixelIndex = py * screenResolution.x + px;
-                
-                uint oldDepth = atomicMin(depthBuffer[pixelIndex], depthU);
-                
-                if (uintBitsToFloat(oldDepth) > depth) {
-                    vec3 ba = pb - pa;
-                    vec3 hitLocal = hit - pa;
-                    float h = dot(hitLocal, ba) / dot(ba, ba);
-                    vec3 normal;
-                    if (h > 0.0 && h < 1.0) {
-                        normal = normalize(hitLocal - ba * h);
-                    } else {
-                        normal = normalize(hitLocal - ba * clamp(h, 0.0, 1.0));
+                if (tnor.x > 0.0) {
+                    float t = tnor.x;
+                    vec3 hit = (rayColStart + float(px) * rayDx) * t;
+                    float depth = (hit.z * proj[2].z + proj[3].z) / -hit.z;
+                    
+                    uint depthU = floatBitsToUint(depth);
+                    int pixelIndex = py * screenResolution.x + px;
+                    
+                    uint oldDepth = atomicMin(depthBuffer[pixelIndex], depthU);
+                    
+                    if (uintBitsToFloat(oldDepth) > depth) {
+                        vec3 normal = normalize(vec3(tnor.y, tnor.z, tnor.w));
+                        float lambertCos = dot(normal, -normalize(t * rd));
+                        vec3 color = lambertCos * lightColor * diffuseI;
+                        imageStore(outputImage, ivec2(px, py), vec4(color, 1.0));
                     }
-                    
-                    float lambert = max(0.0, dot(normal, -normalize(rd)));
-                    vec3 color = lightColor * lambert * diffuseI;
-                    
-                    imageStore(outputImage, ivec2(px, py), vec4(color, 1.0));
                 }
             }
         }

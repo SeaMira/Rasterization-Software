@@ -149,7 +149,14 @@ struct HybridGLSLConfig {
     // -------------------------------------------------------------------------
     int tileSize = 16;
     int maxEntitiesPerTile = 256;
-    
+
+    // -------------------------------------------------------------------------
+    // Ray Casting Structure
+    // -------------------------------------------------------------------------
+    glm::vec3 rayStart;
+    glm::vec3 rayDx;
+    glm::vec3 rayDy;
+
     // -------------------------------------------------------------------------
     // Derived values (computed from above)
     // -------------------------------------------------------------------------
@@ -398,15 +405,56 @@ public:
         
         std::cout << "  All shaders loaded successfully." << std::endl;
     }
+
+    void computeScreenRayCasting(Camera& camera) 
+    {
+        // Compute screen ray casting parameters
+        float aspectRatio = static_cast<float>(m_config.screenWidth) / 
+        static_cast<float>(m_config.screenHeight);
+        float fovRad = glm::radians(camera.getFov());
+        float fovTan = std::tan(fovRad * 0.5f);
+        float halfFovTan = fovTan * aspectRatio;
+
+        glm::vec3 front = camera.getFront();
+        glm::vec3 up = camera.getUp();
+        glm::vec3 right = camera.getRight();
+
+        // View-space ray directions for screen corners
+        glm::vec3 corner00 = glm::normalize((-1.0f * halfFovTan) * right + 
+                            (-1.0f * fovTan) * up + front);
+        glm::vec3 corner10 = glm::normalize(( 1.0f * halfFovTan) * right + 
+                            (-1.0f * fovTan) * up + front);
+        glm::vec3 corner01 = glm::normalize((-1.0f * halfFovTan) * right + 
+                            ( 1.0f * fovTan) * up + front);
+
+        // Transform to world space
+        glm::mat3 viewMat3(camera.getView());
+        glm::vec3 wCorner00 = viewMat3 * corner00;
+        glm::vec3 wCorner10 = viewMat3 * corner10;
+        glm::vec3 wCorner01 = viewMat3 * corner01;
+
+        // Delta per pixel
+        m_config.rayDx = (wCorner10 - wCorner00) / static_cast<float>(m_config.screenWidth);
+        m_config.rayDy = (wCorner01 - wCorner00) / static_cast<float>(m_config.screenHeight);
+        m_config.rayStart = wCorner00;
+    }
     
     /**
      * @brief Execute one frame of the pipeline
+     * @param config Reference to config for runtime-adjustable parameters
      */
     void execute(Camera& camera, const Frustum& frustum,
-                 HybridGLSLResources& resources) {
+                 HybridGLSLResources& resources,
+                 HybridGLSLConfig& config) {
+        
+        // Update runtime-adjustable parameters from external config
+        m_config.smallEntityThreshold = config.smallEntityThreshold;
+        m_config.maxEntitiesPerTile = config.maxEntitiesPerTile;
         
         glm::ivec2 screenRes(m_config.screenWidth, m_config.screenHeight);
         
+        computeScreenRayCasting(camera);
+
         // =====================================================================
         // STAGE 0: Screen Clear + Reset ALL Counters
         // =====================================================================
@@ -510,6 +558,7 @@ public:
         setRasterUniforms(*m_tiledCylinderRasterShader, camera);
         m_tiledCylinderRasterShader->setInt("tilesX", m_config.tilesX);
         m_tiledCylinderRasterShader->setInt("tilesY", m_config.tilesY);
+        m_tiledCylinderRasterShader->setInt("maxEntitiesPerTile", m_config.maxEntitiesPerTile);
         
         glDispatchCompute(m_config.tilesX, m_config.tilesY, 1);
         glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
@@ -558,6 +607,11 @@ private:
         
         shader.setVec2I("screenResolution", screenRes);
         shader.setFloat("fov", camera.getFov());
+        
+        
+        shader.setVec3("rayStart", m_config.rayStart);
+        shader.setVec3("rayDx", m_config.rayDx);
+        shader.setVec3("rayDy", m_config.rayDy);
     }
     
     HybridGLSLConfig m_config;
@@ -593,6 +647,7 @@ HybridGLSLConfig loadConfiguration() {
     
     return config;
 }
+
 
 // ============================================================================
 // MAIN
@@ -757,7 +812,7 @@ int main(int argc, char* argv[]) {
         
         Frustum frustum(camera);
         
-        pipeline.execute(camera, frustum, resources);
+        pipeline.execute(camera, frustum, resources, config);
         
         glBindFramebuffer(GL_READ_FRAMEBUFFER, canvas.getFramebuffer().getId());
         isRunning = window.update();

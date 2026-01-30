@@ -70,6 +70,11 @@ uniform float fov;
 uniform int tilesX;
 uniform int tilesY;
 
+// Screen ray casting uniforms (computed on CPU)
+uniform vec3 rayStart;  // Bottom-left corner ray direction (world space)
+uniform vec3 rayDx;     // Delta per pixel in X
+uniform vec3 rayDy;     // Delta per pixel in Y
+
 // -----------------------------------------------------------------------------
 // Shared Memory
 // -----------------------------------------------------------------------------
@@ -228,16 +233,16 @@ void main() {
             float t = iSphere(cameraPos, rd, posR.xyz, posR.w);
             
             if (t > 0.0) {
-                vec3 hit = cameraPos + rd * t;
-                vec4 hitClip = proj * view * vec4(hit, 1.0);
-                float depth = hitClip.z / hitClip.w;
+                vec3 rayColStart = rayStart + float(pixelY) * rayDy;
+                vec3 hit = (rayColStart + float(pixelX) * rayDx) * t;
+                float depth = (hit.z * proj[2].z + proj[3].z) / -hit.z;
                 
                 if (depth < minDepth) {
                     minDepth = depth;
                     hasHit = true;
                     
-                    vec3 normal = normalize(hit - posR.xyz);
-                    float lambert = max(0.0, dot(normal, -normalize(rd)));
+                    vec3 normal = normalize(cameraPos + rd * t - posR.xyz);
+                    float lambert = max(0.0, dot(normal, -normalize(rd*t)));
                     finalColor = lightColor * lambert * diffuseI;
                 }
             }
@@ -249,11 +254,10 @@ void main() {
     if (hasHit) {
         int pixelIndex = pixelY * screenResolution.x + pixelX;
         uint depthU = floatBitsToUint(minDepth);
-        
-        uint oldDepth = atomicMin(depthBuffer[pixelIndex], depthU);
-        
-        if (uintBitsToFloat(oldDepth) > minDepth) {
+                
+        if (depthBuffer[pixelIndex] > depthU) {
             imageStore(outputImage, ivec2(pixelX, pixelY), vec4(finalColor, 1.0));
+            depthBuffer[pixelIndex] = depthU;
         }
     }
 }
