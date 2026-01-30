@@ -37,6 +37,24 @@ layout(std430, binding = 11) buffer SmallCylinderCounter {
     uint smallCylinderCount;
 };
 
+// Tile depth data for entities
+layout(std430, binding = 14) buffer TileSphereDepths {
+    float tileSphereDepths[];  // [tileIndex * MAX_ENTITIES_PER_TILE + slot]
+};
+
+layout(std430, binding = 15) buffer TileCylinderDepths {
+    float tileCylinderDepths[];
+};
+
+// Tile max depth cache: x = maxDepth (as float bits), y = slot index
+layout(std430, binding = 16) buffer TileSphereMaxCache {
+    uvec2 tileSphereMaxCache[];  // [tileIndex]
+};
+
+layout(std430, binding = 17) buffer TileCylinderMaxCache {
+    uvec2 tileCylinderMaxCache[];  // [tileIndex]
+};
+
 // -----------------------------------------------------------------------------
 // Uniforms
 // -----------------------------------------------------------------------------
@@ -45,6 +63,7 @@ uniform ivec2 screenResolution;
 uniform float farPlane;
 uniform int tilesX;
 uniform int tilesY;
+uniform int maxEntitiesPerTile;
 
 // -----------------------------------------------------------------------------
 // Main
@@ -62,15 +81,22 @@ void main() {
         depthBuffer[pixelIndex] = floatBitsToUint(farPlane);
     }
     
-    // Reset tile counters (first thread of each tile)
+    // Reset tile counters and caches (first thread of each tile)
     if (gl_LocalInvocationID.x == 0 && gl_LocalInvocationID.y == 0) {
         int tileX = int(gl_WorkGroupID.x);
         int tileY = int(gl_WorkGroupID.y);
         
         if (tileX < tilesX && tileY < tilesY) {
             int tileIndex = tileY * tilesX + tileX;
+            
+            // Reset counters
             tileSphereCounts[tileIndex] = 0;
             tileCylinderCounts[tileIndex] = 0;
+            
+            // Reset max cache to 0 depth (no entity)
+            // uvec2(0, 0) means: maxDepth = 0.0, slot = 0
+            tileSphereMaxCache[tileIndex] = uvec2(0, 0);
+            tileCylinderMaxCache[tileIndex] = uvec2(0, 0);
         }
         
         // Reset small entity counters (only first work group)

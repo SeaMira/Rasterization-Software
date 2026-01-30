@@ -295,11 +295,43 @@ public:
             config.cylinderCount * sizeof(GLuint),
             13, nullptr, GL_DYNAMIC_COPY);
         
+        // ---------------------------------------------------------------------
+        // Binding 14-15: Tile Entity Depths (for priority)
+        // ---------------------------------------------------------------------
+        size_t tileDepthsSize = config.totalTiles * config.maxEntitiesPerTile * sizeof(GLfloat);
+        
+        m_tileSphereDepths = std::make_unique<StorageBuffer>(
+            GL_SHADER_STORAGE_BUFFER,
+            tileDepthsSize,
+            14, nullptr, GL_DYNAMIC_COPY);
+        
+        m_tileCylinderDepths = std::make_unique<StorageBuffer>(
+            GL_SHADER_STORAGE_BUFFER,
+            tileDepthsSize,
+            15, nullptr, GL_DYNAMIC_COPY);
+        
+        // ---------------------------------------------------------------------
+        // Binding 16-17: Tile Max Depth Cache (uvec2: depth bits + slot)
+        // ---------------------------------------------------------------------
+        size_t tileCacheSize = config.totalTiles * 2 * sizeof(GLuint);  // uvec2 per tile
+        
+        m_tileSphereMaxCache = std::make_unique<StorageBuffer>(
+            GL_SHADER_STORAGE_BUFFER,
+            tileCacheSize,
+            16, nullptr, GL_DYNAMIC_COPY);
+        
+        m_tileCylinderMaxCache = std::make_unique<StorageBuffer>(
+            GL_SHADER_STORAGE_BUFFER,
+            tileCacheSize,
+            17, nullptr, GL_DYNAMIC_COPY);
+        
         // Print memory usage
         size_t totalMem = 
             config.screenWidth * config.screenHeight * sizeof(GLuint) +  // depth
             config.totalTiles * sizeof(GLuint) * 2 +                     // tile counters
             tileIndicesSize * 2 +                                         // tile indices
+            tileDepthsSize * 2 +                                          // tile depths
+            tileCacheSize * 2 +                                           // tile max cache
             config.sphereCount * sizeof(Sphere) +                        // spheres
             config.cylinderCount * sizeof(Cylinder) +                    // cylinders
             sizeof(GLuint) * 2 +                                          // small counters
@@ -340,6 +372,12 @@ private:
     std::unique_ptr<StorageBuffer> m_tileCylinderCounts;
     std::unique_ptr<StorageBuffer> m_tileSphereIndices;
     std::unique_ptr<StorageBuffer> m_tileCylinderIndices;
+    
+    // Tile depth priority data
+    std::unique_ptr<StorageBuffer> m_tileSphereDepths;
+    std::unique_ptr<StorageBuffer> m_tileCylinderDepths;
+    std::unique_ptr<StorageBuffer> m_tileSphereMaxCache;
+    std::unique_ptr<StorageBuffer> m_tileCylinderMaxCache;
     
     // Entity data
     std::unique_ptr<StorageBuffer> m_sphereBuffer;
@@ -464,6 +502,7 @@ public:
         m_screenClearShader->setFloat("farPlane", camera.getFar());
         m_screenClearShader->setInt("tilesX", m_config.tilesX);
         m_screenClearShader->setInt("tilesY", m_config.tilesY);
+        m_screenClearShader->setInt("maxEntitiesPerTile", m_config.maxEntitiesPerTile);
         
         glDispatchCompute(
             (m_config.screenWidth + 15) / 16,
@@ -524,44 +563,44 @@ public:
         // STAGE 4: Cylinder Classification
         // =====================================================================
         
-        m_cylinderClassifyShader->use();
-        setClassifyUniforms(*m_cylinderClassifyShader, camera, frustum);
-        m_cylinderClassifyShader->setInt("cylinderCount", m_config.cylinderCount);
-        m_cylinderClassifyShader->setInt("smallEntityThreshold", m_config.smallEntityThreshold);
-        m_cylinderClassifyShader->setInt("tilesX", m_config.tilesX);
-        m_cylinderClassifyShader->setInt("tilesY", m_config.tilesY);
+        // m_cylinderClassifyShader->use();
+        // setClassifyUniforms(*m_cylinderClassifyShader, camera, frustum);
+        // m_cylinderClassifyShader->setInt("cylinderCount", m_config.cylinderCount);
+        // m_cylinderClassifyShader->setInt("smallEntityThreshold", m_config.smallEntityThreshold);
+        // m_cylinderClassifyShader->setInt("tilesX", m_config.tilesX);
+        // m_cylinderClassifyShader->setInt("tilesY", m_config.tilesY);
         
-        glDispatchCompute((m_config.cylinderCount + 255) / 256, 1, 1);
-        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+        // glDispatchCompute((m_config.cylinderCount + 255) / 256, 1, 1);
+        // glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
         
-        // =====================================================================
-        // STAGE 5: Small Cylinder Direct Rasterization
-        // =====================================================================
+        // // =====================================================================
+        // // STAGE 5: Small Cylinder Direct Rasterization
+        // // =====================================================================
         
-        GLuint smallCylinderCount = resources.getSmallCylinderCount();
+        // GLuint smallCylinderCount = resources.getSmallCylinderCount();
         
-        if (smallCylinderCount > 0) {
-            m_smallCylinderRasterShader->use();
-            setRasterUniforms(*m_smallCylinderRasterShader, camera);
+        // if (smallCylinderCount > 0) {
+        //     m_smallCylinderRasterShader->use();
+        //     setRasterUniforms(*m_smallCylinderRasterShader, camera);
             
-            glDispatchCompute((smallCylinderCount + 255) / 256, 1, 1);
-            glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-        }
+        //     glDispatchCompute((smallCylinderCount + 255) / 256, 1, 1);
+        //     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+        // }
         
         
-        // =====================================================================
-        // STAGE 6: Tiled Rasterization for Large Cylinders
-        // =====================================================================
-        // Each tile processes its assigned large cylinders
+        // // =====================================================================
+        // // STAGE 6: Tiled Rasterization for Large Cylinders
+        // // =====================================================================
+        // // Each tile processes its assigned large cylinders
         
-        m_tiledCylinderRasterShader->use();
-        setRasterUniforms(*m_tiledCylinderRasterShader, camera);
-        m_tiledCylinderRasterShader->setInt("tilesX", m_config.tilesX);
-        m_tiledCylinderRasterShader->setInt("tilesY", m_config.tilesY);
-        m_tiledCylinderRasterShader->setInt("maxEntitiesPerTile", m_config.maxEntitiesPerTile);
+        // m_tiledCylinderRasterShader->use();
+        // setRasterUniforms(*m_tiledCylinderRasterShader, camera);
+        // m_tiledCylinderRasterShader->setInt("tilesX", m_config.tilesX);
+        // m_tiledCylinderRasterShader->setInt("tilesY", m_config.tilesY);
+        // m_tiledCylinderRasterShader->setInt("maxEntitiesPerTile", m_config.maxEntitiesPerTile);
         
-        glDispatchCompute(m_config.tilesX, m_config.tilesY, 1);
-        glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+        // glDispatchCompute(m_config.tilesX, m_config.tilesY, 1);
+        // glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
     }
     
 private:
@@ -589,6 +628,7 @@ private:
             glm::vec4(frustum.nearFace.normal, frustum.nearFace.distance));
         
         shader.setVec2I("screenResolution", screenRes);
+        shader.setVec3("cameraPos", camera.getPosition());
     }
     
     /**

@@ -1,17 +1,18 @@
 #version 460
 
 // =============================================================================
-// cylinder_classify.compute - Cylinder Classification Only
+// cylinder_classify.compute - Cylinder Classification with Depth Priority
 // =============================================================================
 //
-// This shader ONLY classifies cylinders, it does NOT rasterize.
+// This shader classifies cylinders with depth-aware tile assignment.
+// When a tile overflows, closer entities replace farther ones.
 //
 // For each cylinder:
 //   1. Frustum culling
 //   2. BBox extraction
 //   3. Classification by area:
 //      - SMALL: Store index in small cylinder list
-//      - LARGE: Store original index in each overlapping tile
+//      - LARGE: Store in tiles with depth priority
 //
 // Dispatch: (cylinderCount / 256, 1, 1)
 // =============================================================================
@@ -36,6 +37,16 @@ layout(std430, binding = 3) buffer TileCylinderCounts {
 
 layout(std430, binding = 5) buffer TileCylinderIndices {
     uint tileCylinderIndices[];  // [tileIndex * MAX_ENTITIES_PER_TILE + localIndex]
+};
+
+// Depth data for priority
+layout(std430, binding = 15) buffer TileCylinderDepths {
+    float tileCylinderDepths[];  // [tileIndex * MAX_ENTITIES_PER_TILE + slot]
+};
+
+// Max depth cache per tile: x = floatBitsToUint(maxDepth), y = slot
+layout(std430, binding = 17) buffer TileCylinderMaxCache {
+    uvec2 tileCylinderMaxCache[];  // [tileIndex]
 };
 
 // -----------------------------------------------------------------------------
@@ -83,6 +94,7 @@ uniform int cylinderCount;
 uniform int smallEntityThreshold;
 uniform int tilesX;
 uniform int tilesY;
+uniform vec3 cameraPos;
 
 // -----------------------------------------------------------------------------
 // Frustum Culling
@@ -266,10 +278,59 @@ bool tileIntersectsQuad(int tileX, int tileY, vec2 q0, vec2 q1, vec2 q2, vec2 q3
 }
 
 // -----------------------------------------------------------------------------
-// Tile Assignment for Large Cylinders (using rotated quad)
+// Tile Assignment for Large Cylinders (with depth priority)
 // -----------------------------------------------------------------------------
 
-void assignToTiles(uint cylinderIndex, vec2 q0, vec2 q1, vec2 q2, vec2 q3) {
+void assignToTileWithPriority(uint cylinderIndex, int tileIndex, float depth) {
+    uint depthBits = floatBitsToUint(depth);
+    
+    // Try to get a slot
+    uint slot = atomicAdd(tileCylinderCounts[tileIndex], 1u);
+    
+    if (slot < MAX_ENTITIES_PER_TILE) {
+        // Normal insertion - there's space
+        uint idx = tileIndex * MAX_ENTITIES_PER_TILE + slot;
+        tileCylinderIndices[idx] = cylinderIndex;
+        tileCylinderDepths[idx] = depth;
+        
+        // Update max cache if this is the farthest entity so far
+        uvec2 currentMax = tileCylinderMaxCache[tileIndex];
+        float currentMaxDepth = uintBitsToFloat(currentMax.x);
+        
+        if (depth > currentMaxDepth) {
+            // We're farther - update the cache
+            tileCylinderMaxCache[tileIndex] = uvec2(depthBits, slot);
+        }
+    } else {
+        // Overflow - revert the count increment
+        atomicAdd(tileCylinderCounts[tileIndex], -1u);
+        
+        // Check if we can replace the farthest entity
+        uvec2 maxCache = tileCylinderMaxCache[tileIndex];
+        float maxDepth = uintBitsToFloat(maxCache.x);
+        uint maxSlot = maxCache.y;
+        
+        // Only replace if we're closer (smaller depth) and slot is valid
+        if (depth < maxDepth && maxSlot < MAX_ENTITIES_PER_TILE) {
+            uint idx = tileIndex * MAX_ENTITIES_PER_TILE + maxSlot;
+            
+            // Read current depth at that slot
+            float slotDepth = tileCylinderDepths[idx];
+            
+            // Double-check: only replace if our depth is smaller
+            if (depth < slotDepth) {
+                // Replace the entity
+                tileCylinderIndices[idx] = cylinderIndex;
+                tileCylinderDepths[idx] = depth;
+                
+                // Update cache: we are now at this slot
+                tileCylinderMaxCache[tileIndex] = uvec2(depthBits, maxSlot);
+            }
+        }
+    }
+}
+
+void assignToTiles(uint cylinderIndex, vec2 q0, vec2 q1, vec2 q2, vec2 q3, float depth) {
     // First compute AABB of the quad to limit tile iteration
     vec2 minP = min(min(q0, q1), min(q2, q3));
     vec2 maxP = max(max(q0, q1), max(q2, q3));
@@ -284,26 +345,11 @@ void assignToTiles(uint cylinderIndex, vec2 q0, vec2 q1, vec2 q2, vec2 q3) {
     tileMaxX = clamp(tileMaxX, 0, tilesX - 1);
     tileMaxY = clamp(tileMaxY, 0, tilesY - 1);
     
-    // For each tile in AABB, check if it actually intersects the quad
+    // For each tile in AABB, assign with depth priority
     for (int ty = tileMinY; ty <= tileMaxY; ty++) {
         for (int tx = tileMinX; tx <= tileMaxX; tx++) {
-            // Precise intersection test
-            // if (tileIntersectsQuad(tx, ty, q0, q1, q2, q3)) {
-            //     int tileIndex = ty * tilesX + tx;
-                
-            //     uint slot = atomicAdd(tileCylinderCounts[tileIndex], 1u);
-                
-            //     if (slot < MAX_ENTITIES_PER_TILE) {
-            //         tileCylinderIndices[tileIndex * MAX_ENTITIES_PER_TILE + slot] = cylinderIndex;
-            //     }
-            // }
             int tileIndex = ty * tilesX + tx;
-            
-            uint slot = atomicAdd(tileCylinderCounts[tileIndex], 1u);
-            
-            if (slot < MAX_ENTITIES_PER_TILE) {
-                tileCylinderIndices[tileIndex * MAX_ENTITIES_PER_TILE + slot] = cylinderIndex;
-            }
+            assignToTileWithPriority(cylinderIndex, tileIndex, depth);
         }
     }
 }
@@ -387,7 +433,14 @@ void main() {
     }
     
     // =========================================================================
-    // STAGE 3: Classification
+    // STAGE 3: Compute Depth (distance from camera to cylinder center)
+    // =========================================================================
+    
+    vec3 cylinderCenter = (pa + pb) * 0.5;
+    float depth = distance(cameraPos, cylinderCenter);
+    
+    // =========================================================================
+    // STAGE 4: Classification
     // =========================================================================
     
     if (area <= float(smallEntityThreshold)) {
@@ -395,9 +448,10 @@ void main() {
         uint slot = atomicAdd(smallCylinderCount, 1u);
         smallCylinderIndices[slot] = cylIndex;
     } else {
-        // LARGE: Assign to overlapping tiles using rotated quad intersection
+        // LARGE: Assign to overlapping tiles with depth priority
         assignToTiles(cylIndex, 
                       projectedPoints[0], projectedPoints[1], 
-                      projectedPoints[2], projectedPoints[3]);
+                      projectedPoints[2], projectedPoints[3],
+                      depth);
     }
 }

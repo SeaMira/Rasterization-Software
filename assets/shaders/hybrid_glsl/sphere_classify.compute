@@ -1,17 +1,18 @@
 #version 460
 
 // =============================================================================
-// sphere_classify.compute - Sphere Classification Only
+// sphere_classify.compute - Sphere Classification with Depth Priority
 // =============================================================================
 //
-// This shader ONLY classifies spheres, it does NOT rasterize.
+// This shader classifies spheres with depth-aware tile assignment.
+// When a tile overflows, closer entities replace farther ones.
 //
 // For each sphere:
 //   1. Frustum culling
 //   2. BBox extraction
 //   3. Classification by area:
 //      - SMALL: Store index in small sphere list
-//      - LARGE: Store original index in each overlapping tile
+//      - LARGE: Store in tiles with depth priority
 //
 // Dispatch: (sphereCount / 256, 1, 1)
 // =============================================================================
@@ -36,6 +37,16 @@ layout(std430, binding = 2) buffer TileSphereCounts {
 
 layout(std430, binding = 4) buffer TileSphereIndices {
     uint tileSphereIndices[];  // [tileIndex * MAX_ENTITIES_PER_TILE + localIndex]
+};
+
+// Depth data for priority
+layout(std430, binding = 14) buffer TileSphereDepths {
+    float tileSphereDepths[];  // [tileIndex * MAX_ENTITIES_PER_TILE + slot]
+};
+
+// Max depth cache per tile: x = floatBitsToUint(maxDepth), y = slot
+layout(std430, binding = 16) buffer TileSphereMaxCache {
+    uvec2 tileSphereMaxCache[];  // [tileIndex]
 };
 
 // -----------------------------------------------------------------------------
@@ -78,6 +89,7 @@ uniform int sphereCount;
 uniform int smallEntityThreshold;
 uniform int tilesX;
 uniform int tilesY;
+uniform vec3 cameraPos;
 
 // -----------------------------------------------------------------------------
 // Frustum Culling
@@ -149,10 +161,63 @@ void computeSphereBBox(vec4 spherePosR, out ivec2 screenMin, out ivec2 screenMax
 }
 
 // -----------------------------------------------------------------------------
-// Tile Assignment for Large Spheres
+// Tile Assignment for Large Spheres (with depth priority)
 // -----------------------------------------------------------------------------
 
-void assignToTiles(uint sphereIndex, ivec2 screenMin, ivec2 screenMax) {
+void assignToTileWithPriority(uint sphereIndex, int tileIndex, float depth) {
+    uint depthBits = floatBitsToUint(depth);
+    
+    // Try to get a slot
+    uint slot = atomicAdd(tileSphereCounts[tileIndex], 1u);
+    
+    if (slot < MAX_ENTITIES_PER_TILE) {
+        // Normal insertion - there's space
+        uint idx = tileIndex * MAX_ENTITIES_PER_TILE + slot;
+        tileSphereIndices[idx] = sphereIndex;
+        tileSphereDepths[idx] = depth;
+        
+        // Update max cache if this is the farthest entity so far
+        // Use atomicMax on packed (depth, slot) to ensure consistency
+        uvec2 currentMax = tileSphereMaxCache[tileIndex];
+        float currentMaxDepth = uintBitsToFloat(currentMax.x);
+        
+        if (depth > currentMaxDepth) {
+            // We're farther - update the cache
+            // Note: This is not perfectly atomic but acceptable for approximate cache
+            tileSphereMaxCache[tileIndex] = uvec2(depthBits, slot);
+        }
+    } else {
+        // Overflow - revert the count increment
+        atomicAdd(tileSphereCounts[tileIndex], -1u);
+        
+        // Check if we can replace the farthest entity
+        uvec2 maxCache = tileSphereMaxCache[tileIndex];
+        float maxDepth = uintBitsToFloat(maxCache.x);
+        uint maxSlot = maxCache.y;
+        
+        // Only replace if we're closer (smaller depth) and slot is valid
+        if (depth < maxDepth && maxSlot < MAX_ENTITIES_PER_TILE) {
+            uint idx = tileIndex * MAX_ENTITIES_PER_TILE + maxSlot;
+            
+            // Read current depth at that slot
+            float slotDepth = tileSphereDepths[idx];
+            
+            // Double-check: only replace if our depth is smaller
+            // This handles the case where cache is slightly stale
+            if (depth < slotDepth) {
+                // Replace the entity
+                tileSphereIndices[idx] = sphereIndex;
+                tileSphereDepths[idx] = depth;
+                
+                // Update cache: we are now at this slot
+                // Assume we're the new farthest (approximate)
+                tileSphereMaxCache[tileIndex] = uvec2(depthBits, maxSlot);
+            }
+        }
+    }
+}
+
+void assignToTiles(uint sphereIndex, ivec2 screenMin, ivec2 screenMax, float depth) {
     // Compute tile range
     int tileMinX = screenMin.x >> TILE_SIZE_SHIFT;
     int tileMinY = screenMin.y >> TILE_SIZE_SHIFT;
@@ -165,17 +230,11 @@ void assignToTiles(uint sphereIndex, ivec2 screenMin, ivec2 screenMax) {
     tileMaxX = clamp(tileMaxX, 0, tilesX - 1);
     tileMaxY = clamp(tileMaxY, 0, tilesY - 1);
     
-    // Assign ORIGINAL sphere index to each overlapping tile
+    // Assign sphere to each overlapping tile with depth priority
     for (int ty = tileMinY; ty <= tileMaxY; ty++) {
         for (int tx = tileMinX; tx <= tileMaxX; tx++) {
             int tileIndex = ty * tilesX + tx;
-            
-            uint slot = atomicAdd(tileSphereCounts[tileIndex], 1u);
-            
-            if (slot < MAX_ENTITIES_PER_TILE) {
-                tileSphereIndices[tileIndex * MAX_ENTITIES_PER_TILE + slot] = sphereIndex;
-            }
-            // Overflow is ignored (rare case)
+            assignToTileWithPriority(sphereIndex, tileIndex, depth);
         }
     }
 }
@@ -219,7 +278,13 @@ void main() {
     }
     
     // =========================================================================
-    // STAGE 3: Classification
+    // STAGE 3: Compute Depth (distance from camera to sphere center)
+    // =========================================================================
+    
+    float depth = distance(cameraPos, spherePosR.xyz);
+    
+    // =========================================================================
+    // STAGE 4: Classification
     // =========================================================================
     
     if (area <= smallEntityThreshold) {
@@ -227,7 +292,7 @@ void main() {
         uint slot = atomicAdd(smallSphereCount, 1u);
         smallSphereIndices[slot] = sphereIndex;
     } else {
-        // LARGE: Assign to overlapping tiles for tiled rasterization
-        assignToTiles(sphereIndex, screenMin, screenMax);
+        // LARGE: Assign to overlapping tiles with depth priority
+        assignToTiles(sphereIndex, screenMin, screenMax, depth);
     }
 }
