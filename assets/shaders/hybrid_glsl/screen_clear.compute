@@ -19,13 +19,13 @@ layout(std430, binding = 1) buffer DepthBuffer {
     uint depthBuffer[];
 };
 
-// Tile counters
-layout(std430, binding = 2) buffer TileSphereCounts {
-    uint tileSphereCounts[];
+// Per-tile linked list heads (EMPTY_LIST = 0xFFFFFFFF)
+layout(std430, binding = 2) buffer TileSphereHead {
+    uint tileSphereHead[];
 };
 
-layout(std430, binding = 3) buffer TileCylinderCounts {
-    uint tileCylinderCounts[];
+layout(std430, binding = 3) buffer TileCylinderHead {
+    uint tileCylinderHead[];
 };
 
 // Small entity counters (single value each)
@@ -37,22 +37,9 @@ layout(std430, binding = 11) buffer SmallCylinderCounter {
     uint smallCylinderCount;
 };
 
-// Tile depth data for entities
-layout(std430, binding = 14) buffer TileSphereDepths {
-    float tileSphereDepths[];  // [tileIndex * MAX_ENTITIES_PER_TILE + slot]
-};
-
-layout(std430, binding = 15) buffer TileCylinderDepths {
-    float tileCylinderDepths[];
-};
-
-// Tile max depth cache: x = maxDepth (as float bits), y = slot index
-layout(std430, binding = 16) buffer TileSphereMaxCache {
-    uvec2 tileSphereMaxCache[];  // [tileIndex]
-};
-
-layout(std430, binding = 17) buffer TileCylinderMaxCache {
-    uvec2 tileCylinderMaxCache[];  // [tileIndex]
+// Node pool allocation counters (reset each frame)
+layout(std430, binding = 18) buffer NodeCounters {
+    uint nodeCounters[];  // [0]=sphere, [1]=cylinder
 };
 
 // -----------------------------------------------------------------------------
@@ -63,7 +50,6 @@ uniform ivec2 screenResolution;
 uniform float farPlane;
 uniform int tilesX;
 uniform int tilesY;
-uniform int maxEntitiesPerTile;
 
 // -----------------------------------------------------------------------------
 // Main
@@ -81,28 +67,23 @@ void main() {
         depthBuffer[pixelIndex] = floatBitsToUint(farPlane);
     }
     
-    // Reset tile counters and caches (first thread of each tile)
+    // Reset per-tile linked list heads (first thread of each work group)
     if (gl_LocalInvocationID.x == 0 && gl_LocalInvocationID.y == 0) {
         int tileX = int(gl_WorkGroupID.x);
         int tileY = int(gl_WorkGroupID.y);
         
         if (tileX < tilesX && tileY < tilesY) {
             int tileIndex = tileY * tilesX + tileX;
-            
-            // Reset counters
-            tileSphereCounts[tileIndex] = 0;
-            tileCylinderCounts[tileIndex] = 0;
-            
-            // Reset max cache to 0 depth (no entity)
-            // uvec2(0, 0) means: maxDepth = 0.0, slot = 0
-            tileSphereMaxCache[tileIndex] = uvec2(0, 0);
-            tileCylinderMaxCache[tileIndex] = uvec2(0, 0);
+            tileSphereHead[tileIndex] = 0xFFFFFFFFu;
+            tileCylinderHead[tileIndex] = 0xFFFFFFFFu;
         }
         
-        // Reset small entity counters (only first work group)
+        // Reset small entity counters and node pool counters (only first work group)
         if (gl_WorkGroupID.x == 0 && gl_WorkGroupID.y == 0) {
             smallSphereCount = 0;
             smallCylinderCount = 0;
+            nodeCounters[0] = 0;
+            nodeCounters[1] = 0;
         }
     }
 }

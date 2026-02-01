@@ -19,7 +19,6 @@ layout(local_size_x = 16, local_size_y = 16) in;
 // -----------------------------------------------------------------------------
 
 #define TILE_SIZE 16
-#define MAX_ENTITIES_PER_TILE 256
 #define BATCH_SIZE 64
 
 // -----------------------------------------------------------------------------
@@ -33,15 +32,17 @@ layout(std430, binding = 1) buffer DepthBuffer {
 };
 
 // -----------------------------------------------------------------------------
-// Tile Data Bindings
+// Per-Tile Linked List
 // -----------------------------------------------------------------------------
 
-layout(std430, binding = 2) buffer TileSphereCounts {
-    uint tileSphereCounts[];
+#define EMPTY_LIST 0xFFFFFFFFu
+
+layout(std430, binding = 2) buffer TileSphereHead {
+    uint tileSphereHead[];  // [tileIndex] = first node index
 };
 
-layout(std430, binding = 4) buffer TileSphereIndices {
-    uint tileSphereIndices[];
+layout(std430, binding = 4) buffer SphereNodePool {
+    uvec2 sphereNodePool[];  // [nodeIndex].x = entityId, .y = next
 };
 
 // -----------------------------------------------------------------------------
@@ -78,6 +79,11 @@ uniform vec3 rayDy;     // Delta per pixel in Y
 // -----------------------------------------------------------------------------
 // Shared Memory
 // -----------------------------------------------------------------------------
+
+// First thread fills these by traversing the list in chunks of BATCH_SIZE (no fixed cap per tile)
+shared uint shSphereIndices[BATCH_SIZE];
+shared uint shSphereCount;
+shared uint shNextHead;  // head for next batch (rest of list after current batch)
 
 shared vec4 shSpherePosR[BATCH_SIZE];
 shared ivec4 shSphereBBox[BATCH_SIZE];
@@ -180,36 +186,48 @@ void main() {
     if (!(pixelX < screenResolution.x && pixelY < screenResolution.y))
         return;
     
-    // Load tile sphere count
-    uint sphereCount = min(tileSphereCounts[tileIndex], uint(MAX_ENTITIES_PER_TILE));
-    
-    if (sphereCount == 0) {
-        return;
-    }
-    
-    // Precompute ray parameters
+    // Precompute ray parameters (once per pixel)
     float aspectRatio = float(screenResolution.x) / float(screenResolution.y);
     float fovRad = radians(fov);
     float fovTan = tan(fovRad * 0.5);
     float halfFovTan = fovTan * aspectRatio;
     
     vec3 rd = computeRd(pixelX, pixelY, fovTan, halfFovTan);
-
     float minDepth = 1e10;
     vec3 finalColor = vec3(0.0);
     bool hasHit = false;
     
-    // Process spheres in batches
-    uint numBatches = (sphereCount + BATCH_SIZE - 1) / BATCH_SIZE;
+    // Initialize: first thread sets next head to tile list head
+    if (localIndex == 0) {
+        shNextHead = tileSphereHead[tileIndex];
+    }
+    barrier();
     
-    for (uint batch = 0; batch < numBatches; batch++) {
-        uint batchStart = batch * BATCH_SIZE;
+    // Process all nodes in the tile list in batches of BATCH_SIZE (no fixed cap per tile)
+    while (true) {
+        // First thread traverses from shNextHead and fills up to BATCH_SIZE indices
+        if (localIndex == 0) {
+            uint head = shNextHead;
+            uint count = 0u;
+            while (head != EMPTY_LIST && count < uint(BATCH_SIZE)) {
+                shSphereIndices[count] = sphereNodePool[head].x;
+                head = sphereNodePool[head].y;
+                count++;
+            }
+            shSphereCount = count;
+            shNextHead = head;  // rest of list for next iteration
+        }
+        barrier();
+        
+        if (shSphereCount == 0u)
+            break;
+        
+        uint batchCount = shSphereCount;
         
         // Cooperative loading into shared memory
         if (localIndex < BATCH_SIZE) {
-            uint entityIdx = batchStart + localIndex;
-            if (entityIdx < sphereCount) {
-                uint sphereIndex = tileSphereIndices[tileIndex * MAX_ENTITIES_PER_TILE + entityIdx];
+            if (localIndex < int(batchCount)) {
+                uint sphereIndex = shSphereIndices[localIndex];
                 vec4 posR = spheres[sphereIndex];
                 shSpherePosR[localIndex] = posR;
                 shSphereBBox[localIndex] = computeSphereBBox(posR);
@@ -218,13 +236,10 @@ void main() {
         barrier();
         
         // Process this batch
-        uint batchCount = min(BATCH_SIZE, sphereCount - batchStart);
-        
-        for (uint i = 0; i < batchCount; i++) {
+        for (uint i = 0u; i < batchCount; i++) {
             vec4 posR = shSpherePosR[i];
             ivec4 bbox = shSphereBBox[i];
             
-            // Check if pixel is within bbox
             if (pixelX < bbox.x || pixelX >= bbox.z ||
                 pixelY < bbox.y || pixelY >= bbox.w) {
                 continue;

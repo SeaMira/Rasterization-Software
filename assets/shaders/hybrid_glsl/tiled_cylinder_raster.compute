@@ -33,15 +33,17 @@ layout(std430, binding = 1) buffer DepthBuffer {
 };
 
 // -----------------------------------------------------------------------------
-// Tile Data Bindings
+// Per-Tile Linked List
 // -----------------------------------------------------------------------------
 
-layout(std430, binding = 3) buffer TileCylinderCounts {
-    uint tileCylinderCounts[];
+#define EMPTY_LIST 0xFFFFFFFFu
+
+layout(std430, binding = 3) buffer TileCylinderHead {
+    uint tileCylinderHead[];  // [tileIndex] = first node index
 };
 
-layout(std430, binding = 5) buffer TileCylinderIndices {
-    uint tileCylinderIndices[];
+layout(std430, binding = 5) buffer CylinderNodePool {
+    uvec2 cylinderNodePool[];  // [nodeIndex].x = entityId, .y = next
 };
 
 // -----------------------------------------------------------------------------
@@ -74,8 +76,6 @@ uniform float fov;
 
 uniform int tilesX;
 uniform int tilesY;
-uniform int tileSize;
-uniform int maxEntitiesPerTile;
 
 // Screen ray casting uniforms (computed on CPU)
 uniform vec3 rayStart;  // Bottom-left corner ray direction (world space)
@@ -85,6 +85,11 @@ uniform vec3 rayDy;     // Delta per pixel in Y
 // -----------------------------------------------------------------------------
 // Shared Memory
 // -----------------------------------------------------------------------------
+
+// First thread fills these by traversing the list in chunks of BATCH_SIZE (no fixed cap per tile)
+shared uint shCylinderIndices[BATCH_SIZE];
+shared uint shCylinderCount;
+shared uint shNextHead;  // head for next batch (rest of list after current batch)
 
 shared vec4 shCylPa[BATCH_SIZE];
 shared vec4 shCylPb[BATCH_SIZE];
@@ -244,45 +249,54 @@ void main() {
     if (!(pixelX < screenResolution.x && pixelY < screenResolution.y))
         return;
     
-    // Load tile cylinder count
-    uint cylinderCount = min(tileCylinderCounts[tileIndex], uint(maxEntitiesPerTile));
-    
-    if (cylinderCount == 0) {
-        return;
-    }
-    
-    // Precompute ray parameters
+    // Precompute ray parameters (once per pixel)
     float aspectRatio = float(screenResolution.x) / float(screenResolution.y);
     float fovRad = radians(fov);
     float fovTan = tan(fovRad * 0.5);
     float halfFovTan = fovTan * aspectRatio;
 
     vec3 rd = computeRd(pixelX, pixelY, fovTan, halfFovTan);
-
     float minDepth = 1e10;
     vec3 finalColor = vec3(0.0);
     bool hasHit = false;
     
-    // Process cylinders in batches
-    uint numBatches = (cylinderCount + BATCH_SIZE - 1) / BATCH_SIZE;
+    // Initialize: first thread sets next head to tile list head
+    if (localIndex == 0) {
+        shNextHead = tileCylinderHead[tileIndex];
+    }
+    barrier();
     
-    for (uint batch = 0; batch < numBatches; batch++) {
-        uint batchStart = batch * BATCH_SIZE;
+    // Process all nodes in the tile list in batches of BATCH_SIZE (no fixed cap per tile)
+    while (true) {
+        // First thread traverses from shNextHead and fills up to BATCH_SIZE indices
+        if (localIndex == 0) {
+            uint head = shNextHead;
+            uint count = 0u;
+            while (head != EMPTY_LIST && count < uint(BATCH_SIZE)) {
+                shCylinderIndices[count] = cylinderNodePool[head].x;
+                head = cylinderNodePool[head].y;
+                count++;
+            }
+            shCylinderCount = count;
+            shNextHead = head;  // rest of list for next iteration
+        }
+        barrier();
+        
+        if (shCylinderCount == 0u)
+            break;
+        
+        uint batchCount = shCylinderCount;
         
         // Cooperative loading into shared memory
         if (localIndex < BATCH_SIZE) {
-            uint entityIdx = batchStart + localIndex;
-            if (entityIdx < cylinderCount) {
-                uint cylIndex = tileCylinderIndices[tileIndex * maxEntitiesPerTile + entityIdx];
+            if (localIndex < int(batchCount)) {
+                uint cylIndex = shCylinderIndices[localIndex];
                 Cylinder cyl = cylinders[cylIndex];
                 shCylPa[localIndex] = cyl.pa_r;
                 shCylPb[localIndex] = cyl.pb_r;
                 
-                // Compute rotated quad corners
                 vec2 corners[4];
                 computeCylinderQuad(cyl.pa_r.xyz, cyl.pb_r.xyz, cyl.pa_r.w, corners);
-                
-                // Store in shared memory
                 shCylQuad[localIndex * 4 + 0] = corners[0];
                 shCylQuad[localIndex * 4 + 1] = corners[1];
                 shCylQuad[localIndex * 4 + 2] = corners[2];
@@ -292,20 +306,15 @@ void main() {
         barrier();
         
         // Process this batch
-        uint batchCount = min(BATCH_SIZE, cylinderCount - batchStart);
-        
-        
-        // Each thread processes multiple pixels if needed
-        for (int i = 0; i < batchCount; i++) {
+        for (uint i = 0u; i < batchCount; i++) {
             vec4 pa_r = shCylPa[i];
             vec4 pb_r = shCylPb[i];
 
-            vec2 q0 = shCylQuad[i * 4 + 0];
-            vec2 q1 = shCylQuad[i * 4 + 1];
-            vec2 q2 = shCylQuad[i * 4 + 2];
-            vec2 q3 = shCylQuad[i * 4 + 3];
+            vec2 q0 = shCylQuad[i * 4u + 0u];
+            vec2 q1 = shCylQuad[i * 4u + 1u];
+            vec2 q2 = shCylQuad[i * 4u + 2u];
+            vec2 q3 = shCylQuad[i * 4u + 3u];
                 
-            // Check if pixel is inside the rotated quad
             vec2 pixelCenter = vec2(float(pixelX) + 0.5, float(pixelY) + 0.5);
             if (!pointInQuad(pixelCenter, q0, q1, q2, q3)) {
                 continue;
