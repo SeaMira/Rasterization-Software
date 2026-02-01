@@ -1,0 +1,453 @@
+#version 460
+#extension GL_ARB_gpu_shader_int64 : require
+#extension GL_EXT_shader_atomic_int64 : require
+
+// =============================================================================
+// cylinder_classify.compute - Cylinder Classification with Depth Priority
+// =============================================================================
+//
+// This shader classifies cylinders with depth-aware tile assignment.
+// When a tile overflows, closer entities replace farther ones.
+//
+// For each cylinder:
+//   1. Frustum culling
+//   2. BBox extraction
+//   3. Classification by area:
+//      - SMALL: Store index in small cylinder list
+//      - LARGE: Store in tiles with depth priority
+//
+// Dispatch: (cylinderCount / 256, 1, 1)
+// =============================================================================
+
+layout(local_size_x = 256) in;
+
+// -----------------------------------------------------------------------------
+// Constants
+// -----------------------------------------------------------------------------
+
+#define TILE_SIZE 16
+#define TILE_SIZE_SHIFT 4
+#define MAX_ENTITIES_PER_TILE 256
+
+// -----------------------------------------------------------------------------
+// Tile Bindings
+// -----------------------------------------------------------------------------
+
+layout(std430, binding = 3) buffer TileCylinderCounts {
+    uint tileCylinderCounts[];
+};
+
+layout(std430, binding = 5) buffer TileCylinderIndices {
+    uint tileCylinderIndices[];  // [tileIndex * MAX_ENTITIES_PER_TILE + localIndex]
+};
+
+// Depth data for priority (uint = floatBitsToUint for atomicCompSwap)
+layout(std430, binding = 15) buffer TileCylinderDepthsUint {
+    uint tileCylinderDepthsUint[];  // [tileIndex * MAX_ENTITIES_PER_TILE + slot]
+};
+
+// Max depth cache per tile: uint64 = (depthBits << 32) | slot, updated with atomicMax
+layout(std430, binding = 17) buffer TileCylinderMaxCache {
+    uint64_t tileCylinderMaxCache[];  // [tileIndex]
+};
+
+// -----------------------------------------------------------------------------
+// Small Cylinder Output
+// -----------------------------------------------------------------------------
+
+layout(std430, binding = 11) buffer SmallCylinderCounter {
+    uint smallCylinderCount;
+};
+
+layout(std430, binding = 13) buffer SmallCylinderIndices {
+    uint smallCylinderIndices[];  // List of cylinder indices that are "small"
+};
+
+// -----------------------------------------------------------------------------
+// Input Bindings
+// -----------------------------------------------------------------------------
+
+struct Cylinder {
+    vec4 pa_r;  // Point A (xyz) + radius (w)
+    vec4 pb_r;  // Point B (xyz), w unused
+};
+
+layout(std430, binding = 7) buffer CylinderBuffer {
+    Cylinder cylinders[];
+};
+
+// -----------------------------------------------------------------------------
+// Uniforms
+// -----------------------------------------------------------------------------
+
+uniform mat4 view;
+uniform mat4 proj;
+
+uniform vec4 frustumTopFace;
+uniform vec4 frustumBottomFace;
+uniform vec4 frustumRightFace;
+uniform vec4 frustumLeftFace;
+uniform vec4 frustumFarFace;
+uniform vec4 frustumNearFace;
+
+uniform ivec2 screenResolution;
+
+uniform int cylinderCount;
+uniform int smallEntityThreshold;
+uniform int tilesX;
+uniform int tilesY;
+uniform vec3 cameraPos;
+
+// -----------------------------------------------------------------------------
+// Frustum Culling
+// -----------------------------------------------------------------------------
+
+struct BBox3D
+{
+    vec3 mMin;
+    vec3 mMax;
+};
+
+bool isOnOrForwardPlaneAABB(vec4 plane, BBox3D bbox) 
+{
+    vec3 negativeVertex = bbox.mMin;
+    vec3 normal = plane.xyz;
+    float distance = plane.w;
+
+    if (normal.x >= 0) negativeVertex.x = bbox.mMax.x;
+        else negativeVertex.x = bbox.mMin.x;
+
+    if (normal.y >= 0) negativeVertex.y = bbox.mMax.y;
+        else negativeVertex.y = bbox.mMin.y;
+
+    if (normal.z >= 0) negativeVertex.z = bbox.mMax.z;
+        else negativeVertex.z = bbox.mMin.z;
+
+    return dot(normal, negativeVertex) - distance >= 0;
+}
+
+bool isCylinderInFrustum(vec3 pa, vec3 pb, float radius) {
+    // Use bounding sphere for cylinder
+    vec3 a = pb - pa;
+    vec3 e = radius*sqrt( max(1.0f - a*(a/dot(a,a)), 0.0) );
+    BBox3D bbox3d = BBox3D(min( pa, pb ) - e, max( pa, pb ) + e);
+
+    return isOnOrForwardPlaneAABB(frustumLeftFace, bbox3d) &&
+           isOnOrForwardPlaneAABB(frustumRightFace, bbox3d) &&
+           isOnOrForwardPlaneAABB(frustumFarFace, bbox3d) &&
+           isOnOrForwardPlaneAABB(frustumNearFace, bbox3d) &&
+           isOnOrForwardPlaneAABB(frustumTopFace, bbox3d) &&
+           isOnOrForwardPlaneAABB(frustumBottomFace, bbox3d);
+}
+
+// -----------------------------------------------------------------------------
+// BBox Computation
+// -----------------------------------------------------------------------------
+
+void getCylinderBbox(out vec2 projectedPoints[4], vec3 pa, vec3 pb, vec3 center, 
+    float cylRadius)
+{
+    // Cylinder axis
+    const vec3 z = normalize(pb - pa);
+
+    // Find orthonormal x,y axes orthogonal to cylinder axis
+    vec3 x = normalize(cross(center, z));
+    vec3 y = normalize(cross(x, z)); // make full basis
+
+    // Compute impostor construction vectors.
+    const float dV0 = length( pa );
+    const float dV1 = length( pb );
+
+    const float sinAngle = cylRadius / dV0;
+    float		angle	 = asin( sinAngle );
+    const vec3	y1		 = y * cylRadius;
+    const vec3	x2		 = x * cylRadius * cos( angle );
+    const vec3	y2		 = y1 * sinAngle;
+    angle				 = asin( cylRadius / dV1 );
+    const vec3 x3		 = x * ( dV1 - cylRadius ) * tan( angle );
+
+    // Compute impostors vertices.
+    const vec3 v1 = pa - x2 + y2;
+    const vec3 v2 = pa + x2 + y2;
+    const vec3 v3 = pb - x3 + y1;
+    const vec3 v4 = pb + x3 + y1;
+
+    const vec4 v1Proj = proj * vec4(v1, 1.0f);
+    const vec4 v2Proj = proj * vec4(v2, 1.0f);
+    const vec4 v3Proj = proj * vec4(v3, 1.0f);
+    const vec4 v4Proj = proj * vec4(v4, 1.0f);
+
+    vec3 ndcv1Proj = vec3(v1Proj.x / v1Proj.w, v1Proj.y / v1Proj.w, v1Proj.z / v1Proj.w);
+    vec3 ndcv2Proj = vec3(v2Proj.x / v2Proj.w, v2Proj.y / v2Proj.w, v2Proj.z / v2Proj.w);
+    vec3 ndcv3Proj = vec3(v3Proj.x / v3Proj.w, v3Proj.y / v3Proj.w, v3Proj.z / v3Proj.w);
+    vec3 ndcv4Proj = vec3(v4Proj.x / v4Proj.w, v4Proj.y / v4Proj.w, v4Proj.z / v4Proj.w);
+
+    projectedPoints[0] = vec2(ndcv1Proj);
+    projectedPoints[1] = vec2(ndcv2Proj);
+    projectedPoints[2] = vec2(ndcv4Proj);
+    projectedPoints[3] = vec2(ndcv3Proj);
+        
+}
+
+// -----------------------------------------------------------------------------
+// Quad-Tile Intersection Helpers
+// -----------------------------------------------------------------------------
+
+// Cross product of 2D vectors (returns scalar z component)
+float cross2D(vec2 a, vec2 b) {
+    return a.x * b.y - a.y * b.x;
+}
+
+// Check if point is inside convex quadrilateral (using cross products)
+// Assumes quad vertices are in order (either CW or CCW)
+bool pointInQuad(vec2 p, vec2 q0, vec2 q1, vec2 q2, vec2 q3) {
+    float c0 = cross2D(q1 - q0, p - q0);
+    float c1 = cross2D(q2 - q1, p - q1);
+    float c2 = cross2D(q3 - q2, p - q2);
+    float c3 = cross2D(q0 - q3, p - q3);
+    
+    // All same sign means inside (works for CW or CCW)
+    return (c0 >= 0 && c1 >= 0 && c2 >= 0 && c3 >= 0) ||
+           (c0 <= 0 && c1 <= 0 && c2 <= 0 && c3 <= 0);
+}
+
+// Check if line segment (a,b) intersects line segment (c,d)
+bool segmentsIntersect(vec2 a, vec2 b, vec2 c, vec2 d) {
+    vec2 ab = b - a;
+    vec2 cd = d - c;
+    vec2 ac = c - a;
+    
+    float denom = cross2D(ab, cd);
+    if (abs(denom) < 1e-6) return false; // Parallel
+    
+    float t = cross2D(ac, cd) / denom;
+    float u = cross2D(ac, ab) / denom;
+    
+    return t >= 0.0 && t <= 1.0 && u >= 0.0 && u <= 1.0;
+}
+
+// Check if tile (axis-aligned box) intersects with quadrilateral
+bool tileIntersectsQuad(int tileX, int tileY, vec2 q0, vec2 q1, vec2 q2, vec2 q3) {
+    // Tile bounds in pixels
+    float tileMinX = float(tileX * TILE_SIZE);
+    float tileMinY = float(tileY * TILE_SIZE);
+    float tileMaxX = tileMinX + float(TILE_SIZE);
+    float tileMaxY = tileMinY + float(TILE_SIZE);
+    
+    // Tile corners
+    vec2 t0 = vec2(tileMinX, tileMinY);
+    vec2 t1 = vec2(tileMaxX, tileMinY);
+    vec2 t2 = vec2(tileMaxX, tileMaxY);
+    vec2 t3 = vec2(tileMinX, tileMaxY);
+    
+    // Test 1: Any tile corner inside quad?
+    if (pointInQuad(t0, q0, q1, q2, q3)) return true;
+    if (pointInQuad(t1, q0, q1, q2, q3)) return true;
+    if (pointInQuad(t2, q0, q1, q2, q3)) return true;
+    if (pointInQuad(t3, q0, q1, q2, q3)) return true;
+    
+    // Test 2: Any quad corner inside tile?
+    if (q0.x >= tileMinX && q0.x <= tileMaxX && q0.y >= tileMinY && q0.y <= tileMaxY) return true;
+    if (q1.x >= tileMinX && q1.x <= tileMaxX && q1.y >= tileMinY && q1.y <= tileMaxY) return true;
+    if (q2.x >= tileMinX && q2.x <= tileMaxX && q2.y >= tileMinY && q2.y <= tileMaxY) return true;
+    if (q3.x >= tileMinX && q3.x <= tileMaxX && q3.y >= tileMinY && q3.y <= tileMaxY) return true;
+    
+    // Quad edge 0: q0 -> q1
+    if (segmentsIntersect(q0, q1, t0, t1)) return true;
+    if (segmentsIntersect(q0, q1, t1, t2)) return true;
+    if (segmentsIntersect(q0, q1, t2, t3)) return true;
+    if (segmentsIntersect(q0, q1, t3, t0)) return true;
+    
+    // Quad edge 1: q1 -> q2
+    if (segmentsIntersect(q1, q2, t0, t1)) return true;
+    if (segmentsIntersect(q1, q2, t1, t2)) return true;
+    if (segmentsIntersect(q1, q2, t2, t3)) return true;
+    if (segmentsIntersect(q1, q2, t3, t0)) return true;
+    
+    // Quad edge 2: q2 -> q3
+    if (segmentsIntersect(q2, q3, t0, t1)) return true;
+    if (segmentsIntersect(q2, q3, t1, t2)) return true;
+    if (segmentsIntersect(q2, q3, t2, t3)) return true;
+    if (segmentsIntersect(q2, q3, t3, t0)) return true;
+    
+    // Quad edge 3: q3 -> q0
+    if (segmentsIntersect(q3, q0, t0, t1)) return true;
+    if (segmentsIntersect(q3, q0, t1, t2)) return true;
+    if (segmentsIntersect(q3, q0, t2, t3)) return true;
+    if (segmentsIntersect(q3, q0, t3, t0)) return true;
+    
+    return false;
+}
+
+// -----------------------------------------------------------------------------
+// Tile Assignment for Large Cylinders (with depth priority)
+// -----------------------------------------------------------------------------
+
+void assignToTileWithPriority(uint cylinderIndex, int tileIndex, float depth) {
+    uint depthBits = floatBitsToUint(depth);
+    
+    // Try to get a slot
+    uint slot = atomicAdd(tileCylinderCounts[tileIndex], 1u);
+    
+    if (slot < MAX_ENTITIES_PER_TILE) {
+        // Normal insertion - there's space
+        uint idx = tileIndex * MAX_ENTITIES_PER_TILE + slot;
+        tileCylinderIndices[idx] = cylinderIndex;
+        tileCylinderDepthsUint[idx] = depthBits;
+        
+        // Update max cache atomically: packed = (depthBits << 32) | slot
+        uint64_t packed = (uint64_t(depthBits) << 32) | uint64_t(slot);
+        atomicMax(tileCylinderMaxCache[tileIndex], packed);
+    } else {
+        // Overflow - revert the count increment
+        atomicAdd(tileCylinderCounts[tileIndex], -1u);
+        
+        // Read cache (single 64-bit load is atomic)
+        uint64_t cacheVal = tileCylinderMaxCache[tileIndex];
+        uint maxDepthBits = uint(cacheVal >> 32);
+        uint maxSlot = uint(cacheVal & 0xFFFFFFFFu);
+        
+        // Only replace if we're closer (smaller depth) and slot is valid
+        if (depthBits < maxDepthBits && maxSlot < MAX_ENTITIES_PER_TILE) {
+            uint idx = tileIndex * MAX_ENTITIES_PER_TILE + maxSlot;
+            
+            // Atomically claim the slot: only one thread wins
+            uint oldDepthBits = atomicCompSwap(tileCylinderDepthsUint[idx], maxDepthBits, depthBits);
+            
+            if (oldDepthBits == maxDepthBits) {
+                // We won - write the index
+                tileCylinderIndices[idx] = cylinderIndex;
+                
+                // Update cache with atomicMax (our packed value)
+                uint64_t ourPacked = (uint64_t(depthBits) << 32) | uint64_t(maxSlot);
+                atomicMax(tileCylinderMaxCache[tileIndex], ourPacked);
+            }
+        }
+    }
+}
+
+void assignToTiles(uint cylinderIndex, vec2 q0, vec2 q1, vec2 q2, vec2 q3, float depth) {
+    // First compute AABB of the quad to limit tile iteration
+    vec2 minP = min(min(q0, q1), min(q2, q3));
+    vec2 maxP = max(max(q0, q1), max(q2, q3));
+    
+    int tileMinX = int(floor(minP.x)) >> TILE_SIZE_SHIFT;
+    int tileMinY = int(floor(minP.y)) >> TILE_SIZE_SHIFT;
+    int tileMaxX = int(ceil(maxP.x)) >> TILE_SIZE_SHIFT;
+    int tileMaxY = int(ceil(maxP.y)) >> TILE_SIZE_SHIFT;
+    
+    tileMinX = clamp(tileMinX, 0, tilesX - 1);
+    tileMinY = clamp(tileMinY, 0, tilesY - 1);
+    tileMaxX = clamp(tileMaxX, 0, tilesX - 1);
+    tileMaxY = clamp(tileMaxY, 0, tilesY - 1);
+    
+    // For each tile in AABB, assign with depth priority
+    for (int ty = tileMinY; ty <= tileMaxY; ty++) {
+        for (int tx = tileMinX; tx <= tileMaxX; tx++) {
+            int tileIndex = ty * tilesX + tx;
+            assignToTileWithPriority(cylinderIndex, tileIndex, depth);
+        }
+    }
+}
+
+// Compute area of quadrilateral using shoelace formula
+float quadArea(vec2 q0, vec2 q1, vec2 q2, vec2 q3) {
+    return 0.5 * abs(
+        (q0.x * q1.y - q1.x * q0.y) +
+        (q1.x * q2.y - q2.x * q1.y) +
+        (q2.x * q3.y - q3.x * q2.y) +
+        (q3.x * q0.y - q0.x * q3.y)
+    );
+}
+
+// -----------------------------------------------------------------------------
+// Main
+// -----------------------------------------------------------------------------
+
+void main() {
+    uint cylIndex = gl_GlobalInvocationID.x;
+    
+    if (cylIndex >= cylinderCount) {
+        return;
+    }
+    
+    Cylinder cyl = cylinders[cylIndex];
+    vec3 pa = cyl.pa_r.xyz;
+    vec3 pb = cyl.pb_r.xyz;
+    float radius = cyl.pa_r.w;
+    
+    // =========================================================================
+    // STAGE 1: Frustum Culling
+    // =========================================================================
+    
+    if (!isCylinderInFrustum(pa, pb, radius)) {
+        return;
+    }
+    
+    // =========================================================================
+    // STAGE 2: BBox Extraction
+    // =========================================================================
+
+    vec3 camSpaceCylA = vec3(view * vec4(pa, 1.0f));
+    vec3 camSpaceCylB = vec3(view * vec4(pb, 1.0f));
+
+    vec3 camImpPosA, camImpPosB;
+    if ( camSpaceCylA.z < camSpaceCylB.z )
+	{
+		camImpPosA = camSpaceCylB;
+		camImpPosB = camSpaceCylA;
+	}
+	else
+	{
+		camImpPosA = camSpaceCylA;
+		camImpPosB = camSpaceCylB;
+	}
+
+    vec3 center = normalize( ( camImpPosA + camImpPosB ) * 0.5f );
+    vec2 projectedPoints[4];
+    getCylinderBbox(projectedPoints, camImpPosA, camImpPosB, center, radius);
+    
+    // Convert NDC to screen coordinates
+    for (int i = 0; i < 4; i++) 
+    {
+        projectedPoints[i].x = (projectedPoints[i].x * 0.5f + 0.5f) * float(screenResolution.x);
+        projectedPoints[i].y = (projectedPoints[i].y * 0.5f + 0.5f) * float(screenResolution.y);
+    }
+    
+    // Clamp to screen bounds
+    for (int i = 0; i < 4; i++) {
+        projectedPoints[i] = clamp(projectedPoints[i], vec2(0.0), vec2(screenResolution));
+    }
+    
+    // Compute area of the rotated quad
+    float area = quadArea(projectedPoints[0], projectedPoints[1], 
+                          projectedPoints[2], projectedPoints[3]);
+    
+    // Skip if degenerate
+    if (area < 1.0) {
+        return;
+    }
+    
+    // =========================================================================
+    // STAGE 3: Compute Depth (distance from camera to cylinder center)
+    // =========================================================================
+    
+    vec3 cylinderCenter = (pa + pb) * 0.5;
+    float depth = distance(cameraPos, cylinderCenter);
+    
+    // =========================================================================
+    // STAGE 4: Classification
+    // =========================================================================
+    
+    if (area <= float(smallEntityThreshold)) {
+        // SMALL: Add to small cylinder list
+        uint slot = atomicAdd(smallCylinderCount, 1u);
+        smallCylinderIndices[slot] = cylIndex;
+    } else {
+        // LARGE: Assign to overlapping tiles with depth priority
+        assignToTiles(cylIndex, 
+                      projectedPoints[0], projectedPoints[1], 
+                      projectedPoints[2], projectedPoints[3],
+                      depth);
+    }
+}

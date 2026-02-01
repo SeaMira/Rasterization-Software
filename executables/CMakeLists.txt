@@ -32,6 +32,7 @@ endif()
 if(BUILD_CUDA_VERSION)
     add_subdirectory(cuda)
     add_subdirectory(cuda_hybrid)
+    add_subdirectory(cuda_hybrid_binning)
 endif()
 
 # Hybrid GLSL version - uses same dependencies as FST_PARALLEL
