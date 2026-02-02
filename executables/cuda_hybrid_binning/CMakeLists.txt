@@ -42,11 +42,11 @@ target_include_directories(cuda_hybrid_binning_pipeline PRIVATE
 
 configure_cuda_target(cuda_hybrid_binning_pipeline)
 
-target_compile_definitions(cuda_hybrid_binning_pipeline PRIVATE
-    GLM_FORCE_CUDA
-    GLM_ENABLE_EXPERIMENTAL
-    GLM_FORCE_INLINE
-)
+# target_compile_definitions(cuda_hybrid_binning_pipeline PRIVATE
+#     GLM_FORCE_CUDA
+#     GLM_ENABLE_EXPERIMENTAL
+#     GLM_FORCE_INLINE
+# )
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
     target_compile_options(cuda_hybrid_binning_pipeline PRIVATE

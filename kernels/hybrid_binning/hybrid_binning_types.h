@@ -12,6 +12,8 @@
 
 #define SMALL_ENTITY_THRESHOLD 256
 #define TILE_SIZE 16
+/** Average entities per tile for pair buffer sizing: buffer size = AVG_ENTITIES_PER_TILE * totalTiles */
+#define AVG_ENTITIES_PER_TILE 500
 #define TILE_SIZE_SHIFT 4
 #define CULL_BLOCK_SIZE 256
 #define SMALL_RASTER_BLOCK_SIZE 256
@@ -44,7 +46,7 @@ struct CylinderBillboard {
     unsigned int tileMaxY;
 };
 
-struct BBox3D
+struct _BBox3D
 {
     glm::vec3 mMin;
     glm::vec3 mMax;
@@ -68,6 +70,13 @@ struct HybridConstants {
     int totalTiles;
     int smallEntityThreshold;
     int benchmark;
+    /** Max (tile_id, entity_id) pairs = avgEntitiesPerTile * totalTiles */
+    int avgEntitiesPerTile;
 };
+
+/** Device-side color constants for raster (atoms/bonds); defined in small_entity_raster.cu */
+extern __device__ __constant__ float atomsColor[3];
+extern __device__ __constant__ float bondsColor[3];
+extern __device__ __constant__ float diffuse;
 
 #endif

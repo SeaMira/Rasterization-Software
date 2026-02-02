@@ -15,23 +15,21 @@ struct CylinderBinningResources {
     unsigned int* d_smallIndices;
     unsigned int* d_smallCount;
     unsigned int* d_largeCount;
-    CylinderBillboard* d_largeBillboards;
     unsigned int* d_frustumPassedCount;
     unsigned int* h_smallCount;
-    unsigned int* h_largeCount;
+    unsigned int* h_pairCount;
     unsigned int* h_frustumPassedCount;
+    unsigned long long* d_tile_entity_pairs;
+    unsigned long long* d_tile_entity_pairs_sorted;
     unsigned int* d_pairCount;
-    unsigned int* d_keys_in;
-    unsigned int* d_values_in;
-    unsigned int* d_keys_out;
-    unsigned int* d_values_out;
+    unsigned int* d_keys_extract;
     unsigned int* d_tile_offsets;
     unsigned int* d_unique_out;
     unsigned int* d_counts_out;
     unsigned int* d_run_offsets;
     unsigned int* d_num_runs;
-    void* d_temp_sort;
-    size_t temp_sort_bytes;
+    void* d_temp_sort64;
+    size_t temp_sort64_bytes;
     void* d_temp_rle;
     size_t temp_rle_bytes;
     void* d_temp_scan;
@@ -43,7 +41,7 @@ struct CylinderBinningResources {
     int totalTiles;
 };
 
-void initCylinderBinningResources(CylinderBinningResources* r, int maxCylinders, int tilesX, int tilesY, int totalTiles);
+void initCylinderBinningResources(CylinderBinningResources* r, int maxCylinders, int tilesX, int tilesY, int totalTiles, int avgEntitiesPerTile = 0);
 void freeCylinderBinningResources(CylinderBinningResources* r);
 void resetCylinderBinningCounters(CylinderBinningResources* r, cudaStream_t stream);
 

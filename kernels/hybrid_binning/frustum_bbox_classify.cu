@@ -17,7 +17,7 @@ __device__ inline bool isOnOrForwardOfPlane(const glm::vec4& plane, const glm::v
     return d >= -spherePosR.w;
 }
 
-__device__ inline bool isOnOrForwardPlaneAABB(glm::vec4 plane, BBox3D& bbox) 
+__device__ inline bool isOnOrForwardPlaneAABB(glm::vec4 plane, _BBox3D& bbox) 
 {
     glm::vec3 negativeVertex = bbox.mMin;
     glm::vec3 normal = glm::vec3(plane.x, plane.y, plane.z);
@@ -53,13 +53,13 @@ __device__ inline bool isCylinderInsideFrustum(const glm::vec3 pa,
     glm::vec3 pb_sub_e = pb - e;
     glm::vec3 pa_add_e = pa + e;
     glm::vec3 pb_add_e = pb + e;
-    BBox3D bbox3d = BBox3D{glm::vec3(fminf(pa_sub_e.x, pb_sub_e.x), fminf(pa_sub_e.y, pb_sub_e.y), fminf(pa_sub_e.z, pb_sub_e.z)), glm::vec3(fmaxf(pa_add_e.x, pb_add_e.x), fmaxf(pa_add_e.y, pb_add_e.y), fmaxf(pa_add_e.z, pb_add_e.z))};
-    return isOnOrForwardPlaneAABB(cst.frustumPlanes[0], bbox3d) &&
-    isOnOrForwardPlaneAABB(cst.frustumPlanes[1], bbox3d) &&
-    isOnOrForwardPlaneAABB(cst.frustumPlanes[2], bbox3d) &&
-    isOnOrForwardPlaneAABB(cst.frustumPlanes[3], bbox3d) &&
-    isOnOrForwardPlaneAABB(cst.frustumPlanes[4], bbox3d) &&
-    isOnOrForwardPlaneAABB(cst.frustumPlanes[5], bbox3d);
+    _BBox3D bbox3d = _BBox3D{glm::vec3(fminf(pa_sub_e.x, pb_sub_e.x), fminf(pa_sub_e.y, pb_sub_e.y), fminf(pa_sub_e.z, pb_sub_e.z)), glm::vec3(fmaxf(pa_add_e.x, pb_add_e.x), fmaxf(pa_add_e.y, pb_add_e.y), fmaxf(pa_add_e.z, pb_add_e.z))};
+    return isOnOrForwardPlaneAABB(hybridCst.frustumPlanes[0], bbox3d) &&
+    isOnOrForwardPlaneAABB(hybridCst.frustumPlanes[1], bbox3d) &&
+    isOnOrForwardPlaneAABB(hybridCst.frustumPlanes[2], bbox3d) &&
+    isOnOrForwardPlaneAABB(hybridCst.frustumPlanes[3], bbox3d) &&
+    isOnOrForwardPlaneAABB(hybridCst.frustumPlanes[4], bbox3d) &&
+    isOnOrForwardPlaneAABB(hybridCst.frustumPlanes[5], bbox3d);
 }
 
 __device__ inline void computeSphereBBox(
@@ -120,7 +120,7 @@ __device__ inline void computeCylinderBBox(
     const glm::vec3& pa,
     const glm::vec3& pb,
     float radius,
-    glm::vec2& projectedPoints[4])
+    glm::vec2 projectedPoints[4])
 {
     glm::vec4 camA = hybridCst.view * glm::vec4(pa, 1.0f);
     glm::vec4 camB = hybridCst.view * glm::vec4(pb, 1.0f);
@@ -162,10 +162,10 @@ __device__ inline void computeCylinderBBox(
     const glm::vec3 v3 = camImpPosB - x3 + y1;
     const glm::vec3 v4 = camImpPosB + x3 + y1;
 
-    const glm::vec4 v1Proj = cst.proj * glm::vec4(v1, 1.0f);
-    const glm::vec4 v2Proj = cst.proj * glm::vec4(v2, 1.0f);
-    const glm::vec4 v3Proj = cst.proj * glm::vec4(v3, 1.0f);
-    const glm::vec4 v4Proj = cst.proj * glm::vec4(v4, 1.0f);
+    const glm::vec4 v1Proj = hybridCst.proj * glm::vec4(v1, 1.0f);
+    const glm::vec4 v2Proj = hybridCst.proj * glm::vec4(v2, 1.0f);
+    const glm::vec4 v3Proj = hybridCst.proj * glm::vec4(v3, 1.0f);
+    const glm::vec4 v4Proj = hybridCst.proj * glm::vec4(v4, 1.0f);
 
     glm::vec3 ndcv1Proj = glm::vec3(__fdividef(v1Proj.x, v1Proj.w), __fdividef(v1Proj.y, v1Proj.w), __fdividef(v1Proj.z, v1Proj.w));
     glm::vec3 ndcv2Proj = glm::vec3(__fdividef(v2Proj.x, v2Proj.w), __fdividef(v2Proj.y, v2Proj.w), __fdividef(v2Proj.z, v2Proj.w));
@@ -182,9 +182,10 @@ __global__ void sphereFrustumBBoxClassifyKernel(
     const glm::vec4* __restrict__ spheres,
     unsigned int* __restrict__ smallSphereIndices,
     unsigned int* __restrict__ smallSphereCount,
-    TileSphereIDPairs* __restrict__ largeSphereTilePairs,
-    unsigned int* __restrict__ largeSphereCount,
-    unsigned int* __restrict__ frustumPassedCount)
+    unsigned long long* __restrict__ d_tile_entity_pairs,
+    unsigned int* __restrict__ d_pair_count,
+    unsigned int* __restrict__ frustumPassedCount,
+    int maxPairs)
 {
     const unsigned int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= hybridCst.sphereCount) return;
@@ -205,10 +206,26 @@ __global__ void sphereFrustumBBoxClassifyKernel(
     
     if (area <= (float)hybridCst.smallEntityThreshold) {
         unsigned int outIdx = atomicAdd(smallSphereCount, 1u);
-        smallSphereIndices[outIdx] = idx;
+        if (outIdx < (unsigned int)hybridCst.sphereCount)
+            smallSphereIndices[outIdx] = idx;
     } else {
-        atomicAdd(largeSphereCount, 1u);
-        addTileSphereIDPair(largeSphereTilePairs, idx, screenMin, screenMax);
+        int tileMinX = (int)(screenMin.x / TILE_SIZE);
+        int tileMinY = (int)(screenMin.y / TILE_SIZE);
+        int tileMaxX = (int)(screenMax.x / TILE_SIZE);
+        int tileMaxY = (int)(screenMax.y / TILE_SIZE);
+        if (tileMinX < 0) tileMinX = 0;
+        if (tileMinY < 0) tileMinY = 0;
+        if (tileMaxX >= hybridCst.tilesX) tileMaxX = hybridCst.tilesX - 1;
+        if (tileMaxY >= hybridCst.tilesY) tileMaxY = hybridCst.tilesY - 1;
+        for (int ty = tileMinY; ty <= tileMaxY; ++ty) {
+            for (int tx = tileMinX; tx <= tileMaxX; ++tx) {
+                unsigned int tileId = (unsigned int)(ty * hybridCst.tilesX + tx);
+                unsigned long long pair = ((unsigned long long)tileId << 32) | (unsigned long long)idx;
+                unsigned int outIdx = atomicAdd(d_pair_count, 1u);
+                if (outIdx < (unsigned int)maxPairs)
+                    d_tile_entity_pairs[outIdx] = pair;
+            }
+        }
     }
 }
 
@@ -227,9 +244,10 @@ __global__ void cylinderFrustumBBoxClassifyKernel(
     const Cylinder* __restrict__ cylinders,
     unsigned int* __restrict__ smallCylinderIndices,
     unsigned int* __restrict__ smallCylinderCount,
-    TileCylinderIDPairs* __restrict__ largeCylinderTilePairs,
-    unsigned int* __restrict__ largeCylinderCount,
-    unsigned int* __restrict__ frustumPassedCount)
+    unsigned long long* __restrict__ d_tile_entity_pairs,
+    unsigned int* __restrict__ d_pair_count,
+    unsigned int* __restrict__ frustumPassedCount,
+    int maxPairs)
 {
     const unsigned int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= hybridCst.cylinderCount) return;
@@ -245,23 +263,47 @@ __global__ void cylinderFrustumBBoxClassifyKernel(
     glm::vec2 projectedPoints[4];
     computeCylinderBBox(pa, pb, radius, projectedPoints);
 
-    // Convert NDC to screen coordinates
+    // Convert NDC to screen coordinates and compute screen bbox
+    float screenMinX = 1e6f, screenMinY = 1e6f, screenMaxX = -1e6f, screenMaxY = -1e6f;
     for (int i = 0; i < 4; i++) 
     {
-        projectedPoints[i].x = (projectedPoints[i].x * 0.5f + 0.5f) * (float)hybridCst.screenWidth;
-        projectedPoints[i].y = (projectedPoints[i].y * 0.5f + 0.5f) * (float)hybridCst.screenHeight;
-        projectedPoints[i] = glm::clamp(projectedPoints[i], glm::vec2(0.0f), glm::vec2((float)hybridCst.screenWidth, (float)hybridCst.screenHeight));
+        float sx = fmaf(projectedPoints[i].x, 0.5f, 0.5f) * (float)hybridCst.screenWidth;
+        float sy = fmaf(projectedPoints[i].y, 0.5f, 0.5f) * (float)hybridCst.screenHeight;
+        if (sx < screenMinX) screenMinX = sx;
+        if (sy < screenMinY) screenMinY = sy;
+        if (sx > screenMaxX) screenMaxX = sx;
+        if (sy > screenMaxY) screenMaxY = sy;
     }
+    screenMinX = fmaxf(0.0f, screenMinX);
+    screenMinY = fmaxf(0.0f, screenMinY);
+    screenMaxX = fminf((float)hybridCst.screenWidth, screenMaxX);
+    screenMaxY = fminf((float)hybridCst.screenHeight, screenMaxY);
     
     float area = quadArea(projectedPoints[0], projectedPoints[1], projectedPoints[2], projectedPoints[3]);
     if (area < 1.0f) return;
     
     if (area <= (float)hybridCst.smallEntityThreshold) {
         unsigned int outIdx = atomicAdd(smallCylinderCount, 1u);
-        smallCylinderIndices[outIdx] = idx;
+        if (outIdx < (unsigned int)hybridCst.cylinderCount)
+            smallCylinderIndices[outIdx] = idx;
     } else {
-        atomicAdd(largeCylinderCount, 1u);
-        addTileSphereIDPair(largeCylinderTilePairs, idx, screenMin, screenMax);
+        int tileMinX = (int)(screenMinX / TILE_SIZE);
+        int tileMinY = (int)(screenMinY / TILE_SIZE);
+        int tileMaxX = (int)(screenMaxX / TILE_SIZE);
+        int tileMaxY = (int)(screenMaxY / TILE_SIZE);
+        if (tileMinX < 0) tileMinX = 0;
+        if (tileMinY < 0) tileMinY = 0;
+        if (tileMaxX >= hybridCst.tilesX) tileMaxX = hybridCst.tilesX - 1;
+        if (tileMaxY >= hybridCst.tilesY) tileMaxY = hybridCst.tilesY - 1;
+        for (int ty = tileMinY; ty <= tileMaxY; ++ty) {
+            for (int tx = tileMinX; tx <= tileMaxX; ++tx) {
+                unsigned int tileId = (unsigned int)(ty * hybridCst.tilesX + tx);
+                unsigned long long pair = ((unsigned long long)tileId << 32) | (unsigned long long)idx;
+                unsigned int outIdx = atomicAdd(d_pair_count, 1u);
+                if (outIdx < (unsigned int)maxPairs)
+                    d_tile_entity_pairs[outIdx] = pair;
+            }
+        }
     }
 }
 
@@ -273,32 +315,34 @@ extern "C" void launchSphereFrustumBBoxClassify(
     const glm::vec4* d_spheres,
     unsigned int* d_smallSphereIndices,
     unsigned int* d_smallSphereCount,
-    SphereBillboard* d_largeBillboards,
-    unsigned int* d_largeSphereCount,
+    unsigned long long* d_tile_entity_pairs,
+    unsigned int* d_pair_count,
     unsigned int* d_frustumPassedCount,
     int sphereCount,
+    int maxPairs,
     cudaStream_t stream)
 {
     dim3 block(CULL_BLOCK_SIZE);
     dim3 grid((sphereCount + block.x - 1) / block.x);
     sphereFrustumBBoxClassifyKernel<<<grid, block, 0, stream>>>(
         d_spheres, d_smallSphereIndices, d_smallSphereCount,
-        d_largeBillboards, d_largeSphereCount, d_frustumPassedCount);
+        d_tile_entity_pairs, d_pair_count, d_frustumPassedCount, maxPairs);
 }
 
 extern "C" void launchCylinderFrustumBBoxClassify(
     const Cylinder* d_cylinders,
     unsigned int* d_smallCylinderIndices,
     unsigned int* d_smallCylinderCount,
-    CylinderBillboard* d_largeBillboards,
-    unsigned int* d_largeCylinderCount,
+    unsigned long long* d_tile_entity_pairs,
+    unsigned int* d_pair_count,
     unsigned int* d_frustumPassedCount,
     int cylinderCount,
+    int maxPairs,
     cudaStream_t stream)
 {
     dim3 block(CULL_BLOCK_SIZE);
     dim3 grid((cylinderCount + block.x - 1) / block.x);
     cylinderFrustumBBoxClassifyKernel<<<grid, block, 0, stream>>>(
         d_cylinders, d_smallCylinderIndices, d_smallCylinderCount,
-        d_largeBillboards, d_largeCylinderCount, d_frustumPassedCount);
+        d_tile_entity_pairs, d_pair_count, d_frustumPassedCount, maxPairs);
 }

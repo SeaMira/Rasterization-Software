@@ -45,6 +45,8 @@ struct HybridBinningConfig {
     int cylinderCount = 0;
     bool shown = true;
     int smallEntityThreshold = SMALL_ENTITY_THRESHOLD;
+    /** Average entities per tile for pair buffer size: buffer = avgEntitiesPerTile * totalTiles */
+    int avgEntitiesPerTile = AVG_ENTITIES_PER_TILE;
     double timerDuration = 48.0;
     int tilesX;
     int tilesY;
@@ -76,8 +78,8 @@ public:
     void initialize(int sphereCount, int cylinderCount) {
         m_sphereCount = sphereCount;
         m_cylinderCount = cylinderCount;
-        initSphereBinningResources(&m_sphereResources, sphereCount, m_config.tilesX, m_config.tilesY, m_config.totalTiles);
-        initCylinderBinningResources(&m_cylinderResources, cylinderCount, m_config.tilesX, m_config.tilesY, m_config.totalTiles);
+        initSphereBinningResources(&m_sphereResources, sphereCount, m_config.tilesX, m_config.tilesY, m_config.totalTiles, m_config.avgEntitiesPerTile);
+        initCylinderBinningResources(&m_cylinderResources, cylinderCount, m_config.tilesX, m_config.tilesY, m_config.totalTiles, m_config.avgEntitiesPerTile);
         std::cout << "Binning pipeline initialized: " << sphereCount << " spheres, " << cylinderCount << " cylinders" << std::endl;
     }
 
@@ -118,8 +120,8 @@ public:
 
         resetSphereBinningCounters(&m_sphereResources, stream);
         resetCylinderBinningCounters(&m_cylinderResources, stream);
-
         launchScreenClear(outputImage, d_depthBuffer, m_config.screenWidth, m_config.screenHeight, camera.getFar(), stream);
+        cudaStreamSynchronize(stream);  /* ensure counters are 0 before classifiers run */
 
         executeSpherePipelineBinning(d_spheres, m_sphereCount, d_depthBuffer, outputImage, &m_sphereResources, stream);
         executeCylinderPipelineBinning(d_cylinders, m_cylinderCount, d_depthBuffer, outputImage, &m_cylinderResources, stream);
@@ -222,7 +224,7 @@ int main(int argc, char* argv[]) {
                       "media/csv/cuda_hybrid_binning/process_times.csv",
                       config.sphereCount, config.cylinderCount, 0, config.timerDuration);
 
-    window.setupSceneInfoGui("Scene Info", {
+    std::unordered_map<std::string, int*> sceneData = {
         {"Screen width", &config.screenWidth},
         {"Screen height", &config.screenHeight},
         {"Sphere count", &config.sphereCount},
@@ -231,7 +233,8 @@ int main(int argc, char* argv[]) {
         {"Cylinder count", &config.cylinderCount},
         {"Visible cylinders", &visibleCylinders},
         {"Drawn cylinders", &drawnCylinders}
-    });
+    };
+    window.setupSceneInfoGui("Scene Info", sceneData);
     window.setupCameraGui("Camera Info", &camera);
     window.setupInputInfoGui("Input Info");
     window.setupBenchmarkInfoGui("Benchmark", &benchmark);
