@@ -116,15 +116,43 @@ public:
         constants.totalTiles = m_config.totalTiles;
         constants.smallEntityThreshold = m_config.smallEntityThreshold;
         constants.benchmark = 1;
+
+        // Pre-compute screen ray casting vectors (camera space)
+        {
+            float aspectRatio = (float)m_config.screenWidth / (float)m_config.screenHeight;
+            float fovRad = glm::radians(camera.getFov());
+            float fovTan = tanf(fovRad * 0.5f);
+            float halfFovTan = fovTan * aspectRatio;
+
+            glm::vec3 camFront = camera.getFront();
+            glm::vec3 camUp    = camera.getUp();
+            glm::vec3 camRight = camera.getRight();
+
+            // Corner ray directions in world space
+            glm::vec3 corner00 = glm::normalize(-halfFovTan * camRight - fovTan * camUp + camFront);
+            glm::vec3 corner10 = glm::normalize( halfFovTan * camRight - fovTan * camUp + camFront);
+            glm::vec3 corner01 = glm::normalize(-halfFovTan * camRight + fovTan * camUp + camFront);
+
+            // Transform to camera space via the 3x3 rotation part of the view matrix
+            glm::mat3 viewRot = glm::mat3(camera.getView());
+            glm::vec3 wCorner00 = viewRot * corner00;
+            glm::vec3 wCorner10 = viewRot * corner10;
+            glm::vec3 wCorner01 = viewRot * corner01;
+
+            constants.rayStart = wCorner00;
+            constants.dx = (wCorner10 - wCorner00) / (float)m_config.screenWidth;
+            constants.dy = (wCorner01 - wCorner00) / (float)m_config.screenHeight;
+        }
+
         uploadHybridConstants(constants, stream);
 
         resetSphereBinningCounters(&m_sphereResources, stream);
         resetCylinderBinningCounters(&m_cylinderResources, stream);
         launchScreenClear(outputImage, d_depthBuffer, m_config.screenWidth, m_config.screenHeight, camera.getFar(), stream);
-        cudaStreamSynchronize(stream);  /* ensure counters are 0 before classifiers run */
+        // cudaStreamSynchronize(stream);  /* ensure counters are 0 before classifiers run */
 
         executeSpherePipelineBinning(d_spheres, m_sphereCount, d_depthBuffer, outputImage, &m_sphereResources, stream);
-        executeCylinderPipelineBinning(d_cylinders, m_cylinderCount, d_depthBuffer, outputImage, &m_cylinderResources, stream);
+        // executeCylinderPipelineBinning(d_cylinders, m_cylinderCount, d_depthBuffer, outputImage, &m_cylinderResources, stream);
 
         nvtxRangePop();
     }
@@ -251,7 +279,7 @@ int main(int argc, char* argv[]) {
 
         Frustum frustum(camera);
         pipeline.executeFrame(d_spheres, d_cylinders, depthBuffer, outputSurface, camera, frustum, stream);
-        cudaStreamSynchronize(stream);
+        cudaStreamSynchronize(stream);  // ensure all kernels and D2H copies finish before reading stats
 
         pipeline.getSphereStats(&sphereFrustum, &sphereSmall, &sphereLarge);
         pipeline.getCylinderStats(&cylFrustum, &cylSmall, &cylLarge);
@@ -265,8 +293,8 @@ int main(int argc, char* argv[]) {
     }
 
     cudaStreamDestroy(stream);
-    texWrapper.cudaDestroySurfaceObj();
     texWrapper.cudaUnmapResources();
+    texWrapper.cudaDestroySurfaceObj();
     sphereBufferCUDA.cudaUnmapResources();
     cylinderBufferCUDA.cudaUnmapResources();
     std::cout << "Done." << std::endl;

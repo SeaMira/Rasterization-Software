@@ -204,15 +204,18 @@ __global__ void sphereFrustumBBoxClassifyKernel(
     float area = width * height;
     if (area < 1.0f) return;
     
-    if (area <= (float)hybridCst.smallEntityThreshold) {
+    if (area <= (float)hybridCst.smallEntityThreshold) 
+    {
         unsigned int outIdx = atomicAdd(smallSphereCount, 1u);
         if (outIdx < (unsigned int)hybridCst.sphereCount)
             smallSphereIndices[outIdx] = idx;
-    } else {
+    } 
+    else 
+    {
         int tileMinX = (int)(screenMin.x / TILE_SIZE);
         int tileMinY = (int)(screenMin.y / TILE_SIZE);
         int tileMaxX = (int)(screenMax.x / TILE_SIZE);
-        int tileMaxY = (int)(screenMax.y / TILE_SIZE);
+        int tileMaxY = (int)(screenMax.y / TILE_SIZE)+1;
         if (tileMinX < 0) tileMinX = 0;
         if (tileMinY < 0) tileMinY = 0;
         if (tileMaxX >= hybridCst.tilesX) tileMaxX = hybridCst.tilesX - 1;

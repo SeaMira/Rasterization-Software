@@ -88,11 +88,12 @@ __global__ void smallSphereRasterKernel(
 
     float dist = glm::length(cameraSpaceSphere) + 1e-6f;
     float sinAngle = __fdividef(radius, dist);
-    float tanAngle = tanf(asinf(sinAngle));
+    float tanAngle = tanf(asinf(fminf(sinAngle, 0.999f)));
     float quadScale = tanAngle * glm::length(camImposPos);
 
     glm::vec3 upVec(0.0f, 1.0f, 0.0f);
     glm::vec3 impU = glm::normalize(glm::cross(normCamSpaceSphere, upVec));
+    if (glm::length(impU) < 0.001f) impU = glm::vec3(1.0f, 0.0f, 0.0f);
     glm::vec3 impV = glm::cross(impU, normCamSpaceSphere) * quadScale;
     impU *= quadScale;
 
@@ -112,10 +113,10 @@ __global__ void smallSphereRasterKernel(
         maxC.x = fmaxf(maxC.x, x); maxC.y = fmaxf(maxC.y, y);
     }
 
-    int screenMinX = __float2int_rd(fmaf(minC.x, 0.5f, 0.5f) * hybridCst.screenWidth);
-    int screenMinY = __float2int_rd(fmaf(minC.y, 0.5f, 0.5f) * hybridCst.screenHeight);
-    int screenMaxX = __float2int_ru(fmaf(maxC.x, 0.5f, 0.5f) * hybridCst.screenWidth);
-    int screenMaxY = __float2int_ru(fmaf(maxC.y, 0.5f, 0.5f) * hybridCst.screenHeight);
+    int screenMinX = max(0, __float2int_rd(fmaf(minC.x, 0.5f, 0.5f) * hybridCst.screenWidth));
+    int screenMinY = max(0, __float2int_rd(fmaf(minC.y, 0.5f, 0.5f) * hybridCst.screenHeight));
+    int screenMaxX = min(hybridCst.screenWidth,  __float2int_ru(fmaf(maxC.x, 0.5f, 0.5f) * hybridCst.screenWidth));
+    int screenMaxY = min(hybridCst.screenHeight, __float2int_ru(fmaf(maxC.y, 0.5f, 0.5f) * hybridCst.screenHeight));
 
 
     float difx = float(screenMaxX - screenMinX);
@@ -132,21 +133,26 @@ __global__ void smallSphereRasterKernel(
     float proj32 = hybridCst.proj[3][2];
 
     for (int py = screenMinY; py < screenMaxY; py++) {
+        glm::vec3 rayColStart = hybridCst.rayStart + (float)py * hybridCst.dy;
         for (int px = screenMinX; px < screenMaxX; px++) {
             glm::vec3 rd = computeRayDirection(px, py, fovTan, halfFovTan);
             float t = iSphere(hybridCst.cameraPos, rd, spherePos, radius);
 
             if (t > 0.0f) {
-                glm::vec3 hit = hybridCst.cameraPos + rd * t;
+                glm::vec3 hit = (rayColStart + (float)px * hybridCst.dx) * t;
                 float depth = __fdividef(fmaf(hit.z, proj22, proj32), -hit.z);
                 unsigned int depthU = __float_as_uint(depth);
 
                 int pixelIdx = py * hybridCst.screenWidth + px;
-                if (atomicMin(&depthBuffer[pixelIdx], depthU) != depthU) {
+                unsigned int old = atomicMin(&depthBuffer[pixelIdx], depthU);
+                if (__uint_as_float(old) > depth) {
                     glm::vec3 normal = glm::normalize(hybridCst.cameraPos + rd * t - glm::vec3(spherePosR));
-                    float lambert = fmaxf(0.0f, glm::dot(normal, -glm::normalize(rd*t)));
+                    float lambert = fmaxf(0.0f, glm::dot(normal, -glm::normalize(rd * t)));
                     glm::vec3 color = glm::vec3(atomsColor[0], atomsColor[1], atomsColor[2]) * lambert * diffuse;
-                    uchar4 ucharColor = make_uchar4(color.x*255, color.y*255, color.z*255, 255);
+                    uchar4 ucharColor = make_uchar4(
+                        (unsigned char)(color.x * 255.0f),
+                        (unsigned char)(color.y * 255.0f),
+                        (unsigned char)(color.z * 255.0f), 255);
                     surf2Dwrite(ucharColor, outputImage, px * sizeof(uchar4), py);
                 }
             }
@@ -277,7 +283,7 @@ __global__ void smallCylinderRasterKernel(
                 xMin = fminf(xMin, xIntersections[i]);
                 xMax = fmaxf(xMax, xIntersections[i]);
             }
-
+            glm::vec3 rayColStart = hybridCst.rayStart + (float)py * hybridCst.dy;
             for (int px = fmaxf(0, __float2int_ru(xMin)); px <= fminf(__float2int_rd(xMax), hybridCst.screenWidth -1); ++px)
             {
                 glm::vec3 rd = computeRayDirection(px, py, fovTan, halfFovTan);
@@ -286,7 +292,7 @@ __global__ void smallCylinderRasterKernel(
 
                 if (tnor.x > 0.0f) {
                     float t = tnor.x;
-                    glm::vec3 hit = hybridCst.cameraPos + rd * t;
+                    glm::vec3 hit = (rayColStart + (float)px * hybridCst.dx) * t;
                     float depth = __fdividef(fmaf(hit.z, hybridCst.proj[2][2], hybridCst.proj[3][2]), -hit.z);
 
                     unsigned int depthU = __float_as_uint(depth);
@@ -300,7 +306,10 @@ __global__ void smallCylinderRasterKernel(
                         glm::vec3 normal = glm::normalize(glm::vec3(tnor.y, tnor.z, tnor.w));
                         float lambert = glm::max(0.0f, glm::dot(normal, -glm::normalize(rd * t)));
                         glm::vec3 color = glm::vec3(bondsColor[0], bondsColor[1], bondsColor[2]) * lambert * diffuse;
-                        uchar4 ucharColor = make_uchar4(color.x*255, color.y*255, color.z*255, 255);
+                        uchar4 ucharColor = make_uchar4(
+                            (unsigned char)(color.x * 255.0f),
+                            (unsigned char)(color.y * 255.0f),
+                            (unsigned char)(color.z * 255.0f), 255);
                         surf2Dwrite(ucharColor, outputImage, px * sizeof(uchar4), py); 
                     }
                 } 

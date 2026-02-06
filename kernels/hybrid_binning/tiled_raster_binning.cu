@@ -104,8 +104,10 @@ __global__ void tiledSphereRasterBinningKernel(
     float fovTan = tanf(fovRad * 0.5f);
     float halfFovTan = fovTan * aspectRatio;
 
+    glm::vec3 ray = hybridCst.rayStart + (float)pixelX * hybridCst.dx + (float)pixelY * hybridCst.dy;
+
     glm::vec3 rd = computeRayDirTiled(pixelX, pixelY, fovTan, halfFovTan);
-    float minDepth = depthBuffer[pixelY * hybridCst.screenWidth + pixelX];
+    float minDepth = __uint_as_float(depthBuffer[pixelY * hybridCst.screenWidth + pixelX]);
     glm::vec3 finalColor(0.0f);
     bool hasHit = false;
 
@@ -135,14 +137,15 @@ __global__ void tiledSphereRasterBinningKernel(
             glm::vec4 posR = shPosR[i];
             float t = iSphereTiled(hybridCst.cameraPos, rd, glm::vec3(posR), posR.w);
             if (t > 0.0f) {
-                glm::vec3 hit = hybridCst.cameraPos + rd * t;
+                glm::vec3 hit = ray * t;
                 float proj22 = hybridCst.proj[2][2];
                 float proj32 = hybridCst.proj[3][2];
                 float depth = __fdividef(fmaf(hit.z, proj22, proj32), -hit.z);
                 if (depth < minDepth) {
                     minDepth = depth;
                     hasHit = true;
-                    glm::vec3 normal = glm::normalize(hit - glm::vec3(posR));
+                    glm::vec3 worldHit = hybridCst.cameraPos + rd * t;
+                    glm::vec3 normal = glm::normalize(worldHit - glm::vec3(posR));
                     float lambert = fmaxf(0.0f, glm::dot(normal, -glm::normalize(rd * t)));
                     finalColor = glm::vec3(atomsColor[0], atomsColor[1], atomsColor[2]) * lambert * diffuse;
                 }
@@ -230,9 +233,11 @@ __global__ void tiledCylinderRasterBinningKernel(
     float fovTan = tanf(fovRad * 0.5f);
     float halfFovTan = fovTan * aspectRatio;
     glm::vec3 rd = computeRayDirTiled(pixelX, pixelY, fovTan, halfFovTan);
-    float minDepth = depthBuffer[pixelY * hybridCst.screenWidth + pixelX];
+    float minDepth = __uint_as_float(depthBuffer[pixelY * hybridCst.screenWidth + pixelX]);
     glm::vec3 finalColor(0.0f);
     bool hasHit = false;
+
+    glm::vec3 ray = hybridCst.rayStart + (float)pixelX * hybridCst.dx + (float)pixelY * hybridCst.dy;
 
     unsigned int numBatches = (entityCount + SHARED_BATCH - 1) / SHARED_BATCH;
     for (unsigned int batch = 0; batch < numBatches; batch++) {
@@ -318,7 +323,7 @@ __global__ void tiledCylinderRasterBinningKernel(
             glm::vec4 tnor = iCylinderTiled(hybridCst.cameraPos, rd, pa, pb, ra);
             if (tnor.x > 0.0f) {
                 float t = tnor.x;
-                glm::vec3 hit = hybridCst.cameraPos + rd * t;
+                glm::vec3 hit = ray * t;
                 float depth = __fdividef(fmaf(hit.z, hybridCst.proj[2][2], hybridCst.proj[3][2]), -hit.z);
 
                 if (depth < minDepth) {

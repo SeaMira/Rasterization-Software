@@ -72,6 +72,14 @@ struct HybridConstants {
     int benchmark;
     /** Max (tile_id, entity_id) pairs = avgEntitiesPerTile * totalTiles */
     int avgEntitiesPerTile;
+
+    /** Pre-computed screen ray casting vectors (camera space).
+     *  ray(px,py) = rayStart + px*dx + py*dy  (unnormalized direction).
+     *  Hit point in camera space: hit = ray(px,py) * t.
+     *  Depth from camera-space hit: (hit.z * proj[2][2] + proj[3][2]) / -hit.z */
+    glm::vec3 rayStart; ///< Corner (0,0) ray direction in camera space
+    glm::vec3 dx;       ///< Per-pixel delta along x in camera space
+    glm::vec3 dy;       ///< Per-pixel delta along y in camera space
 };
 
 /** Device-side color constants for raster (atoms/bonds); defined in small_entity_raster.cu */

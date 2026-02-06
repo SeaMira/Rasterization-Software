@@ -26,7 +26,6 @@ extern "C" void sortPairs64AndBuildTileOffsets(
     unsigned long long* d_pairs_out,
     unsigned int num_pairs,
     unsigned int total_tiles,
-    unsigned int* d_keys_extract,
     unsigned int* d_tile_offsets,
     unsigned int* d_unique_out,
     unsigned int* d_counts_out,
@@ -39,6 +38,7 @@ extern "C" void sortPairs64AndBuildTileOffsets(
     void* d_temp_scan,
     size_t temp_scan_bytes,
     cudaStream_t stream);
+extern "C" void getRleTempStorageBytesForPairs64(size_t* out_bytes, int maxPairs);
 extern "C" void buildTileOffsetsFromRLE(
     const unsigned int* d_unique_out, const unsigned int* d_counts_out,
     unsigned int num_runs, unsigned int num_pairs, unsigned int total_tiles,
@@ -80,7 +80,6 @@ void initCylinderBinningResources(CylinderBinningResources* r, int maxCylinders,
     CUDA_CHECK(cudaMalloc(&r->d_pairCount, sizeof(unsigned int)));
     CUDA_CHECK(cudaMalloc(&r->d_tile_entity_pairs, r->maxPairs * sizeof(unsigned long long)));
     CUDA_CHECK(cudaMalloc(&r->d_tile_entity_pairs_sorted, r->maxPairs * sizeof(unsigned long long)));
-    CUDA_CHECK(cudaMalloc(&r->d_keys_extract, r->maxPairs * sizeof(unsigned int)));
     CUDA_CHECK(cudaMalloc(&r->d_tile_offsets, (totalTiles + 1) * sizeof(unsigned int)));
     CUDA_CHECK(cudaMalloc(&r->d_unique_out, r->maxPairs * sizeof(unsigned int)));
     CUDA_CHECK(cudaMalloc(&r->d_counts_out, r->maxPairs * sizeof(unsigned int)));
@@ -95,9 +94,7 @@ void initCylinderBinningResources(CylinderBinningResources* r, int maxCylinders,
     r->d_temp_scan = nullptr;
     r->temp_rle_bytes = 0;
     r->temp_scan_bytes = 0;
-    cub::DeviceRunLengthEncode::Encode(nullptr, r->temp_rle_bytes,
-        (unsigned int*)nullptr, (unsigned int*)nullptr, (unsigned int*)nullptr,
-        (unsigned int*)nullptr, (int)r->maxPairs);
+    getRleTempStorageBytesForPairs64(&r->temp_rle_bytes, (int)r->maxPairs);
     cub::DeviceScan::ExclusiveSum(nullptr, r->temp_scan_bytes,
         (unsigned int*)nullptr, (unsigned int*)nullptr, (int)r->maxPairs);
     if (r->temp_sort64_bytes > 0) CUDA_CHECK(cudaMalloc(&r->d_temp_sort64, r->temp_sort64_bytes));
@@ -116,7 +113,6 @@ void freeCylinderBinningResources(CylinderBinningResources* r) {
     cudaFree(r->d_pairCount);
     cudaFree(r->d_tile_entity_pairs);
     cudaFree(r->d_tile_entity_pairs_sorted);
-    cudaFree(r->d_keys_extract);
     cudaFree(r->d_tile_offsets);
     cudaFree(r->d_unique_out);
     cudaFree(r->d_counts_out);
@@ -164,7 +160,7 @@ void executeCylinderPipelineBinning(
         sortPairs64AndBuildTileOffsets(
             r->d_tile_entity_pairs, r->d_tile_entity_pairs_sorted,
             numPairs, r->totalTiles,
-            r->d_keys_extract, r->d_tile_offsets,
+            r->d_tile_offsets,
             r->d_unique_out, r->d_counts_out, r->d_run_offsets, r->d_num_runs,
             r->d_temp_sort64, r->temp_sort64_bytes,
             r->d_temp_rle, r->temp_rle_bytes,

@@ -9,26 +9,29 @@
 #include <device_launch_parameters.h>
 #include <cstdint>
 #include <cub/cub.cuh>
+#include <thrust/iterator/transform_iterator.h>
 
 // ---- 64-bit pair path: d_pairs = (tile_id << 32) | entity_id ----
 
-__global__ void extractKeysFromPairs64Kernel(
-    const unsigned long long* __restrict__ d_pairs,
-    unsigned int* __restrict__ d_keys,
-    unsigned int num_pairs)
-{
-    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < num_pairs)
-        d_keys[i] = (unsigned int)(d_pairs[i] >> 32);
-}
+/** Functor: extracts tile_id (high 32 bits) from a 64-bit (tile_id, entity_id) pair.
+ *  Used with cub::TransformInputIterator to feed RLE without a separate extraction kernel. */
+struct ExtractTileId {
+    __host__ __device__ __forceinline__
+    unsigned int operator()(const unsigned long long& pair) const {
+        return static_cast<unsigned int>(pair >> 32);
+    }
+};
 
-/** Sort 64-bit pairs (tile_id in high 32 bits), run RLE on tile_id, build tile offsets. Entity index = low 32 bits, extracted in tiled raster. */
+using TileIdIterator = thrust::transform_iterator<ExtractTileId, const unsigned long long*, unsigned int>;
+
+/** Sort 64-bit pairs (tile_id in high 32 bits), run RLE on tile_id, build tile offsets.
+ *  Entity index = low 32 bits, extracted in tiled raster.
+ *  Uses TransformInputIterator to extract tile_id on-the-fly, avoiding a separate kernel + buffer. */
 extern "C" void sortPairs64AndBuildTileOffsets(
     unsigned long long* d_pairs_in,
     unsigned long long* d_pairs_out,
     unsigned int num_pairs,
     unsigned int total_tiles,
-    unsigned int* d_keys_extract,      /* temp: size num_pairs, holds tile_id per element for RLE input */
     unsigned int* d_tile_offsets,
     unsigned int* d_unique_out,
     unsigned int* d_counts_out,
@@ -57,14 +60,12 @@ extern "C" void sortPairs64AndBuildTileOffsets(
         0, 64,
         stream);
 
-    // 2) Extract tile_id (high 32 bits) for RLE
-    extractKeysFromPairs64Kernel<<<(num_pairs + 255) / 256, 256, 0, stream>>>(d_pairs_out, d_keys_extract, num_pairs);
-
-    // 3) Run-length encode on tile ids
+    // 2) Run-length encode: TransformInputIterator extracts tile_id (high 32 bits) lazily from sorted pairs
+    TileIdIterator tile_id_iter(d_pairs_out, ExtractTileId{});
     cub::DeviceRunLengthEncode::Encode(
         d_temp_storage_rle,
         temp_storage_bytes_rle,
-        d_keys_extract,
+        tile_id_iter,
         d_unique_out,
         d_counts_out,
         d_num_runs,
@@ -130,6 +131,18 @@ extern "C" void sortPairsAndBuildTileOffsets(
     // then call buildTileOffsetsFromRLE and launchScatterAndFillTileOffsets.
 }
 
+/** Query CUB for the temp storage bytes needed by RLE with TransformInputIterator on 64-bit pairs.
+ *  Callers use this during resource init instead of computing it directly (avoids exposing the iterator type). */
+extern "C" void getRleTempStorageBytesForPairs64(size_t* out_bytes, int maxPairs) {
+    *out_bytes = 0;
+    TileIdIterator dummy_iter(nullptr, ExtractTileId{});
+    cub::DeviceRunLengthEncode::Encode(
+        nullptr, *out_bytes,
+        dummy_iter,
+        (unsigned int*)nullptr, (unsigned int*)nullptr,
+        (unsigned int*)nullptr, maxPairs);
+}
+
 extern "C" void buildTileOffsetsFromRLE(
     const unsigned int* d_unique_out,
     const unsigned int* d_counts_out,
@@ -180,18 +193,18 @@ __global__ void scatterTileOffsetsKernel(
     }
 }
 
-// Kernel: fill gaps (tiles with no entities). Single-thread sequential pass so propagation is correct.
+// Kernel: fill gaps (tiles with no entities).
+// Must propagate BACKWARD so empty tiles get the offset of the NEXT occupied tile.
+// Forward propagation is wrong: it copies the START of the previous tile, stealing its entities.
 __global__ void fillTileOffsetsGapsKernel(
     unsigned int total_tiles,
     unsigned int* __restrict__ tileOffsets)
 {
     if (threadIdx.x != 0 || blockIdx.x != 0) return;
-    unsigned int last = 0u;
-    for (unsigned int t = 0; t < total_tiles; ++t) {
-        if (tileOffsets[t] != 0xFFFFFFFFu)
-            last = tileOffsets[t];
-        else
-            tileOffsets[t] = last;
+    // tileOffsets[total_tiles] = num_pairs (set by scatter kernel) acts as sentinel.
+    for (int t = (int)total_tiles - 1; t >= 0; --t) {
+        if (tileOffsets[t] == 0xFFFFFFFFu)
+            tileOffsets[t] = tileOffsets[t + 1];
     }
 }
 

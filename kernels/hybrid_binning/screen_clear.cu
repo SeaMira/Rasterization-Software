@@ -16,7 +16,7 @@ __global__ void clearScreenKernel(
     unsigned int px = blockIdx.x * blockDim.x + threadIdx.x;
     unsigned int py = blockIdx.y * blockDim.y + threadIdx.y;
     if (px >= screenWidth || py >= screenHeight) return;
-    uchar4 clearColor = make_uchar4(0, 0, 0, 255);
+    uchar4 clearColor = make_uchar4(255, 255, 0, 255);
     surf2Dwrite(clearColor, outputImage, px * sizeof(uchar4), py);
     depthBuffer[py * screenWidth + px] = __float_as_uint(farPlane);
 }

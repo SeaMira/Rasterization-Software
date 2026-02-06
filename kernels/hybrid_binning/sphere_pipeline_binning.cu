@@ -26,7 +26,6 @@ extern "C" void sortPairs64AndBuildTileOffsets(
     unsigned long long* d_pairs_out,
     unsigned int num_pairs,
     unsigned int total_tiles,
-    unsigned int* d_keys_extract,
     unsigned int* d_tile_offsets,
     unsigned int* d_unique_out,
     unsigned int* d_counts_out,
@@ -39,6 +38,7 @@ extern "C" void sortPairs64AndBuildTileOffsets(
     void* d_temp_scan,
     size_t temp_scan_bytes,
     cudaStream_t stream);
+extern "C" void getRleTempStorageBytesForPairs64(size_t* out_bytes, int maxPairs);
 extern "C" void buildTileOffsetsFromRLE(
     const unsigned int* d_unique_out,
     const unsigned int* d_counts_out,
@@ -85,19 +85,20 @@ void initSphereBinningResources(SphereBinningResources* r, int maxSpheres, int t
     r->totalTiles = totalTiles;
     int avgPerTile = (avgEntitiesPerTile > 0) ? avgEntitiesPerTile : AVG_ENTITIES_PER_TILE;
     r->maxPairs = avgPerTile * totalTiles;
+    printf("Initializing SphereBinningResources with maxSpheres=%d, tilesX=%d, tilesY=%d, totalTiles=%d, avgEntitiesPerTile=%d, avgPerTile=%d, maxPairs=%d\n",
+        maxSpheres, tilesX, tilesY, totalTiles, avgEntitiesPerTile, avgPerTile, r->maxPairs);
     if (r->maxPairs < totalTiles * 4) r->maxPairs = totalTiles * 4;
 
     CUDA_CHECK(cudaMalloc(&r->d_smallIndices, maxSpheres * sizeof(unsigned int)));
     CUDA_CHECK(cudaMalloc(&r->d_smallCount, sizeof(unsigned int)));
     CUDA_CHECK(cudaMalloc(&r->d_frustumPassedCount, sizeof(unsigned int)));
+    CUDA_CHECK(cudaMalloc(&r->d_pairCount, sizeof(unsigned int)));
     CUDA_CHECK(cudaHostAlloc(&r->h_smallCount, sizeof(unsigned int), cudaHostAllocDefault));
     CUDA_CHECK(cudaHostAlloc(&r->h_pairCount, sizeof(unsigned int), cudaHostAllocDefault));
     CUDA_CHECK(cudaHostAlloc(&r->h_frustumPassedCount, sizeof(unsigned int), cudaHostAllocDefault));
 
-    CUDA_CHECK(cudaMalloc(&r->d_pairCount, sizeof(unsigned int)));
     CUDA_CHECK(cudaMalloc(&r->d_tile_entity_pairs, r->maxPairs * sizeof(unsigned long long)));
     CUDA_CHECK(cudaMalloc(&r->d_tile_entity_pairs_sorted, r->maxPairs * sizeof(unsigned long long)));
-    CUDA_CHECK(cudaMalloc(&r->d_keys_extract, r->maxPairs * sizeof(unsigned int)));
     CUDA_CHECK(cudaMalloc(&r->d_tile_offsets, (totalTiles + 1) * sizeof(unsigned int)));
     CUDA_CHECK(cudaMalloc(&r->d_unique_out, r->maxPairs * sizeof(unsigned int)));
     CUDA_CHECK(cudaMalloc(&r->d_counts_out, r->maxPairs * sizeof(unsigned int)));
@@ -112,9 +113,7 @@ void initSphereBinningResources(SphereBinningResources* r, int maxSpheres, int t
     r->d_temp_scan = nullptr;
     r->temp_rle_bytes = 0;
     r->temp_scan_bytes = 0;
-    cub::DeviceRunLengthEncode::Encode(nullptr, r->temp_rle_bytes,
-        (unsigned int*)nullptr, (unsigned int*)nullptr, (unsigned int*)nullptr,
-        (unsigned int*)nullptr, (int)r->maxPairs);
+    getRleTempStorageBytesForPairs64(&r->temp_rle_bytes, (int)r->maxPairs);
     cub::DeviceScan::ExclusiveSum(nullptr, r->temp_scan_bytes,
         (unsigned int*)nullptr, (unsigned int*)nullptr, (int)r->maxPairs);
     if (r->temp_sort64_bytes > 0) CUDA_CHECK(cudaMalloc(&r->d_temp_sort64, r->temp_sort64_bytes));
@@ -133,7 +132,6 @@ void freeSphereBinningResources(SphereBinningResources* r) {
     cudaFree(r->d_pairCount);
     cudaFree(r->d_tile_entity_pairs);
     cudaFree(r->d_tile_entity_pairs_sorted);
-    cudaFree(r->d_keys_extract);
     cudaFree(r->d_tile_offsets);
     cudaFree(r->d_unique_out);
     cudaFree(r->d_counts_out);
@@ -159,6 +157,7 @@ void executeSpherePipelineBinning(
     cudaStream_t stream)
 {
     if (sphereCount == 0) return;
+    
 
     launchSphereFrustumBBoxClassify(
         d_spheres, r->d_smallIndices, r->d_smallCount,
@@ -168,20 +167,20 @@ void executeSpherePipelineBinning(
     cudaMemcpyAsync(r->h_smallCount, r->d_smallCount, sizeof(unsigned int), cudaMemcpyDeviceToHost, stream);
     cudaMemcpyAsync(r->h_pairCount, r->d_pairCount, sizeof(unsigned int), cudaMemcpyDeviceToHost, stream);
     cudaMemcpyAsync(r->h_frustumPassedCount, r->d_frustumPassedCount, sizeof(unsigned int), cudaMemcpyDeviceToHost, stream);
-    cudaStreamSynchronize(stream);
+    // cudaStreamSynchronize(stream);
 
     unsigned int smallCount = *r->h_smallCount;
     unsigned int numPairs = *r->h_pairCount;
 
     if (numPairs > 0) {
         
-        cudaStreamSynchronize(stream);
+        // cudaStreamSynchronize(stream);
         if (numPairs > (unsigned int)r->maxPairs) numPairs = r->maxPairs;
 
         sortPairs64AndBuildTileOffsets(
             r->d_tile_entity_pairs, r->d_tile_entity_pairs_sorted,
             numPairs, r->totalTiles,
-            r->d_keys_extract, r->d_tile_offsets,
+            r->d_tile_offsets,
             r->d_unique_out, r->d_counts_out, r->d_run_offsets, r->d_num_runs,
             r->d_temp_sort64, r->temp_sort64_bytes,
             r->d_temp_rle, r->temp_rle_bytes,
@@ -206,6 +205,8 @@ void executeSpherePipelineBinning(
         launchSmallSphereRaster(d_spheres, r->d_smallIndices, smallCount, d_depthBuffer, outputImage, stream);
     }
 
+    // TODO: Re-enable when sort/RLE/tile-offset pipeline is uncommented above.
+    // Without valid tile offsets, this reads garbage memory and crashes CUDA.
     if (numPairs > 0) {
         launchTiledSphereRasterBinning(
             d_spheres, r->d_tile_offsets, r->d_tile_entity_pairs_sorted,
