@@ -147,14 +147,14 @@ void executeCylinderPipelineBinning(
     cudaMemcpyAsync(r->h_smallCount, r->d_smallCount, sizeof(unsigned int), cudaMemcpyDeviceToHost, stream);
     cudaMemcpyAsync(r->h_pairCount, r->d_pairCount, sizeof(unsigned int), cudaMemcpyDeviceToHost, stream);
     cudaMemcpyAsync(r->h_frustumPassedCount, r->d_frustumPassedCount, sizeof(unsigned int), cudaMemcpyDeviceToHost, stream);
-    cudaStreamSynchronize(stream);
+    // cudaStreamSynchronize(stream);
 
     unsigned int smallCount = *r->h_smallCount;
     unsigned int numPairs = *r->h_pairCount;
 
     if (numPairs > 0) {
         
-        cudaStreamSynchronize(stream);
+        // cudaStreamSynchronize(stream);
         if (numPairs > (unsigned int)r->maxPairs) numPairs = r->maxPairs;
 
         sortPairs64AndBuildTileOffsets(

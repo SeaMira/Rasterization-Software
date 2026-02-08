@@ -50,7 +50,8 @@ __device__ inline glm::vec4 iCylinder(const glm::vec3& ro, const glm::vec3& rd,
 
     // body
     float y = fmaf(t, bard, baoc);
-    if( y>0.0f && y<baba ) return glm::vec4( t, oc+t*rd - ba*y/baba );
+    if( y>0.0f && y<baba ) 
+        return glm::vec4( t, oc+t*rd - ba*y/baba );
     
     // caps
     // t = ( ((y<0.0f) ? 0.0f : baba) - baoc)/bard;
@@ -202,7 +203,7 @@ __global__ void smallCylinderRasterKernel(
     const float sinAngle = __fdividef(radius, dV0);
     float		angle	 = asinf( sinAngle );
     const glm::vec3	y1		 = y * radius;
-    const glm::vec3	x2		 = x * radius * cosf( angle );
+    const glm::vec3	x2		 = x * radius * __cosf( angle );
     const glm::vec3	y2		 = y1 * sinAngle;
     angle				 = asinf( __fdividef(radius, dV1) );
     const glm::vec3 x3		 = x * ( dV1 - radius ) * __tanf( angle );
@@ -244,9 +245,6 @@ __global__ void smallCylinderRasterKernel(
         minX = min(minX, __float2int_rd(projectedPoints[i].x)); 
         maxX = max(maxX, __float2int_ru(projectedPoints[i].x));
     }
-
-    if (maxY < 0 || minY >= hybridCst.screenHeight || maxY - minY < 2 ||
-        maxX < 0 || minX >= hybridCst.screenWidth || maxX - minX < 2) return;
     
 
     float aspectRatio = fdividef(hybridCst.screenWidth, hybridCst.screenHeight);
@@ -284,7 +282,7 @@ __global__ void smallCylinderRasterKernel(
                 xMax = fmaxf(xMax, xIntersections[i]);
             }
             glm::vec3 rayColStart = hybridCst.rayStart + (float)py * hybridCst.dy;
-            for (int px = fmaxf(0, __float2int_ru(xMin)); px <= fminf(__float2int_rd(xMax), hybridCst.screenWidth -1); ++px)
+            for (int px = max(0, __float2int_ru(xMin)); px <= min(__float2int_rd(xMax), hybridCst.screenWidth -1); ++px)
             {
                 glm::vec3 rd = computeRayDirection(px, py, fovTan, halfFovTan);
                 glm::vec4 tnor = iCylinder(glm::vec3(hybridCst.cameraPos), rd, pa, pb, radius);

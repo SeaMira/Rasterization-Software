@@ -96,8 +96,6 @@ __global__ void tiledSphereRasterBinningKernel(
     if (entityCount == 0) return;
 
     __shared__ glm::vec4 shPosR[SHARED_BATCH];
-    __shared__ int shBboxMinX[SHARED_BATCH], shBboxMinY[SHARED_BATCH];
-    __shared__ int shBboxMaxX[SHARED_BATCH], shBboxMaxY[SHARED_BATCH];
 
     float aspectRatio = (float)hybridCst.screenWidth / (float)hybridCst.screenHeight;
     float fovRad = glm::radians(hybridCst.fov);
@@ -122,18 +120,13 @@ __global__ void tiledSphereRasterBinningKernel(
                 unsigned int sphereIndex = (unsigned int)(pair & 0xFFFFFFFFu);
                 glm::vec4 posR = d_spheres[sphereIndex];
                 shPosR[localIdx] = posR;
-                int bx0, by0, bx1, by1;
-                computeSphereBBoxTiled(posR, bx0, by0, bx1, by1);
-                shBboxMinX[localIdx] = bx0; shBboxMinY[localIdx] = by0;
-                shBboxMaxX[localIdx] = bx1; shBboxMaxY[localIdx] = by1;
             }
         }
         __syncthreads();
 
         unsigned int batchCount = min(SHARED_BATCH, entityCount - batchStart);
         for (unsigned int i = 0; i < batchCount; i++) {
-            if (pixelX < shBboxMinX[i] || pixelX >= shBboxMaxX[i] ||
-                pixelY < shBboxMinY[i] || pixelY >= shBboxMaxY[i]) continue;
+            
             glm::vec4 posR = shPosR[i];
             float t = iSphereTiled(hybridCst.cameraPos, rd, glm::vec3(posR), posR.w);
             if (t > 0.0f) {
@@ -168,23 +161,6 @@ __global__ void tiledSphereRasterBinningKernel(
 }
 
 
-// Cross product of 2D vectors
-__device__ inline float cross2D(glm::vec2 a, glm::vec2 b) 
-{
-    return a.x * b.y - a.y * b.x;
-}
-
-// Check if point is inside convex quadrilateral
-__device__ inline bool pointInQuad(glm::vec2 p, glm::vec2 q0, glm::vec2 q1, glm::vec2 q2, glm::vec2 q3) 
-{
-    float c0 = cross2D(q1 - q0, p - q0);
-    float c1 = cross2D(q2 - q1, p - q1);
-    float c2 = cross2D(q3 - q2, p - q2);
-    float c3 = cross2D(q0 - q3, p - q3);
-    
-    return (c0 >= 0 && c1 >= 0 && c2 >= 0 && c3 >= 0) ||
-           (c0 <= 0 && c1 <= 0 && c2 <= 0 && c3 <= 0);
-}
 
 // Cylinder: ray-cylinder and bbox from quad (simplified - reuse logic from hybrid tiled)
 __device__ inline glm::vec4 iCylinderTiled(const glm::vec3& ro, const glm::vec3& rd,
@@ -251,62 +227,6 @@ __global__ void tiledCylinderRasterBinningKernel(
                 Cylinder cyl = d_cylinders[cylIndex];
                 shPa[localIdx] = cyl.pa_r;
                 shPb[localIdx] = cyl.pb_r;
-
-                glm::vec3 pa = glm::vec3(cyl.pa_r), pb = glm::vec3(cyl.pb_r);
-                float radius = cyl.pa_r.w;
-                glm::vec4 camA = hybridCst.view * glm::vec4(pa, 1.0f);
-                glm::vec4 camB = hybridCst.view * glm::vec4(pb, 1.0f);
-                glm::vec3 camImpPosA, camImpPosB;
-                if ( camA.z < camB.z )
-                {
-                    camImpPosA = glm::vec3(camB);
-                    camImpPosB = glm::vec3(camA);
-                }
-                else
-                {
-                    camImpPosA = glm::vec3(camA);
-                    camImpPosB = glm::vec3(camB);
-                }
-                glm::vec3 center = glm::normalize( ( camImpPosA + camImpPosB ) * 0.5f );
-                // Cylinder axis
-                const glm::vec3 z = glm::normalize(camImpPosB - camImpPosA);
-
-                // Find orthonormal x,y axes orthogonal to cylinder axis
-                glm::vec3 x = glm::normalize(glm::cross(center, z));
-                glm::vec3 y = glm::normalize(glm::cross(x, z)); // make full basis
-
-                // Compute impostor construction vectors.
-                const float dV0 = glm::length( camImpPosA );
-                const float dV1 = glm::length( camImpPosB );
-
-                const float sinAngle = __fdividef(radius, dV0);
-                float		angle	 = asinf( sinAngle );
-                const glm::vec3	y1		 = y * radius;
-                const glm::vec3	x2		 = x * radius * cosf( angle );
-                const glm::vec3	y2		 = y1 * sinAngle;
-                angle				 = asinf( __fdividef(radius, dV1) );
-                const glm::vec3 x3		 = x * ( dV1 - radius ) * __tanf( angle );
-
-                // Compute impostors vertices.
-                const glm::vec3 v1 = camImpPosA - x2 + y2;
-                const glm::vec3 v2 = camImpPosA + x2 + y2;
-                const glm::vec3 v3 = camImpPosB - x3 + y1;
-                const glm::vec3 v4 = camImpPosB + x3 + y1;
-
-                const glm::vec4 v1Proj = hybridCst.proj * glm::vec4(v1, 1.0f);
-                const glm::vec4 v2Proj = hybridCst.proj * glm::vec4(v2, 1.0f);
-                const glm::vec4 v3Proj = hybridCst.proj * glm::vec4(v3, 1.0f);
-                const glm::vec4 v4Proj = hybridCst.proj * glm::vec4(v4, 1.0f);
-
-                glm::vec3 ndcv1Proj = glm::vec3(__fdividef(v1Proj.x, v1Proj.w), __fdividef(v1Proj.y, v1Proj.w), __fdividef(v1Proj.z, v1Proj.w));
-                glm::vec3 ndcv2Proj = glm::vec3(__fdividef(v2Proj.x, v2Proj.w), __fdividef(v2Proj.y, v2Proj.w), __fdividef(v2Proj.z, v2Proj.w));
-                glm::vec3 ndcv3Proj = glm::vec3(__fdividef(v3Proj.x, v3Proj.w), __fdividef(v3Proj.y, v3Proj.w), __fdividef(v3Proj.z, v3Proj.w));
-                glm::vec3 ndcv4Proj = glm::vec3(__fdividef(v4Proj.x, v4Proj.w), __fdividef(v4Proj.y, v4Proj.w), __fdividef(v4Proj.z, v4Proj.w));
-
-                shQuad[localIdx * 4 + 0] = glm::vec2(ndcv1Proj);
-                shQuad[localIdx * 4 + 1] = glm::vec2(ndcv2Proj);
-                shQuad[localIdx * 4 + 2] = glm::vec2(ndcv4Proj);
-                shQuad[localIdx * 4 + 3] = glm::vec2(ndcv3Proj);
             }
         }
         __syncthreads();
@@ -314,10 +234,7 @@ __global__ void tiledCylinderRasterBinningKernel(
         unsigned int batchCount = min(SHARED_BATCH, entityCount - batchStart);
         glm::vec2 pixelCenter((float)pixelX + 0.5f, (float)pixelY + 0.5f);
         for (unsigned int i = 0; i < batchCount; i++) {
-            glm::vec2 q0 = shQuad[i * 4 + 0], q1 = shQuad[i * 4 + 1];
-            glm::vec2 q2 = shQuad[i * 4 + 2], q3 = shQuad[i * 4 + 3];
             
-            if (!pointInQuad(pixelCenter, q0, q1, q2, q3)) continue;
             glm::vec3 pa = glm::vec3(shPa[i]), pb = glm::vec3(shPb[i]);
             float ra = shPa[i].w;
             glm::vec4 tnor = iCylinderTiled(hybridCst.cameraPos, rd, pa, pb, ra);

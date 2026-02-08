@@ -152,7 +152,7 @@ public:
         // cudaStreamSynchronize(stream);  /* ensure counters are 0 before classifiers run */
 
         executeSpherePipelineBinning(d_spheres, m_sphereCount, d_depthBuffer, outputImage, &m_sphereResources, stream);
-        // executeCylinderPipelineBinning(d_cylinders, m_cylinderCount, d_depthBuffer, outputImage, &m_cylinderResources, stream);
+        executeCylinderPipelineBinning(d_cylinders, m_cylinderCount, d_depthBuffer, outputImage, &m_cylinderResources, stream);
 
         nvtxRangePop();
     }

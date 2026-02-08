@@ -128,13 +128,13 @@ __device__ inline void computeCylinderBBox(
     glm::vec3 camImpPosA, camImpPosB;
     if ( camA.z < camB.z )
 	{
-		camImpPosA = camB;
-		camImpPosB = camA;
+		camImpPosA = glm::vec3(camB);
+		camImpPosB = glm::vec3(camA);
 	}
 	else
 	{
-		camImpPosA = camA;
-		camImpPosB = camB;
+		camImpPosA = glm::vec3(camA);
+		camImpPosB = glm::vec3(camB);
 	}
     glm::vec3 center = normalize( ( camImpPosA + camImpPosB ) * 0.5f );
     // Cylinder axis
@@ -151,7 +151,7 @@ __device__ inline void computeCylinderBBox(
     const float sinAngle = __fdividef(radius, dV0);
     float		angle	 = asinf( sinAngle );
     const glm::vec3	y1		 = y * radius;
-    const glm::vec3	x2		 = x * radius * cosf( angle );
+    const glm::vec3	x2		 = x * radius * __cosf( angle );
     const glm::vec3	y2		 = y1 * sinAngle;
     angle				 = asinf( __fdividef(radius, dV1) );
     const glm::vec3 x3		 = x * ( dV1 - radius ) * __tanf( angle );
@@ -270,17 +270,13 @@ __global__ void cylinderFrustumBBoxClassifyKernel(
     float screenMinX = 1e6f, screenMinY = 1e6f, screenMaxX = -1e6f, screenMaxY = -1e6f;
     for (int i = 0; i < 4; i++) 
     {
-        float sx = fmaf(projectedPoints[i].x, 0.5f, 0.5f) * (float)hybridCst.screenWidth;
-        float sy = fmaf(projectedPoints[i].y, 0.5f, 0.5f) * (float)hybridCst.screenHeight;
-        if (sx < screenMinX) screenMinX = sx;
-        if (sy < screenMinY) screenMinY = sy;
-        if (sx > screenMaxX) screenMaxX = sx;
-        if (sy > screenMaxY) screenMaxY = sy;
+        projectedPoints[i].x = fmaf(projectedPoints[i].x, 0.5f, 0.5f) * (float)hybridCst.screenWidth;
+        projectedPoints[i].y = fmaf(projectedPoints[i].y, 0.5f, 0.5f) * (float)hybridCst.screenHeight;
+        if (projectedPoints[i].x < screenMinX) screenMinX = projectedPoints[i].x;
+        if (projectedPoints[i].y < screenMinY) screenMinY = projectedPoints[i].y;
+        if (projectedPoints[i].x > screenMaxX) screenMaxX = projectedPoints[i].x;
+        if (projectedPoints[i].y > screenMaxY) screenMaxY = projectedPoints[i].y;
     }
-    screenMinX = fmaxf(0.0f, screenMinX);
-    screenMinY = fmaxf(0.0f, screenMinY);
-    screenMaxX = fminf((float)hybridCst.screenWidth, screenMaxX);
-    screenMaxY = fminf((float)hybridCst.screenHeight, screenMaxY);
     
     float area = quadArea(projectedPoints[0], projectedPoints[1], projectedPoints[2], projectedPoints[3]);
     if (area < 1.0f) return;
@@ -289,7 +285,13 @@ __global__ void cylinderFrustumBBoxClassifyKernel(
         unsigned int outIdx = atomicAdd(smallCylinderCount, 1u);
         if (outIdx < (unsigned int)hybridCst.cylinderCount)
             smallCylinderIndices[outIdx] = idx;
-    } else {
+        } 
+    else 
+    {
+        screenMinX = fmaxf(0.0f, screenMinX);
+        screenMinY = fmaxf(0.0f, screenMinY);
+        screenMaxX = fminf((float)hybridCst.screenWidth, screenMaxX);
+        screenMaxY = fminf((float)hybridCst.screenHeight, screenMaxY);
         int tileMinX = (int)(screenMinX / TILE_SIZE);
         int tileMinY = (int)(screenMinY / TILE_SIZE);
         int tileMaxX = (int)(screenMaxX / TILE_SIZE);
