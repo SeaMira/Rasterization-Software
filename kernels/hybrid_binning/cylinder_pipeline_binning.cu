@@ -56,7 +56,10 @@ extern "C" void launchTiledCylinderRasterBinning(
     const Cylinder* d_cylinders, const unsigned int* d_tile_offsets,
     const unsigned long long* d_tile_entity_pairs_sorted,
     unsigned int* d_depthBuffer, cudaSurfaceObject_t outputImage,
-    unsigned int tilesX, unsigned int tilesY, cudaStream_t stream);
+    unsigned int tilesX, unsigned int tilesY,
+    unsigned int* d_lightTileList, unsigned int* d_heavyTileIndices,
+    unsigned int* d_heavyBatchStarts, unsigned int* d_tileClassifyCounts,
+    cudaStream_t stream);
 
 #define CUDA_CHECK(call) do { cudaError_t e = call; if (e != cudaSuccess) printf("CUDA error %d: %s\n", e, cudaGetErrorString(e)); } while(0)
 
@@ -100,6 +103,7 @@ void initCylinderBinningResources(CylinderBinningResources* r, int maxCylinders,
     if (r->temp_sort64_bytes > 0) CUDA_CHECK(cudaMalloc(&r->d_temp_sort64, r->temp_sort64_bytes));
     if (r->temp_rle_bytes > 0) CUDA_CHECK(cudaMalloc(&r->d_temp_rle, r->temp_rle_bytes));
     if (r->temp_scan_bytes > 0) CUDA_CHECK(cudaMalloc(&r->d_temp_scan, r->temp_scan_bytes));
+    CUDA_CHECK(cudaMalloc(&r->d_tileClassifyCounts, 2 * sizeof(unsigned int)));
 }
 
 void freeCylinderBinningResources(CylinderBinningResources* r) {
@@ -121,6 +125,7 @@ void freeCylinderBinningResources(CylinderBinningResources* r) {
     if (r->d_temp_sort64) cudaFree(r->d_temp_sort64);
     if (r->d_temp_rle) cudaFree(r->d_temp_rle);
     if (r->d_temp_scan) cudaFree(r->d_temp_scan);
+    cudaFree(r->d_tileClassifyCounts);
 }
 
 void resetCylinderBinningCounters(CylinderBinningResources* r, cudaStream_t stream) {
@@ -188,7 +193,9 @@ void executeCylinderPipelineBinning(
     if (numPairs > 0) {
         launchTiledCylinderRasterBinning(
             d_cylinders, r->d_tile_offsets, r->d_tile_entity_pairs_sorted,
-            d_depthBuffer, outputImage, r->tilesX, r->tilesY, stream);
+            d_depthBuffer, outputImage, r->tilesX, r->tilesY,
+            r->d_unique_out, r->d_counts_out, r->d_run_offsets,
+            r->d_tileClassifyCounts, stream);
     }
 }
 

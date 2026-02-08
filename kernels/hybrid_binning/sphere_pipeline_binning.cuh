@@ -37,6 +37,7 @@ struct SphereBinningResources {
     int tilesX;
     int tilesY;
     int totalTiles;
+    unsigned int* d_tileClassifyCounts; // [0]=lightCount, [1]=heavyCount
 };
 
 void initSphereBinningResources(SphereBinningResources* r, int maxSpheres, int tilesX, int tilesY, int totalTiles, int avgEntitiesPerTile = 0);

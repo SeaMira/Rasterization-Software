@@ -38,6 +38,7 @@ struct CylinderBinningResources {
     int tilesX;
     int tilesY;
     int totalTiles;
+    unsigned int* d_tileClassifyCounts; // [0]=lightCount, [1]=heavyCount
 };
 
 void initCylinderBinningResources(CylinderBinningResources* r, int maxCylinders, int tilesX, int tilesY, int totalTiles, int avgEntitiesPerTile = 0);

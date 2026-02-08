@@ -73,6 +73,10 @@ extern "C" void launchTiledSphereRasterBinning(
     cudaSurfaceObject_t outputImage,
     unsigned int tilesX,
     unsigned int tilesY,
+    unsigned int* d_lightTileList,
+    unsigned int* d_heavyTileIndices,
+    unsigned int* d_heavyBatchStarts,
+    unsigned int* d_tileClassifyCounts,
     cudaStream_t stream);
 
 #define CUDA_CHECK(call) do { cudaError_t e = call; if (e != cudaSuccess) printf("CUDA error %d: %s\n", e, cudaGetErrorString(e)); } while(0)
@@ -119,6 +123,7 @@ void initSphereBinningResources(SphereBinningResources* r, int maxSpheres, int t
     if (r->temp_sort64_bytes > 0) CUDA_CHECK(cudaMalloc(&r->d_temp_sort64, r->temp_sort64_bytes));
     if (r->temp_rle_bytes > 0) CUDA_CHECK(cudaMalloc(&r->d_temp_rle, r->temp_rle_bytes));
     if (r->temp_scan_bytes > 0) CUDA_CHECK(cudaMalloc(&r->d_temp_scan, r->temp_scan_bytes));
+    CUDA_CHECK(cudaMalloc(&r->d_tileClassifyCounts, 2 * sizeof(unsigned int)));
 }
 
 void freeSphereBinningResources(SphereBinningResources* r) {
@@ -140,6 +145,7 @@ void freeSphereBinningResources(SphereBinningResources* r) {
     if (r->d_temp_sort64) cudaFree(r->d_temp_sort64);
     if (r->d_temp_rle) cudaFree(r->d_temp_rle);
     if (r->d_temp_scan) cudaFree(r->d_temp_scan);
+    cudaFree(r->d_tileClassifyCounts);
 }
 
 void resetSphereBinningCounters(SphereBinningResources* r, cudaStream_t stream) {
@@ -210,7 +216,9 @@ void executeSpherePipelineBinning(
     if (numPairs > 0) {
         launchTiledSphereRasterBinning(
             d_spheres, r->d_tile_offsets, r->d_tile_entity_pairs_sorted,
-            d_depthBuffer, outputImage, r->tilesX, r->tilesY, stream);
+            d_depthBuffer, outputImage, r->tilesX, r->tilesY,
+            r->d_unique_out, r->d_counts_out, r->d_run_offsets,
+            r->d_tileClassifyCounts, stream);
     }
 }
 
