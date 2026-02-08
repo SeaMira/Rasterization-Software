@@ -202,7 +202,6 @@ __global__ void tiledCylinderRasterBinningKernel(
     if (entityCount == 0) return;
 
     __shared__ glm::vec4 shPa[SHARED_BATCH], shPb[SHARED_BATCH];
-    __shared__ glm::vec2 shQuad[SHARED_BATCH * 4];
 
     float aspectRatio = (float)hybridCst.screenWidth / (float)hybridCst.screenHeight;
     float fovRad = glm::radians(hybridCst.fov);

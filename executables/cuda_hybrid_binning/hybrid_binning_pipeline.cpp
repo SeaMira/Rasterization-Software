@@ -164,6 +164,10 @@ public:
         getCylinderBinningStats(&m_cylinderResources, frustumPassed, smallCount, largeCount);
     }
 
+    void setSmallEntityThreshold(int threshold) {
+        m_config.smallEntityThreshold = threshold;
+    }
+
 private:
     HybridBinningConfig m_config;
     int m_sphereCount = 0;
@@ -266,6 +270,12 @@ int main(int argc, char* argv[]) {
     window.setupCameraGui("Camera Info", &camera);
     window.setupInputInfoGui("Input Info");
     window.setupBenchmarkInfoGui("Benchmark", &benchmark);
+
+    int tileSize = TILE_SIZE;
+    int maxEntitiesPerTile = config.avgEntitiesPerTile;
+    window.setupPipelineConfigGui("Pipeline Config",
+        config.smallEntityThreshold, tileSize,
+        maxEntitiesPerTile, config.tilesX, config.tilesY);
 
     cudaStream_t stream;
     cudaStreamCreate(&stream);
