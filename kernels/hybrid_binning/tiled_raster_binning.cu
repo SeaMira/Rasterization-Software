@@ -29,11 +29,8 @@ __device__ inline float iSphereTiled(const glm::vec3& ro, const glm::vec3& rd,
     return -b - sqrtf(h);
 }
 
-__device__ inline glm::vec3 computeRayDirTiled(int px, int py, float fovTan, float halfFovTan) {
-    glm::vec2 p = (-glm::vec2(hybridCst.screenWidth, hybridCst.screenHeight) +
-                   2.0f * glm::vec2(px, py)) / glm::vec2(hybridCst.screenWidth, hybridCst.screenHeight);
-    return glm::normalize(p.x * hybridCst.right * halfFovTan +
-                          p.y * hybridCst.up * fovTan + hybridCst.front);
+__device__ inline glm::vec3 fastNormalize(const glm::vec3& v) {
+    return v * rsqrtf(glm::dot(v, v));
 }
 
 __device__ inline glm::vec4 iCylinderTiled(const glm::vec3& ro, const glm::vec3& rd,
@@ -100,7 +97,7 @@ __device__ inline void writeFragmentSafe(
     cudaSurfaceObject_t outputImage, int px, int py)
 {
     unsigned int newDepth = __float_as_uint(depth);
-    unsigned int old = depthBuffer[pixelIdx];
+    unsigned int old = __ldg(&depthBuffer[pixelIdx]);
 
     while (__uint_as_float(old) > depth) {
         unsigned int assumed = old;
@@ -128,19 +125,15 @@ __global__ void tiledSphereRasterWGKernel(
     unsigned int* __restrict__ depthBuffer,
     cudaSurfaceObject_t outputImage)
 {
-    const float aspectRatio = (float)hybridCst.screenWidth / (float)hybridCst.screenHeight;
-    const float fovRad = glm::radians(hybridCst.fov);
-    const float fovTan = tanf(fovRad * 0.5f);
-    const float halfFovTan = fovTan * aspectRatio;
     const float proj22 = hybridCst.proj[2][2];
     const float proj32 = hybridCst.proj[3][2];
 
     __shared__ glm::vec4 shPosR[SHARED_BATCH];
 
     const unsigned int wgIdx       = blockIdx.x;
-    const unsigned int tileIdx     = d_wg_tileId[wgIdx];
-    const unsigned int entityStart = d_wg_entityStart[wgIdx];
-    const unsigned int entityCount = d_wg_entityCount[wgIdx];
+    const unsigned int tileIdx     = __ldg(&d_wg_tileId[wgIdx]);
+    const unsigned int entityStart = __ldg(&d_wg_entityStart[wgIdx]);
+    const unsigned int entityCount = __ldg(&d_wg_entityCount[wgIdx]);
 
     const unsigned int tileX  = tileIdx % hybridCst.tilesX;
     const unsigned int tileY  = tileIdx / hybridCst.tilesX;
@@ -150,7 +143,7 @@ __global__ void tiledSphereRasterWGKernel(
 
     bool hasHit = false;
     glm::vec3 finalColor = glm::vec3(0.0f);
-    float finalDepth = __uint_as_float(depthBuffer[pixelY * hybridCst.screenWidth + pixelX]);
+    float finalDepth = __uint_as_float(__ldg(&depthBuffer[pixelY * hybridCst.screenWidth + pixelX]));
 
     // Load entities into shared memory
     const unsigned int localIdx = threadIdx.y * TILE_SIZE + threadIdx.x;
@@ -164,8 +157,8 @@ __global__ void tiledSphereRasterWGKernel(
     // Ray-trace; atomicMin since multiple blocks may share a tile
     if (!validPixel) return;
 
-    glm::vec3 rd  = computeRayDirTiled(pixelX, pixelY, fovTan, halfFovTan);
     glm::vec3 ray = hybridCst.rayStart + (float)pixelX * hybridCst.dx + (float)pixelY * hybridCst.dy;
+    glm::vec3 rd  = fastNormalize(ray.x * hybridCst.right + ray.y * hybridCst.up - ray.z * hybridCst.front);
     const int pixelIdx = pixelY * hybridCst.screenWidth + pixelX;
 
     for (unsigned int i = 0; i < entityCount; i++) {
@@ -177,9 +170,8 @@ __global__ void tiledSphereRasterWGKernel(
             
             if (depth < finalDepth) {
                 hasHit = true;
-                glm::vec3 worldHit = hybridCst.cameraPos + rd * t;
-                glm::vec3 normal = glm::normalize(worldHit - glm::vec3(posR));
-                float lambert = fmaxf(0.0f, glm::dot(normal, -glm::normalize(rd * t)));
+                glm::vec3 normal = fastNormalize(hybridCst.cameraPos + rd * t - glm::vec3(posR));
+                float lambert = fmaxf(0.0f, glm::dot(normal, -rd));
                 finalColor = glm::vec3(atomsColor[0], atomsColor[1], atomsColor[2]) * lambert * diffuse;
                 finalDepth = depth;
             }
@@ -205,20 +197,15 @@ __global__ void tiledCylinderRasterWGKernel(
     unsigned int* __restrict__ depthBuffer,
     cudaSurfaceObject_t outputImage)
 {
-    const float aspectRatio = (float)hybridCst.screenWidth / (float)hybridCst.screenHeight;
-    const float fovRad = glm::radians(hybridCst.fov);
-    const float fovTan = tanf(fovRad * 0.5f);
-    const float halfFovTan = fovTan * aspectRatio;
     const float proj22 = hybridCst.proj[2][2];
     const float proj32 = hybridCst.proj[3][2];
 
-    
     __shared__ glm::vec4 shPa[SHARED_BATCH], shPb[SHARED_BATCH];
 
     const unsigned int wgIdx       = blockIdx.x;
-    const unsigned int tileIdx     = d_wg_tileId[wgIdx];
-    const unsigned int entityStart = d_wg_entityStart[wgIdx];
-    const unsigned int entityCount = d_wg_entityCount[wgIdx];
+    const unsigned int tileIdx     = __ldg(&d_wg_tileId[wgIdx]);
+    const unsigned int entityStart = __ldg(&d_wg_entityStart[wgIdx]);
+    const unsigned int entityCount = __ldg(&d_wg_entityCount[wgIdx]);
 
     const unsigned int tileX  = tileIdx % hybridCst.tilesX;
     const unsigned int tileY  = tileIdx / hybridCst.tilesX;
@@ -228,7 +215,7 @@ __global__ void tiledCylinderRasterWGKernel(
     
     bool hasHit = false;
     glm::vec3 finalColor = glm::vec3(0.0f);
-    float finalDepth = __uint_as_float(depthBuffer[pixelY * hybridCst.screenWidth + pixelX]); 
+    float finalDepth = __uint_as_float(__ldg(&depthBuffer[pixelY * hybridCst.screenWidth + pixelX])); 
 
     // Load entities into shared memory
     const unsigned int localIdx = threadIdx.y * TILE_SIZE + threadIdx.x;
@@ -244,8 +231,8 @@ __global__ void tiledCylinderRasterWGKernel(
     // Ray-trace; atomicMin since multiple blocks may share a tile
     if (!validPixel) return;
 
-    glm::vec3 rd  = computeRayDirTiled(pixelX, pixelY, fovTan, halfFovTan);
     glm::vec3 ray = hybridCst.rayStart + (float)pixelX * hybridCst.dx + (float)pixelY * hybridCst.dy;
+    glm::vec3 rd  = fastNormalize(ray.x * hybridCst.right + ray.y * hybridCst.up - ray.z * hybridCst.front);
     const int pixelIdx = pixelY * hybridCst.screenWidth + pixelX;
 
     for (unsigned int i = 0; i < entityCount; i++) {
@@ -259,8 +246,8 @@ __global__ void tiledCylinderRasterWGKernel(
             
             if (depth < finalDepth) {
                 hasHit = true;
-                glm::vec3 normal = glm::normalize(glm::vec3(tnor.y, tnor.z, tnor.w));
-                float lambert = glm::max(0.0f, glm::dot(normal, -glm::normalize(rd * t)));
+                glm::vec3 normal = fastNormalize(glm::vec3(tnor.y, tnor.z, tnor.w));
+                float lambert = fmaxf(0.0f, glm::dot(normal, -rd));
                 finalColor = glm::vec3(bondsColor[0], bondsColor[1], bondsColor[2]) * lambert * diffuse;
                 finalDepth = depth;
             }
