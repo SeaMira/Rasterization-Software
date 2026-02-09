@@ -105,11 +105,13 @@ struct Frustum
      * Uses the `isOnOrForwardPlane` method from the `Plane` structure to check if the bounding box of the cylinder is inside the frustum.
      * If the bbox is on or in front of all the planes, it is considered inside the frustum.
      * 
-     * @param cyl A cylinder represented by its extreme points and a radius.
+     * @param pa Position of endpoint A.
+     * @param pb Position of endpoint B.
+     * @param radius Cylinder radius.
      * 
      * @return true if the bbox of the cylinder is inside the frustum, false otherwise.
      */
-    bool isCylinderInside(Cylinder& cyl) const;
+    bool isCylinderInside(const glm::vec3& pa, const glm::vec3& pb, float radius) const;
 };
 
 

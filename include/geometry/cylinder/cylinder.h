@@ -1,36 +1,31 @@
 #ifndef CYLINDER_H
 #define CYLINDER_H
 
+#include <cstdint>
 #include <glm/glm.hpp>
 
 
 /**
- * @struct Cylinder
+ * @struct CylinderIndex
  * 
- * @brief Represents a cylinder in 3D space.
+ * @brief Represents a cylinder in 3D space via indices into the sphere buffer.
  * 
- * The cylinder is defined by two points (extremes) and a radius. The points are represented as 4D vectors, where the last component is the radius of the cylinder.
+ * The cylinder is defined by two sphere indices (its endpoints) and a radius.
+ * The actual 3D positions are resolved from the sphere buffer at runtime.
+ * Total size: 16 bytes (GPU-aligned).
  */
-struct Cylinder
-{
-    glm::vec4 pa_r; ///< extreme A of the cylinder
-    glm::vec4 pb_r; ///< extreme B of the cylinder
+struct CylinderIndex {
+    uint32_t sphereIndexA;  ///< Index of sphere at end A
+    uint32_t sphereIndexB;  ///< Index of sphere at end B
+    float radius;           ///< Cylinder radius
+    uint32_t _padding;      ///< Padding for alignment
 
-    /**
-     * @brief Construct a new Cylinder object by defining its extremes and radius.
-     * 
-     * @param pa extreme A of the cylinder
-     * @param pb extreme B of the cylinder
-     * @param radius radius of the cylinder
-     */
-    Cylinder(const glm::vec3& pa, const glm::vec3& pb, float radius) : 
-        pa_r(glm::vec4(pa.x, pa.y, pa.z, radius)), pb_r(glm::vec4(pb.x, pb.y, pb.z, radius)) 
-        {}
-
-    /**
-     * @brief Construct a new Cylinder object with default values.
-     */
-    Cylinder() : pa_r(0.0f), pb_r(0.0f) {}
+    CylinderIndex(uint32_t a, uint32_t b, float r)
+        : sphereIndexA(a), sphereIndexB(b), radius(r), _padding(0) {}
+    CylinderIndex() : sphereIndexA(0), sphereIndexB(0), radius(0.0f), _padding(0) {}
 };
+
+/// Backward-compatible alias
+using Cylinder = CylinderIndex;
 
 #endif // CYLINDER_H

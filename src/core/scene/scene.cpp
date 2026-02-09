@@ -35,12 +35,12 @@ void Scene::addSpheresFromClass(const std::vector<geometry::Sphere>& spheres)
     }
 }
 
-void Scene::addCylinder(const Cylinder& cylinder)
+void Scene::addCylinder(const CylinderIndex& cylinder)
 {
     m_cylinders.push_back(cylinder);
 }
 
-void Scene::addCylinders(const std::vector<Cylinder>& cylinders)
+void Scene::addCylinders(const std::vector<CylinderIndex>& cylinders)
 {
     m_cylinders.insert(m_cylinders.end(), cylinders.begin(), cylinders.end());
 }
@@ -69,18 +69,21 @@ void Scene::computeBoundingBox(glm::vec3& outMin, glm::vec3& outMax) const
         outMax = glm::max(outMax, sphereMax);
     }
 
-    // Process cylinders
+    // Process cylinders (resolve positions from sphere buffer)
     for (const auto& cylinder : m_cylinders)
     {
-        glm::vec3 pa(cylinder.pa_r.x, cylinder.pa_r.y, cylinder.pa_r.z);
-        glm::vec3 pb(cylinder.pb_r.x, cylinder.pb_r.y, cylinder.pb_r.z);
-        float radius = cylinder.pa_r.w;
+        if (cylinder.sphereIndexA < m_spheres.size() && cylinder.sphereIndexB < m_spheres.size())
+        {
+            glm::vec3 pa(m_spheres[cylinder.sphereIndexA]);
+            glm::vec3 pb(m_spheres[cylinder.sphereIndexB]);
+            float radius = cylinder.radius;
 
-        glm::vec3 cylMin = glm::min(pa, pb) - glm::vec3(radius);
-        glm::vec3 cylMax = glm::max(pa, pb) + glm::vec3(radius);
+            glm::vec3 cylMin = glm::min(pa, pb) - glm::vec3(radius);
+            glm::vec3 cylMax = glm::max(pa, pb) + glm::vec3(radius);
 
-        outMin = glm::min(outMin, cylMin);
-        outMax = glm::max(outMax, cylMax);
+            outMin = glm::min(outMin, cylMin);
+            outMax = glm::max(outMax, cylMax);
+        }
     }
 
     // Handle empty scene

@@ -13,6 +13,7 @@
 
 extern "C" void launchCylinderFrustumBBoxClassify(
     const Cylinder* d_cylinders,
+    const glm::vec4* d_spheres,
     unsigned int* d_smallCylinderIndices,
     unsigned int* d_smallCylinderCount,
     unsigned long long* d_tile_entity_pairs,
@@ -40,7 +41,8 @@ extern "C" void sortPairs64AndBuildTileOffsets(
     cudaStream_t stream);
 extern "C" void getRleTempStorageBytesForPairs64(size_t* out_bytes, int maxPairs);
 extern "C" void launchSmallCylinderRaster(
-    const Cylinder* d_cylinders, const unsigned int* d_smallCylinderIndices,
+    const Cylinder* d_cylinders, const glm::vec4* d_spheres,
+    const unsigned int* d_smallCylinderIndices,
     unsigned int smallCylinderCount, unsigned int* d_depthBuffer,
     cudaSurfaceObject_t outputImage, cudaStream_t stream);
 extern "C" void launchExpandWorkGroups(
@@ -55,6 +57,7 @@ extern "C" void launchExpandWorkGroups(
     cudaStream_t stream);
 extern "C" void launchTiledCylinderRasterWG(
     const Cylinder* d_cylinders,
+    const glm::vec4* d_spheres,
     const unsigned long long* d_tile_entity_pairs_sorted,
     const unsigned int* d_wg_tileId,
     const unsigned int* d_wg_entityStart,
@@ -150,6 +153,7 @@ void resetCylinderBinningCounters(CylinderBinningResources* r, cudaStream_t stre
 
 void executeCylinderPipelineBinning(
     const Cylinder* d_cylinders,
+    const glm::vec4* d_spheres,
     int cylinderCount,
     unsigned int* d_depthBuffer,
     cudaSurfaceObject_t outputImage,
@@ -159,7 +163,7 @@ void executeCylinderPipelineBinning(
     if (cylinderCount == 0) return;
 
     launchCylinderFrustumBBoxClassify(
-        d_cylinders, r->d_smallIndices, r->d_smallCount,
+        d_cylinders, d_spheres, r->d_smallIndices, r->d_smallCount,
         r->d_tile_entity_pairs, r->d_pairCount, r->d_frustumPassedCount,
         cylinderCount, r->maxPairs, stream);
 
@@ -211,14 +215,14 @@ void executeCylinderPipelineBinning(
         // Launch tiled cylinder raster
         if (totalWorkGroups > 0) {
             launchTiledCylinderRasterWG(
-                d_cylinders, r->d_tile_entity_pairs_sorted,
+                d_cylinders, d_spheres, r->d_tile_entity_pairs_sorted,
                 r->d_wg_tileId, r->d_wg_entityStart, r->d_wg_entityCount,
                 totalWorkGroups, d_depthBuffer, outputImage, stream);
         }
     }
 
     if (smallCount > 0) {
-        launchSmallCylinderRaster(d_cylinders, r->d_smallIndices, smallCount, d_depthBuffer, outputImage, stream);
+        launchSmallCylinderRaster(d_cylinders, d_spheres, r->d_smallIndices, smallCount, d_depthBuffer, outputImage, stream);
     }
 }
 

@@ -59,12 +59,12 @@ bool Frustum::isSphereInside(glm::vec4& sph) const
 }
 
 
-bool Frustum::isCylinderInside(Cylinder& cyl) const
+bool Frustum::isCylinderInside(const glm::vec3& pa, const glm::vec3& pb, float radius) const
 {
-    glm::vec3 a = cyl.pb_r - cyl.pa_r;
-    glm::vec3 e = cyl.pb_r.w*sqrt( 1.0f - a*a/glm::dot(a,a) );
+    glm::vec3 a = pb - pa;
+    glm::vec3 e = radius*sqrt( 1.0f - a*a/glm::dot(a,a) );
     
-    BBox3D bbox3d = {glm::min( glm::vec3(cyl.pa_r) - e, glm::vec3(cyl.pb_r) - e ), glm::max( glm::vec3(cyl.pa_r) + e, glm::vec3(cyl.pb_r) + e )};
+    BBox3D bbox3d = {glm::min( pa - e, pb - e ), glm::max( pa + e, pb + e )};
 
     return (leftFace.isOnOrForwardPlaneAABB(bbox3d) &&
         rightFace.isOnOrForwardPlaneAABB(bbox3d) &&

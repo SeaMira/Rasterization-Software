@@ -36,11 +36,14 @@ struct Constants {
 
 static __constant__ Constants cst;
 
-struct Cylinder 
+struct CylinderIndex
 {
-    glm::vec4 pa_r;
-    glm::vec4 pb_r;
+    unsigned int sphereIndexA;
+    unsigned int sphereIndexB;
+    float radius;
+    unsigned int _padding;
 };
+using Cylinder = CylinderIndex;
 
 struct BBox3D
 {
@@ -263,6 +266,7 @@ __device__ inline RayDirectionResult getRayDirection(glm::vec3& pa, glm::vec3& p
 __global__ void cylinderRasterKernel(
     // buffers (device pointers)
     Cylinder* __restrict__ cylinders,
+    const glm::vec4* __restrict__ spheres,
     // storage buffers (lineal)
     unsigned int* __restrict__ depthBuffer,            // in uint bits of float depth, length = screenW*screenH
     unsigned int* __restrict__ pixelOwnershipBuffer,   // length = screenW*screenH
@@ -281,10 +285,14 @@ __global__ void cylinderRasterKernel(
     if (idx >= cst.cylinderCount) return;
 
     Cylinder c = cylinders[idx];
-    // glm::vec4 posr = s.positionr;
+    glm::vec4 sA = spheres[c.sphereIndexA];
+    glm::vec4 sB = spheres[c.sphereIndexB];
+    glm::vec3 pa = glm::vec3(sA);
+    glm::vec3 pb = glm::vec3(sB);
+    float ra = c.radius;
 
     // Frustum test
-    if (!isCylinderInside(glm::vec3(c.pa_r.x, c.pa_r.y, c.pa_r.z), glm::vec3(c.pb_r.x, c.pb_r.y, c.pb_r.z), c.pa_r.w))
+    if (!isCylinderInside(pa, pb, ra))
     {
         // mark zero pixels like shader did
         unsigned int visId = cst.visibilityFrameBufferIndexOffset + idx;
@@ -294,10 +302,6 @@ __global__ void cylinderRasterKernel(
     }
 
     if (cst.benchmark == 1) atomicAdd(frustCullcounter, 1u);
-
-    glm::vec3 pa = glm::vec3(c.pa_r.x, c.pa_r.y, c.pa_r.z);
-    glm::vec3 pb = glm::vec3(c.pb_r.x, c.pb_r.y, c.pb_r.z);
-    float ra = c.pa_r.w;
     glm::vec3 camSpaceCylA = glm::vec3(cst.view * glm::vec4(pa, 1.0f));
     glm::vec3 camSpaceCylB = glm::vec3(cst.view * glm::vec4(pb, 1.0f));
 
@@ -498,6 +502,7 @@ __global__ void cylinderRasterKernel(
 
 extern "C" void cylinderRaster(
     Cylinder* cylinders,
+    const glm::vec4* d_spheres,
     int c_cylinderCount,
     glm::mat4 c_view,
     glm::mat4 c_proj,
@@ -556,6 +561,7 @@ extern "C" void cylinderRaster(
     dim3 grid((c_cylinderCount + block.x - 1) / block.x);
     cylinderRasterKernel<<<grid, block, 0, stream>>>(
         cylinders,
+        d_spheres,
         d_depthBuffer,
         d_pixelOwnershipBuffer,
         (FramePixelsCount*)d_visibilityFrameBuffer,

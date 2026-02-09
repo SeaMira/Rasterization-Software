@@ -2,17 +2,22 @@
 
 layout(local_size_x = 256) in;
 
-struct Cylinder 
+struct CylinderIndex
 {
-    vec4 pa_r;  // (x, y, z, r)
-    vec4 pb_r;  // (x, y, z, r)
-    uint index;
-    int wasDrawn[3];
+    uint sphereIndexA;
+    uint sphereIndexB;
+    float radius;
+    uint _padding;
+};
+
+layout(std430, binding = 6) buffer SphereBuffer
+{
+    vec4 spheres[];
 };
 
 layout(std430, binding = 9) buffer CylinderBuffer 
 {
-    Cylinder cylinders[];
+    CylinderIndex cylinderIndices[];
 };
 
 struct CylinderBillboard 
@@ -91,11 +96,8 @@ void getCylinderBbox(out vec2 projectedPoints[4], vec3 pa, vec3 pb, vec3 center,
         
 }
 
-void storeCylinderBBox(Cylinder cylinder)
+void storeCylinderBBox(vec3 pa, vec3 pb, float ra)
 {
-    vec3 pa = cylinder.pa_r.xyz;
-    vec3 pb = cylinder.pb_r.xyz;
-    float ra = cylinder.pa_r.w;
     vec3 camSpaceCylA = vec3(view * vec4(pa, 1.0f));
     vec3 camSpaceCylB = vec3(view * vec4(pb, 1.0f));
 
@@ -124,7 +126,7 @@ void storeCylinderBBox(Cylinder cylinder)
 
 
     cylinderBillboardData[gl_GlobalInvocationID.x] =
-            CylinderBillboard(cylinder.pa_r, cylinder.pb_r, 
+            CylinderBillboard(vec4(pa, ra), vec4(pb, ra), 
                 projectedPoints[0], projectedPoints[1], 
                 projectedPoints[2], projectedPoints[3], 
                 gl_GlobalInvocationID.x, 0, 0, 0);
@@ -142,6 +144,9 @@ void main()
     }
 
     // Get cylinder bbox
-    Cylinder c = cylinders[index];
-    storeCylinderBBox(c);    
+    CylinderIndex c = cylinderIndices[index];
+    vec3 pa = spheres[c.sphereIndexA].xyz;
+    vec3 pb = spheres[c.sphereIndexB].xyz;
+    float ra = c.radius;
+    storeCylinderBBox(pa, pb, ra);    
 }

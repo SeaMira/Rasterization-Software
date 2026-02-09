@@ -68,7 +68,7 @@ public:
      * @param cylinders Vector of cylinders to add.
      * @return Reference to this builder for chaining.
      */
-    SceneBuilder& withCylinders(const std::vector<Cylinder>& cylinders);
+    SceneBuilder& withCylinders(const std::vector<CylinderIndex>& cylinders);
 
     /**
      * @brief Builds the scene.
@@ -82,7 +82,7 @@ private:
     std::unique_ptr<ISceneLoader> m_loader;
     std::vector<geometry::Sphere> m_spheres;
     std::vector<glm::vec4> m_sphereData;
-    std::vector<Cylinder> m_cylinders;
+    std::vector<CylinderIndex> m_cylinders;
     bool m_hasDirectSpheres = false;
     bool m_hasSphereData = false;
     bool m_hasDirectCylinders = false;

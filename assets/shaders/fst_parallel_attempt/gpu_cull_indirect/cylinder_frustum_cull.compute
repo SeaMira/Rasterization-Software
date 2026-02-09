@@ -10,16 +10,24 @@
 
 layout(local_size_x = 256) in;
 
-struct Cylinder 
+struct CylinderIndex
 {
-    vec4 pa_r;  // punto A + radio
-    vec4 pb_r;  // punto B + radio (unused)
+    uint sphereIndexA;
+    uint sphereIndexB;
+    float radius;
+    uint _padding;
+};
+
+// Input: sphere positions
+layout(std430, binding = 6) buffer SphereBuffer
+{
+    vec4 spheres[];
 };
 
 // Input: todos los cilindros
 layout(std430, binding = 7) buffer CylinderBuffer 
 {
-    Cylinder cylinders[];
+    CylinderIndex cylinderIndices[];
 };
 
 // Output: índices de cilindros visibles
@@ -111,9 +119,12 @@ void main()
     }
 
     // Get cylinder
-    Cylinder c = cylinders[index];
+    CylinderIndex c = cylinderIndices[index];
+    vec3 pa = spheres[c.sphereIndexA].xyz;
+    vec3 pb = spheres[c.sphereIndexB].xyz;
+    float ra = c.radius;
     
-    if (isCylinderInside(c.pa_r.xyz, c.pb_r.xyz, c.pa_r.w)) 
+    if (isCylinderInside(pa, pb, ra)) 
     {
         // Atomically increment counter and get the index for this visible cylinder
         uint visibleIndex = atomicAdd(visibleCylinderCount, 1);

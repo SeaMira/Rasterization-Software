@@ -248,7 +248,7 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
             #else
                 cylinderShader.setInt("benchmark", 0);
             #endif
-            cullCylinders(cylinders, visibleCylinders, frustum, visibleCylindersCount);
+            cullCylinders(cylinders, visibleCylinders, spheres, frustum, visibleCylindersCount);
             cylinderBuffer.bind();
             glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, visibleCylindersCount * sizeof(CylinderContainer), visibleCylinders.data());
             cylinderBuffer.unbind();
@@ -407,7 +407,7 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
             glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
             
             cylinderShader.use();
-            cullCylinders(cylinders, visibleCylinders, frustum, visibleCylindersCount);
+            cullCylinders(cylinders, visibleCylinders, spheres, frustum, visibleCylindersCount);
             notOccludedCylindersCount = visibleCylindersCount;
             cylinderBuffer.bind();
             glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, visibleCylindersCount * sizeof(CylinderContainer), visibleCylinders.data());

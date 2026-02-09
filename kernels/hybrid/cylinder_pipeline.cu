@@ -20,6 +20,7 @@
 // From frustum_bbox_classify.cu
 extern "C" void launchCylinderFrustumBBoxClassify(
     const Cylinder* d_cylinders,
+    const glm::vec4* d_spheres,
     unsigned int* d_smallCylinderIndices,
     unsigned int* d_smallCylinderCount,
     CylinderBillboard* d_largeBillboards,
@@ -64,6 +65,7 @@ extern "C" void launchCylinderTileBinning(
 // From small_entity_raster.cu
 extern "C" void launchSmallCylinderRaster(
     const Cylinder* d_cylinders,
+    const glm::vec4* d_spheres,
     const unsigned int* d_smallCylinderIndices,
     unsigned int smallCylinderCount,
     unsigned int* d_depthBuffer,
@@ -188,6 +190,7 @@ void resetCylinderPipelineCounters(CylinderPipelineResources* resources, cudaStr
 
 void executeCylinderPipeline(
     const Cylinder* d_cylinders,
+    const glm::vec4* d_spheres,
     int cylinderCount,
     unsigned int* d_depthBuffer,
     cudaSurfaceObject_t outputImage,
@@ -205,6 +208,7 @@ void executeCylinderPipeline(
     
     launchCylinderFrustumBBoxClassify(
         d_cylinders,
+        d_spheres,
         resources->d_smallIndices,
         resources->d_smallCount,
         resources->d_largeBillboards,
@@ -268,6 +272,7 @@ void executeCylinderPipeline(
         
         launchSmallCylinderRaster(
             d_cylinders,
+            d_spheres,
             resources->d_smallIndices,
             smallCount,
             d_depthBuffer,

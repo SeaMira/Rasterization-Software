@@ -31,30 +31,31 @@ std::vector<glm::vec4> loaded_scene(std::filesystem::path& path, int sphere_coun
     return spheres;
 }
 
-std::vector<Cylinder> loaded_cylinder_scene(std::filesystem::path& path, int cylinder_count)
+std::vector<CylinderIndex> loaded_cylinder_scene(std::filesystem::path& path, int cylinder_count)
 {
     ChemFilesLoader loader(path);
-    std::vector<Cylinder> cylinders;
-
+    std::vector<CylinderIndex> cylinders;
+    auto& bonds = loader.getBondsInfo();
     for (int i = 0; i < std::min(loader.getBondsAmount(), cylinder_count); i++)
     {
-        std::pair<glm::vec4, glm::vec4> bond = loader.getBond(i);
-        cylinders.push_back({bond.first, bond.second, cylinderRadius});
+        const auto& bond = bonds[i];
+        cylinders.push_back(CylinderIndex(bond.first, bond.second, cylinderRadius));
     }
     return cylinders;
 }
 
-void loaded_complete_scene(std::filesystem::path& path, std::vector<glm::vec4>& spheres, int sphere_count, std::vector<Cylinder>& cylinders, int cylinder_count)
+void loaded_complete_scene(std::filesystem::path& path, std::vector<glm::vec4>& spheres, int sphere_count, std::vector<CylinderIndex>& cylinders, int cylinder_count)
 {
     ChemFilesLoader loader(path);
     std::vector<glm::vec4>& positions = loader.getSphereInfo();
     spheres.assign(positions.begin(), positions.begin() + std::min(positions.size(), static_cast<size_t>(sphere_count)));
 
     cylinders.clear();
+    auto& bonds = loader.getBondsInfo();
     for (int i = 0; i < std::min(loader.getBondsAmount(), cylinder_count); i++)
     {
-        std::pair<glm::vec4, glm::vec4> bond = loader.getBond(i);
-        cylinders.push_back({bond.first, bond.second, cylinderRadius});
+        const auto& bond = bonds[i];
+        cylinders.push_back(CylinderIndex(bond.first, bond.second, cylinderRadius));
     }
 }
 
@@ -68,21 +69,18 @@ std::vector<glm::vec4> grid_scene(int gridWidth, int sphere_count)
     return spheres;
 }
 
-std::vector<Cylinder> cylinder_grid_scene(int gridWidth, int cylinder_count)
+std::vector<CylinderIndex> cylinder_grid_scene(int gridWidth, int cylinder_count)
 {
-    std::vector<Cylinder> cylinders;
+    std::vector<CylinderIndex> cylinders;
     for (int i = 0; i < cylinder_count; i++)
     {
-        cylinders.push_back(
-            {{(float)(i%gridWidth)*separation + sphereRadius, (float)(i/gridWidth) * separation, 1.0f},
-            {(float)(i%gridWidth + 1)*separation - sphereRadius, (float)(i/gridWidth) * separation, 1.0f},
-            cylinderRadius}
-        );
+        // Connect sphere i to sphere i+1
+        cylinders.push_back(CylinderIndex(i, i + 1, cylinderRadius));
     }
     return cylinders;
 }
 
-void complete_grid_scene(int gridWidth, std::vector<glm::vec4>& spheres, int sphere_count, std::vector<Cylinder>& cylinders, int cylinder_count)
+void complete_grid_scene(int gridWidth, std::vector<glm::vec4>& spheres, int sphere_count, std::vector<CylinderIndex>& cylinders, int cylinder_count)
 {
     spheres.clear();
     cylinders.clear();
@@ -99,12 +97,10 @@ void complete_grid_scene(int gridWidth, std::vector<glm::vec4>& spheres, int sph
     }
     for (int i = 0; i < cylinder_count; i++)
     {
-        float d_x = (float)(i%sn_entities);
-        cylinders.push_back(
-            Cylinder(glm::vec3(d_x*separation + sphereRadius, (float)(i/sn_entities) * separation, 1.0f),
-            glm::vec3((d_x + 1.0f)*separation - sphereRadius, (float)(i/sn_entities) * separation, 1.0f),
-            cylinderRadius)
-        );
+        // Connect sphere i to sphere i+1 (clamped to valid range)
+        uint32_t idxA = i % sphere_count;
+        uint32_t idxB = (i + 1) % sphere_count;
+        cylinders.push_back(CylinderIndex(idxA, idxB, cylinderRadius));
     }
 }
 
@@ -127,9 +123,9 @@ std::vector<glm::vec4> package_scene(int gridWidth, int gridHeight, int gridDept
     return spheres;
 }
 
-std::vector<Cylinder> cylinder_package_scene(int gridWidth, int gridHeight, int gridDepth, int cylinder_count)
+std::vector<CylinderIndex> cylinder_package_scene(int gridWidth, int gridHeight, int gridDepth, int cylinder_count)
 {
-    std::vector<Cylinder> cylinders;
+    std::vector<CylinderIndex> cylinders;
     int count = 0;
     for (int i = 0; i < gridWidth; i++)
     {
@@ -138,11 +134,13 @@ std::vector<Cylinder> cylinder_package_scene(int gridWidth, int gridHeight, int 
             for (int k = 0; k < gridDepth; k++)
             {
                 if (count >= cylinder_count) return cylinders;
-                cylinders.push_back(
-                    {{(float)i*2.0f, (float)j*2.0f, (float)k*2.0f},
-                    {(float)i*2.0f, (float)j*2.0f, (float)(k+1)*2.0f},
-                    .5f}
-                );
+                // Connect sphere at current index to next index
+                int currentIdx = i * gridHeight * gridDepth + j * gridDepth + k;
+                int nextIdx = i * gridHeight * gridDepth + j * gridDepth + k + 1;
+                if (k + 1 < gridDepth)
+                    cylinders.push_back(CylinderIndex(currentIdx, nextIdx, .5f));
+                else
+                    cylinders.push_back(CylinderIndex(currentIdx, currentIdx, .5f));
                 count++;
             }
         }
@@ -150,7 +148,7 @@ std::vector<Cylinder> cylinder_package_scene(int gridWidth, int gridHeight, int 
     return cylinders;
 }
 
-void complete_package_scene(int gridWidth, int gridHeight, int gridDepth, std::vector<glm::vec4>& spheres, int sphere_count, std::vector<Cylinder>& cylinders, int cylinder_count)
+void complete_package_scene(int gridWidth, int gridHeight, int gridDepth, std::vector<glm::vec4>& spheres, int sphere_count, std::vector<CylinderIndex>& cylinders, int cylinder_count)
 {
     int s_count = 0;
     int c_count = 0;
@@ -172,11 +170,9 @@ void complete_package_scene(int gridWidth, int gridHeight, int gridDepth, std::v
 
                 if (c_count < cylinder_count)
                 {
-                    cylinders.push_back(
-                        {{(float)i*2.0f, (float)j*2.0f, (float)k*2.0f},
-                        {(float)i*2.0f, (float)j*2.0f, (float)(k+1)*2.0f},
-                        .5f}
-                    );
+                    int currentIdx = i * gridHeight * gridDepth + j * gridDepth + k;
+                    int nextIdx = (k + 1 < gridDepth) ? (currentIdx + 1) : currentIdx;
+                    cylinders.push_back(CylinderIndex(currentIdx, nextIdx, .5f));
                     c_count++;
                 }
             }
@@ -231,7 +227,7 @@ std::vector<std::pair<glm::vec3, glm::vec3>> benchmark1_structured_grid(int& sph
 }
 
 
-std::vector<std::pair<glm::vec3, glm::vec3>> benchmark2_loaded_molecules(std::vector<glm::vec4>& spheres, std::vector<Cylinder>& cylinders, int interleaveAngle, int interleaveZ, int interleaveY, float radFactor)
+std::vector<std::pair<glm::vec3, glm::vec3>> benchmark2_loaded_molecules(std::vector<glm::vec4>& spheres, std::vector<CylinderIndex>& cylinders, int interleaveAngle, int interleaveZ, int interleaveY, float radFactor)
 {
     float x_dis_max;
     float z_dis_max;
@@ -241,26 +237,14 @@ std::vector<std::pair<glm::vec3, glm::vec3>> benchmark2_loaded_molecules(std::ve
 
     if (spheres.empty() && cylinders.empty()) return {{mass_center, mass_center}};
 
-    if (spheres.size() >= cylinders.size()) 
+    // Always compute from spheres (cylinder endpoints are sphere positions)
+    for (auto& sphere : spheres)
     {
-        for (auto& sphere : spheres)
-        {
-            mass_center += glm::vec3(sphere);
-            min_point = glm::min(min_point, glm::vec3(sphere));
-            max_point = glm::max(max_point, glm::vec3(sphere));
-        }
-        mass_center /= spheres.size();
-    } else
-    {
-        for (auto& cylinder : cylinders)
-        {
-            glm::vec3 cyl_center = glm::vec3(cylinder.pa_r + cylinder.pb_r) / 2.0f;
-            mass_center += cyl_center;
-            min_point = glm::min(min_point, cyl_center);
-            max_point = glm::max(max_point, cyl_center);
-        }
-        mass_center /= cylinders.size();
+        mass_center += glm::vec3(sphere);
+        min_point = glm::min(min_point, glm::vec3(sphere));
+        max_point = glm::max(max_point, glm::vec3(sphere));
     }
+    if (!spheres.empty()) mass_center /= spheres.size();
 
     float d_theta = 360.0f/(float)interleaveAngle;
     x_dis_max = glm::max(abs(max_point.x - mass_center.x), abs(min_point.x - mass_center.x));
@@ -430,7 +414,7 @@ std::vector<glm::vec4> getScene(int sphere_count)
     }
 }
 
-std::vector<Cylinder> getCylinderScene(int cylinder_count)
+std::vector<CylinderIndex> getCylinderScene(int cylinder_count)
 {
     switch (currentScene)
     {
@@ -450,7 +434,7 @@ std::vector<Cylinder> getCylinderScene(int cylinder_count)
 }
 
 
-void getCompleteScene(std::vector<glm::vec4>& spheres, int sphere_count, std::vector<Cylinder>& cylinders, int cylinder_count)
+void getCompleteScene(std::vector<glm::vec4>& spheres, int sphere_count, std::vector<CylinderIndex>& cylinders, int cylinder_count)
 {
     switch (currentScene)
     {
@@ -469,7 +453,7 @@ void getCompleteScene(std::vector<glm::vec4>& spheres, int sphere_count, std::ve
     }
 }
 
-std::vector<std::pair<glm::vec3, glm::vec3>> getCheckpoints(int& sphere_count, std::vector<glm::vec4>& spheres, std::vector<Cylinder>& cylinders)
+std::vector<std::pair<glm::vec3, glm::vec3>> getCheckpoints(int& sphere_count, std::vector<glm::vec4>& spheres, std::vector<CylinderIndex>& cylinders)
 {
     switch (currentScene)
     {

@@ -26,7 +26,7 @@ SceneBuilder& SceneBuilder::withSpheresFromVec4(const std::vector<glm::vec4>& sp
     return *this;
 }
 
-SceneBuilder& SceneBuilder::withCylinders(const std::vector<Cylinder>& cylinders)
+SceneBuilder& SceneBuilder::withCylinders(const std::vector<CylinderIndex>& cylinders)
 {
     m_cylinders = cylinders;
     m_hasDirectCylinders = true;

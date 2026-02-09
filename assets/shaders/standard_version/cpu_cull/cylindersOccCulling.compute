@@ -4,17 +4,22 @@ layout(local_size_x = 256) in;
 
 layout(binding = 0) uniform sampler2D downsampledDepthTexture;
 
-struct Cylinder 
+struct CylinderIndex
 {
-    vec4 pa_r;
-    vec4 pb_r;
-    int index;
-    int wasDrawn[3];
+    uint sphereIndexA;
+    uint sphereIndexB;
+    float radius;
+    uint _padding;
+};
+
+layout(std430, binding = 6) buffer SphereBuffer
+{
+    vec4 spheres[];
 };
 
 layout(std430, binding = 2) buffer CylinderBuffer 
 {
-    Cylinder cylinders[];
+    CylinderIndex cylinderIndices[];
 };
 
 layout(std430, binding = 5) buffer VisibleCylinderIndexes 
@@ -206,12 +211,10 @@ void main()
     }
 
     // Get cylinder
-    Cylinder c = cylinders[index];
-
-
-    vec3 pa = c.pa_r.xyz;
-    vec3 pb = c.pb_r.xyz;
-    float ra = c.pa_r.w;
+    CylinderIndex c = cylinderIndices[index];
+    vec3 pa = spheres[c.sphereIndexA].xyz;
+    vec3 pb = spheres[c.sphereIndexB].xyz;
+    float ra = c.radius;
     vec3 camSpaceCylA = vec3(view * vec4(pa, 1.0f));
     vec3 camSpaceCylB = vec3(view * vec4(pb, 1.0f));
 
@@ -295,7 +298,7 @@ void main()
         onCylDepth(closePb, closePbScreen.x, closePbScreen.y, pa, pb, ra, rayStart, dx, dy),
         onCylDepth(closeCenter, closeCenterScreen.x, closeCenterScreen.y, pa, pb, ra, rayStart, dx, dy),
     };
-    uint visFrameBufferId = indexOffset + c.index;
+    uint visFrameBufferId = indexOffset + index;
 
 
     if (!isBillboardVisible(xcoords, ycoords, pixelDepths))

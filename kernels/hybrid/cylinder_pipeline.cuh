@@ -81,6 +81,7 @@ void resetCylinderPipelineCounters(CylinderPipelineResources* resources, cudaStr
  */
 void executeCylinderPipeline(
     const Cylinder* d_cylinders,
+    const glm::vec4* d_spheres,
     int cylinderCount,
     unsigned int* d_depthBuffer,
     cudaSurfaceObject_t outputImage,

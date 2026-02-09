@@ -190,6 +190,7 @@ __global__ void tiledSphereRasterWGKernel(
 
 __global__ void tiledCylinderRasterWGKernel(
     const Cylinder* __restrict__ d_cylinders,
+    const glm::vec4* __restrict__ d_spheres,
     const unsigned long long* __restrict__ d_tile_entity_pairs_sorted,
     const unsigned int* __restrict__ d_wg_tileId,
     const unsigned int* __restrict__ d_wg_entityStart,
@@ -223,8 +224,10 @@ __global__ void tiledCylinderRasterWGKernel(
         unsigned long long pair = d_tile_entity_pairs_sorted[entityStart + localIdx];
         unsigned int cylIndex = (unsigned int)(pair & 0xFFFFFFFFu);
         Cylinder cyl = d_cylinders[cylIndex];
-        shPa[localIdx] = cyl.pa_r;
-        shPb[localIdx] = cyl.pb_r;
+        glm::vec4 sA = d_spheres[cyl.sphereIndexA];
+        glm::vec4 sB = d_spheres[cyl.sphereIndexB];
+        shPa[localIdx] = glm::vec4(glm::vec3(sA), cyl.radius);
+        shPb[localIdx] = sB;
     }
     __syncthreads();
 
@@ -305,6 +308,7 @@ extern "C" void launchTiledSphereRasterWG(
 
 extern "C" void launchTiledCylinderRasterWG(
     const Cylinder* d_cylinders,
+    const glm::vec4* d_spheres,
     const unsigned long long* d_tile_entity_pairs_sorted,
     const unsigned int* d_wg_tileId,
     const unsigned int* d_wg_entityStart,
@@ -318,7 +322,7 @@ extern "C" void launchTiledCylinderRasterWG(
     dim3 block(TILE_SIZE, TILE_SIZE);
     dim3 grid(totalWorkGroups, 1);
     tiledCylinderRasterWGKernel<<<grid, block, 0, stream>>>(
-        d_cylinders, d_tile_entity_pairs_sorted,
+        d_cylinders, d_spheres, d_tile_entity_pairs_sorted,
         d_wg_tileId, d_wg_entityStart, d_wg_entityCount,
         d_depthBuffer, outputImage);
 }

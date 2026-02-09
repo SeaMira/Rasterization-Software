@@ -60,13 +60,19 @@ layout(std430, binding = 13) buffer SmallCylinderIndices {
 // Input Bindings
 // -----------------------------------------------------------------------------
 
-struct Cylinder {
-    vec4 pa_r;  // Point A (xyz) + radius (w)
-    vec4 pb_r;  // Point B (xyz), w unused
+struct CylinderIndex {
+    uint sphereIndexA;
+    uint sphereIndexB;
+    float radius;
+    uint _padding;
+};
+
+layout(std430, binding = 6) buffer SphereBuffer {
+    vec4 spheres[];
 };
 
 layout(std430, binding = 7) buffer CylinderBuffer {
-    Cylinder cylinders[];
+    CylinderIndex cylinderIndices[];
 };
 
 // -----------------------------------------------------------------------------
@@ -330,10 +336,10 @@ void main() {
         return;
     }
     
-    Cylinder cyl = cylinders[cylIndex];
-    vec3 pa = cyl.pa_r.xyz;
-    vec3 pb = cyl.pb_r.xyz;
-    float radius = cyl.pa_r.w;
+    CylinderIndex c = cylinderIndices[cylIndex];
+    vec3 pa = spheres[c.sphereIndexA].xyz;
+    vec3 pb = spheres[c.sphereIndexB].xyz;
+    float radius = c.radius;
     
     // =========================================================================
     // STAGE 1: Frustum Culling

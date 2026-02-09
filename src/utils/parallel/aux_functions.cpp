@@ -23,35 +23,47 @@ void fillSpheresData(std::vector<Sphere>& spheres, std::vector<SphereContainer>&
 }
 
 
-void cullSimpleCylinders(std::vector<Cylinder>& cylinders, std::vector<Cylinder>& visibleCylinders, Frustum& frustum, int& visibleCylindersCount, int indexOffset)
+void cullSimpleCylinders(std::vector<CylinderIndex>& cylinders, std::vector<CylinderIndex>& visibleCylinders, const std::vector<glm::vec4>& spheres, Frustum& frustum, int& visibleCylindersCount, int indexOffset)
 {
     visibleCylindersCount = 0;
     for (int i = 0 ; i < cylinders.size(); i++)
-        if (frustum.isCylinderInside(cylinders[i]))
+    {
+        glm::vec3 pa(spheres[cylinders[i].sphereIndexA]);
+        glm::vec3 pb(spheres[cylinders[i].sphereIndexB]);
+        if (frustum.isCylinderInside(pa, pb, cylinders[i].radius))
             visibleCylinders[visibleCylindersCount++] = cylinders[i];    
+    }
 }
 
-void cullCylinders(std::vector<Cylinder>& cylinders, std::vector<CylinderContainer>& visibleCylinders, Frustum& frustum, int& visibleCylindersCount, int indexOffset)
+void cullCylinders(std::vector<CylinderIndex>& cylinders, std::vector<CylinderContainer>& visibleCylinders, const std::vector<glm::vec4>& spheres, Frustum& frustum, int& visibleCylindersCount, int indexOffset)
 {
     visibleCylindersCount = 0;
     for (int i = 0 ; i < cylinders.size(); i++)
-        if (frustum.isCylinderInside(cylinders[i]))
+    {
+        glm::vec3 pa(spheres[cylinders[i].sphereIndexA]);
+        glm::vec3 pb(spheres[cylinders[i].sphereIndexB]);
+        if (frustum.isCylinderInside(pa, pb, cylinders[i].radius))
         visibleCylinders[visibleCylindersCount++] = {
-            cylinders[i].pa_r, 
-            cylinders[i].pb_r,
+            cylinders[i].sphereIndexA, 
+            cylinders[i].sphereIndexB,
+            cylinders[i].radius,
             i + indexOffset, 
-            {0, 0, 0}
+            {0, 0, 0},
+            0
         };    
+    }
 }
 
-void fillCylindersData(std::vector<Cylinder>& cylinders, std::vector<CylinderContainer>& visibleCylinders, int indexOffset)
+void fillCylindersData(std::vector<CylinderIndex>& cylinders, std::vector<CylinderContainer>& visibleCylinders, int indexOffset)
 {
     for (int i = 0 ; i < cylinders.size(); i++)
         visibleCylinders[i] = {
-            cylinders[i].pa_r, 
-            cylinders[i].pb_r,
+            cylinders[i].sphereIndexA, 
+            cylinders[i].sphereIndexB,
+            cylinders[i].radius,
             i + indexOffset, 
-            {0, 0, 0}
+            {0, 0, 0},
+            0
         };  
 }
 

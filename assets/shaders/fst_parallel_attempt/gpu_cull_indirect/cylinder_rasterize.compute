@@ -16,16 +16,23 @@ layout(std430, binding = 3) buffer DepthBuffer
     uint depthBuffer[];
 };
 
-struct Cylinder 
+struct CylinderIndex
 {
-    vec4 pa_r;
-    vec4 pb_r;
+    uint sphereIndexA;
+    uint sphereIndexB;
+    float radius;
+    uint _padding;
+};
+
+layout(std430, binding = 6) buffer SphereBuffer
+{
+    vec4 spheres[];
 };
 
 // Todos los cilindros
 layout(std430, binding = 7) buffer CylinderBuffer 
 {
-    Cylinder cylinders[];
+    CylinderIndex cylinderIndices[];
 };
 
 // Índices de cilindros visibles (del frustum culling)
@@ -174,11 +181,8 @@ float intersectX(vec2 a, vec2 b, float y)
 // Cylinder Drawing
 // ============================================================================
 
-void drawCylinder(Cylinder cylinder, uint cylinderIndex)
+void drawCylinder(vec3 pa, vec3 pb, float ra, uint cylinderIndex)
 {
-    vec3 pa = cylinder.pa_r.xyz;
-    vec3 pb = cylinder.pb_r.xyz;
-    float ra = cylinder.pa_r.w;
     vec3 camSpaceCylA = vec3(view * vec4(pa, 1.0f));
     vec3 camSpaceCylB = vec3(view * vec4(pb, 1.0f));
 
@@ -295,6 +299,9 @@ void main()
     uint originalIndex = visibleCylinderIndices[visibleIndex];
     
     // Get and draw the cylinder
-    Cylinder c = cylinders[originalIndex];
-    drawCylinder(c, originalIndex);
+    CylinderIndex c = cylinderIndices[originalIndex];
+    vec3 pa = spheres[c.sphereIndexA].xyz;
+    vec3 pb = spheres[c.sphereIndexB].xyz;
+    float ra = c.radius;
+    drawCylinder(pa, pb, ra, originalIndex);
 }

@@ -27,17 +27,22 @@ layout(std430, binding = 5) buffer VisibilityFrameBuffer
     FramePixelsCount visibilityFrameBuffer[];
 };
 
-struct Cylinder 
+struct CylinderIndex
 {
-    vec4 pa_r;
-    vec4 pb_r;
-    int index;
-    int wasDrawn[3];
+    uint sphereIndexA;
+    uint sphereIndexB;
+    float radius;
+    uint _padding;
+};
+
+layout(std430, binding = 6) buffer SphereBuffer
+{
+    vec4 spheres[];
 };
 
 layout(std430, binding = 7) buffer CylinderBuffer 
 {
-    Cylinder cylinders[];
+    CylinderIndex cylinderIndices[];
 };
 
 layout(binding = 8) buffer CounterBuffer {
@@ -221,11 +226,8 @@ bool isBillboardVisible(int xcoords[pixelsToCheck], int ycoords[pixelsToCheck], 
     return false;
 }
 
-void drawCylinder(Cylinder cylinder)
+void drawCylinder(vec3 pa, vec3 pb, float ra)
 {
-    vec3 pa = cylinder.pa_r.xyz;
-    vec3 pb = cylinder.pb_r.xyz;
-    float ra = cylinder.pa_r.w;
     vec3 camSpaceCylA = vec3(view * vec4(pa, 1.0f));
     vec3 camSpaceCylB = vec3(view * vec4(pb, 1.0f));
 

@@ -16,17 +16,22 @@ layout(std430, binding = 5) buffer VisibilityFrameBuffer
     FramePixelsCount visibilityFrameBuffer[];
 };
 
-struct Cylinder 
+struct CylinderIndex
 {
-    vec4 pa_r;  // (x, y, z, r)
-    vec4 pb_r;  // (x, y, z, r)
-    uint index;
-    int wasDrawn[3];
+    uint sphereIndexA;
+    uint sphereIndexB;
+    float radius;
+    uint _padding;
+};
+
+layout(std430, binding = 6) buffer SphereBuffer
+{
+    vec4 spheres[];
 };
 
 layout(std430, binding = 9) buffer CylinderBuffer 
 {
-    Cylinder cylinders[];
+    CylinderIndex cylinderIndices[];
 };
 
 struct CylinderBillboard 
@@ -210,11 +215,8 @@ bool isBillboardVisible(int xcoords[pixelsToCheck], int ycoords[pixelsToCheck], 
     return false;
 }
 
-void storeCylinderBBox(Cylinder cylinder)
+void storeCylinderBBox(vec3 pa, vec3 pb, float ra, uint cylinderIndex)
 {
-    vec3 pa = cylinder.pa_r.xyz;
-    vec3 pb = cylinder.pb_r.xyz;
-    float ra = cylinder.pa_r.w;
     vec3 camSpaceCylA = vec3(view * vec4(pa, 1.0f));
     vec3 camSpaceCylB = vec3(view * vec4(pb, 1.0f));
 
@@ -294,7 +296,7 @@ void storeCylinderBBox(Cylinder cylinder)
         onCylDepth(closeCenter, closeCenterScreen.x, closeCenterScreen.y, pa, pb, ra, rayStart, dx, dy),
     };
 
-    uint visFrameBufferId = visibilityFrameBufferIndexOffset + cylinder.index;
+    uint visFrameBufferId = visibilityFrameBufferIndexOffset + cylinderIndex;
     if (!isBillboardVisible(xcoords, ycoords, pixelDepths))
     {
         if (visibilityFrameBuffer[visFrameBufferId].pixels > 5)
@@ -303,13 +305,12 @@ void storeCylinderBBox(Cylinder cylinder)
             visibilityFrameBuffer[visFrameBufferId].frames -= 1;
         else 
         {
-            cylinders[gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_WorkGroupSize.x].wasDrawn[0] = 0;
             return;
         }
         
         uint currentCounter = atomicAdd(counter, 1);
         cylinderBillboardData[int(currentCounter)] =
-            CylinderBillboard(cylinder.pa_r, cylinder.pb_r, 
+            CylinderBillboard(vec4(pa, ra), vec4(pb, ra), 
                 projectedPoints[0], projectedPoints[1], 
                 projectedPoints[2], projectedPoints[3], 
                 visFrameBufferId, 0, 0, 0);
@@ -319,12 +320,11 @@ void storeCylinderBBox(Cylinder cylinder)
 
         uint currentCounter = atomicAdd(counter, 1);
         cylinderBillboardData[int(currentCounter)] =
-            CylinderBillboard(cylinder.pa_r, cylinder.pb_r, 
+            CylinderBillboard(vec4(pa, ra), vec4(pb, ra), 
                 projectedPoints[0], projectedPoints[1], 
                 projectedPoints[2], projectedPoints[3], 
                 visFrameBufferId, 0, 0, 0);
     }
-    cylinders[gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_WorkGroupSize.x].wasDrawn[0] = 1;
     
 }
 
@@ -339,8 +339,11 @@ void main()
     }
 
     // Get cylinder bbox
-    Cylinder c = cylinders[index];
-    storeCylinderBBox(c);
-    visibilityFrameBuffer[visibilityFrameBufferIndexOffset + c.index].pixels = 0;
+    CylinderIndex c = cylinderIndices[index];
+    vec3 pa = spheres[c.sphereIndexA].xyz;
+    vec3 pb = spheres[c.sphereIndexB].xyz;
+    float ra = c.radius;
+    storeCylinderBBox(pa, pb, ra, index);
+    visibilityFrameBuffer[visibilityFrameBufferIndexOffset + index].pixels = 0;
     
 }

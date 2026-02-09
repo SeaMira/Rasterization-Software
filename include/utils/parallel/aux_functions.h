@@ -29,16 +29,17 @@ struct SphereContainer
  * @struct CylinderContainer
  * @brief Represents a cylinder in 3D space.
  * 
- * The cylinder is defined by its two endpoints (pa and pb) and radius. But it also stores
- * the index of the cylinder in the original vector and a padding integers array
- * to be used on the SSBO.
+ * The cylinder is defined by its two sphere indices, a radius, and bookkeeping data
+ * for the SSBO.
  */
 struct CylinderContainer
 {
-    glm::vec4 pa_r;
-    glm::vec4 pb_r;
+    uint32_t sphereIndexA;
+    uint32_t sphereIndexB;
+    float radius;
     int index;
     int wasDrawn[3];
+    uint32_t _padding;
 };
 
 /**
@@ -90,7 +91,7 @@ void fillSpheresData(std::vector<glm::vec4>& spheres, std::vector<SphereContaine
  * @param visibleCylindersCount The number of cylinders that are on the camera frustum.
  * @param indexOffset The offset to be added to the index of the cylinders in the visibleCylinders vector.
  */
-void cullSimpleCylinders(std::vector<Cylinder>& cylinders, std::vector<Cylinder>& visibleCylinders, Frustum& frustum, int& visibleCylindersCount, int indexOffset = 0);
+void cullSimpleCylinders(std::vector<CylinderIndex>& cylinders, std::vector<CylinderIndex>& visibleCylinders, const std::vector<glm::vec4>& spheres, Frustum& frustum, int& visibleCylindersCount, int indexOffset = 0);
 
 /**
  * @brief Filters cylinders that are actually on the camera frustum.
@@ -103,7 +104,7 @@ void cullSimpleCylinders(std::vector<Cylinder>& cylinders, std::vector<Cylinder>
  * @param visibleCylindersCount The number of cylinders that are on the camera frustum.
  * @param indexOffset The offset to be added to the index of the cylinders in the visibleCylinders vector.
  */
-void cullCylinders(std::vector<Cylinder>& cylinders, std::vector<CylinderContainer>& visibleCylinders, Frustum& frustum, int& visibleCylindersCount, int indexOffset = 0);
+void cullCylinders(std::vector<CylinderIndex>& cylinders, std::vector<CylinderContainer>& visibleCylinders, const std::vector<glm::vec4>& spheres, Frustum& frustum, int& visibleCylindersCount, int indexOffset = 0);
 
 /**
  * @brief Completes a cylinders vector with index and visibility bool.
@@ -115,7 +116,7 @@ void cullCylinders(std::vector<Cylinder>& cylinders, std::vector<CylinderContain
  * @param visibleCylinders The list of cylinders with index, visibility bool and padding (for SSBO).
  * @param indexOffset The offset to be added to the index of the cylinders in the visibleCylinders vector.
  */
-void fillCylindersData(std::vector<Cylinder>& cylinders, std::vector<CylinderContainer>& visibleCylinders, int indexOffset = 0);
+void fillCylindersData(std::vector<CylinderIndex>& cylinders, std::vector<CylinderContainer>& visibleCylinders, int indexOffset = 0);
 
 /**
  * @brief Sets the camera uniforms on the shader.

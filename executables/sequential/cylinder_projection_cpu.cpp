@@ -92,7 +92,7 @@ void loadConfiguration() {
 
 void renderFrameWithOcclusionCulling(std::vector<uint32_t>& framebuffer, 
     std::vector<float>& depthBuffer, 
-    std::vector<Cylinder>& cylinders,
+    std::vector<CylinderIndex>& cylinders,
     std::vector<Sphere>& spheres,
     Camera& cam) 
 {
@@ -110,11 +110,13 @@ void renderFrameWithOcclusionCulling(std::vector<uint32_t>& framebuffer,
     int visibleCylindersCount = 0;
     for(int i = 0; i < cylinders.size(); i++)
     {
-        // std::cout << static_cast<int>(spheresVisibilityFrameCache[i]) << std::endl;
-        if (frustum.isCylinderInside(cylinders[i]))
+        glm::vec3 pa(spheres[cylinders[i].sphereIndexA]);
+        glm::vec3 pb(spheres[cylinders[i].sphereIndexB]);
+        float cylRadius = cylinders[i].radius;
+        if (frustum.isCylinderInside(pa, pb, cylRadius))
         {
             bool wasDrawn = drawCylinderWithOcclusionCulling(proj, view, up, front, right, camPos, SCR_WIDTH, SCR_HEIGHT, 
-                cylinders[i].pa_r, cylinders[i].pb_r, cylinders[i].pb_r.w, 
+                pa, pb, cylRadius, 
                 fov, framebuffer, depthBuffer, hizPyramid, cylinderVisibilityFrameCache[i], pixelOwnership, i + sphere_count, ownedPixelsMap[i + sphere_count]);
             frustumCylindersCount++;
             if (wasDrawn)
@@ -176,7 +178,7 @@ void renderFrameWithOcclusionCulling(std::vector<uint32_t>& framebuffer,
 
 void renderFrameWithoutOcclusionCulling(std::vector<uint32_t>& framebuffer, 
     std::vector<float>& depthBuffer, 
-    std::vector<Cylinder>& cylinders,
+    std::vector<CylinderIndex>& cylinders,
     std::vector<Sphere>& spheres,
     Camera& cam) 
 {
@@ -192,11 +194,14 @@ void renderFrameWithoutOcclusionCulling(std::vector<uint32_t>& framebuffer,
     frustumCylinders = 0;
     for(int i = 0; i < cylinders.size(); i++)
     {
-        if (frustum.isCylinderInside(cylinders[i]))
+        glm::vec3 pa(spheres[cylinders[i].sphereIndexA]);
+        glm::vec3 pb(spheres[cylinders[i].sphereIndexB]);
+        float cylRadius = cylinders[i].radius;
+        if (frustum.isCylinderInside(pa, pb, cylRadius))
         {
             frustumCylinders++;
             drawCylinder(proj, view, up, front, right, camPos, SCR_WIDTH, SCR_HEIGHT, 
-                 cylinders[i].pa_r, cylinders[i].pb_r, cylinders[i].pb_r.w, 
+                 pa, pb, cylRadius, 
                  fov, framebuffer, depthBuffer);
         } 
     }
@@ -239,7 +244,7 @@ int main(int argc, char* argv[])
     std::vector<float> depthBuffer(SCR_WIDTH * SCR_HEIGHT, FLT_MAX);
     
    
-    std::vector<Cylinder> cylinders = getCylinderScene(cylinder_count);
+    std::vector<CylinderIndex> cylinders = getCylinderScene(cylinder_count);
     cylinder_count = cylinders.size();
     std::vector<Sphere> spheres = getScene(sphere_count);
     sphere_count = spheres.size();

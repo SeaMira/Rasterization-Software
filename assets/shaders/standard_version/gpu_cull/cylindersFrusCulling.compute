@@ -2,15 +2,22 @@
 
 layout(local_size_x = 256) in;
 
-struct Cylinder 
+struct CylinderIndex
 {
-    vec4 pa_r;
-    vec4 pb_r;
+    uint sphereIndexA;
+    uint sphereIndexB;
+    float radius;
+    uint _padding;
+};
+
+layout(std430, binding = 6) buffer SphereBuffer
+{
+    vec4 spheres[];
 };
 
 layout(std430, binding = 4) buffer CylinderBuffer 
 {
-    Cylinder cylinders[];
+    CylinderIndex cylinderIndices[];
 };
 
 layout(std430, binding = 5) buffer VisibleCylinderIndexes 
@@ -82,9 +89,12 @@ void main()
     }
 
     // Get cylinder
-    Cylinder c = cylinders[index];
+    CylinderIndex c = cylinderIndices[index];
+    vec3 pa = spheres[c.sphereIndexA].xyz;
+    vec3 pb = spheres[c.sphereIndexB].xyz;
+    float ra = c.radius;
 
-    if (isCylinderInside(c.pa_r.xyz, c.pb_r.xyz, c.pa_r.w))
+    if (isCylinderInside(pa, pb, ra))
     {
         uint oldIndex = atomicAdd(frustCullcounter, 1);
         visibilityIndex[oldIndex] = index;

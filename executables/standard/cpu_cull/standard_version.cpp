@@ -297,7 +297,7 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
             glDrawArrays(GL_POINTS, 0, notOccludedSpheresCount);
             
             /// Cylinder drawing
-            cullCylinders(cylinders, visibleCylinders, frustum, visibleCylindersCount);
+            cullCylinders(cylinders, visibleCylinders, spheres, frustum, visibleCylindersCount);
             cylinderBuffer.bind();
             glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, visibleCylindersCount * sizeof(CylinderContainer), visibleCylinders.data());
             cylinderBuffer.unbind();
@@ -483,7 +483,7 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
             glDrawArrays(GL_POINTS, 0, visibleSpheresCount);
             
             /// Cylinder drawing
-            cullSimpleCylinders(cylinders, visibleCylinders, frustum, visibleCylindersCount);
+            cullSimpleCylinders(cylinders, visibleCylinders, spheres, frustum, visibleCylindersCount);
             cylinderBuffer.bind();
             glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, visibleCylindersCount * sizeof(Cylinder), visibleCylinders.data());
             cylinderBuffer.unbind();

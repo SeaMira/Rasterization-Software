@@ -134,28 +134,28 @@ public:
      * 
      * @param cylinder Cylinder to add.
      */
-    void addCylinder(const Cylinder& cylinder);
+    void addCylinder(const CylinderIndex& cylinder);
 
     /**
      * @brief Adds multiple cylinders to the scene.
      * 
      * @param cylinders Vector of cylinders to add.
      */
-    void addCylinders(const std::vector<Cylinder>& cylinders);
+    void addCylinders(const std::vector<CylinderIndex>& cylinders);
 
     /**
      * @brief Gets all cylinders in the scene.
      * 
      * @return Const reference to the cylinder vector.
      */
-    const std::vector<Cylinder>& getCylinders() const { return m_cylinders; }
+    const std::vector<CylinderIndex>& getCylinders() const { return m_cylinders; }
 
     /**
      * @brief Gets mutable access to cylinders.
      * 
      * @return Reference to the cylinder vector.
      */
-    std::vector<Cylinder>& getCylindersMutable() { return m_cylinders; }
+    std::vector<CylinderIndex>& getCylindersMutable() { return m_cylinders; }
 
     /**
      * @brief Gets the number of cylinders in the scene.
@@ -243,7 +243,7 @@ public:
      */
     GLsizeiptr getCylinderDataSize() const 
     { 
-        return static_cast<GLsizeiptr>(m_cylinders.size() * sizeof(Cylinder)); 
+        return static_cast<GLsizeiptr>(m_cylinders.size() * sizeof(CylinderIndex)); 
     }
 
     /**
@@ -262,7 +262,7 @@ public:
 
 private:
     std::vector<glm::vec4> m_spheres;      ///< Collection of spheres
-    std::vector<Cylinder> m_cylinders;  ///< Collection of cylinders
+    std::vector<CylinderIndex> m_cylinders;  ///< Collection of cylinders (index pairs + radius)
     SceneConfig m_config;               ///< Scene configuration
 
     int sphereCount = 0;

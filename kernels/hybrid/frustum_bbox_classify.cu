@@ -255,6 +255,7 @@ __global__ void sphereFrustumBBoxClassifyKernel(
 
 __global__ void cylinderFrustumBBoxClassifyKernel(
     const Cylinder* __restrict__ cylinders,
+    const glm::vec4* __restrict__ spheres,
     // Output for small entities (direct raster)
     unsigned int* __restrict__ smallCylinderIndices,
     unsigned int* __restrict__ smallCylinderCount,
@@ -268,9 +269,11 @@ __global__ void cylinderFrustumBBoxClassifyKernel(
     if (idx >= hybridCst.cylinderCount) return;
     
     Cylinder cyl = cylinders[idx];
-    glm::vec3 pa = glm::vec3(cyl.pa_r);
-    glm::vec3 pb = glm::vec3(cyl.pb_r);
-    float radius = cyl.pa_r.w;
+    glm::vec4 sA = spheres[cyl.sphereIndexA];
+    glm::vec4 sB = spheres[cyl.sphereIndexB];
+    glm::vec3 pa = glm::vec3(sA);
+    glm::vec3 pb = glm::vec3(sB);
+    float radius = cyl.radius;
     
     // Frustum culling
     if (!isCylinderInsideFrustum(pa, pb, radius)) {
@@ -303,8 +306,8 @@ __global__ void cylinderFrustumBBoxClassifyKernel(
         unsigned int outIdx = atomicAdd(largeCylinderCount, 1u);
         
         CylinderBillboard& bb = largeBillboards[outIdx];
-        bb.pa_r = cyl.pa_r;
-        bb.pb_r = cyl.pb_r;
+        bb.pa_r = glm::vec4(pa, radius);
+        bb.pb_r = glm::vec4(pb, 0.0f);
         bb.screenMin = screenMin;
         bb.screenMax = screenMax;
         bb.centerDepth = centerDepth;
@@ -359,6 +362,7 @@ extern "C" void launchSphereFrustumBBoxClassify(
 
 extern "C" void launchCylinderFrustumBBoxClassify(
     const Cylinder* d_cylinders,
+    const glm::vec4* d_spheres,
     unsigned int* d_smallCylinderIndices,
     unsigned int* d_smallCylinderCount,
     CylinderBillboard* d_largeBillboards,
@@ -372,6 +376,7 @@ extern "C" void launchCylinderFrustumBBoxClassify(
     
     cylinderFrustumBBoxClassifyKernel<<<grid, block, 0, stream>>>(
         d_cylinders,
+        d_spheres,
         d_smallCylinderIndices,
         d_smallCylinderCount,
         d_largeBillboards,

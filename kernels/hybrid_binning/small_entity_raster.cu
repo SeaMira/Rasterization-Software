@@ -156,6 +156,7 @@ __global__ void smallSphereRasterKernel(
 
 __global__ void smallCylinderRasterKernel(
     const Cylinder* __restrict__ cylinders,
+    const glm::vec4* __restrict__ spheres,
     const unsigned int* __restrict__ smallCylinderIndices,
     unsigned int smallCylinderCount,
     unsigned int* __restrict__ depthBuffer,
@@ -165,8 +166,10 @@ __global__ void smallCylinderRasterKernel(
     if (idx >= smallCylinderCount) return;
     unsigned int cylIdx = __ldg(&smallCylinderIndices[idx]);
     Cylinder cyl = cylinders[cylIdx];
-    glm::vec3 pa = glm::vec3(cyl.pa_r), pb = glm::vec3(cyl.pb_r);
-    float radius = cyl.pa_r.w;
+    glm::vec4 sA = spheres[cyl.sphereIndexA];
+    glm::vec4 sB = spheres[cyl.sphereIndexB];
+    glm::vec3 pa = glm::vec3(sA), pb = glm::vec3(sB);
+    float radius = cyl.radius;
     glm::vec4 camA = hybridCst.view * glm::vec4(pa, 1.0f);
     glm::vec4 camB = hybridCst.view * glm::vec4(pb, 1.0f);
     glm::vec3 camImpPosA, camImpPosB;
@@ -332,6 +335,7 @@ extern "C" void launchSmallSphereRaster(
 
 extern "C" void launchSmallCylinderRaster(
     const Cylinder* d_cylinders,
+    const glm::vec4* d_spheres,
     const unsigned int* d_smallCylinderIndices,
     unsigned int smallCylinderCount,
     unsigned int* d_depthBuffer,
@@ -341,5 +345,5 @@ extern "C" void launchSmallCylinderRaster(
     if (smallCylinderCount == 0) return;
     dim3 block(256);
     dim3 grid((smallCylinderCount + block.x - 1) / block.x);
-    smallCylinderRasterKernel<<<grid, block, 0, stream>>>(d_cylinders, d_smallCylinderIndices, smallCylinderCount, d_depthBuffer, outputImage);
+    smallCylinderRasterKernel<<<grid, block, 0, stream>>>(d_cylinders, d_spheres, d_smallCylinderIndices, smallCylinderCount, d_depthBuffer, outputImage);
 }

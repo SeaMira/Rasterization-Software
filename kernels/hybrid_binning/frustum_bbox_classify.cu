@@ -245,6 +245,7 @@ __device__ inline float quadArea(const glm::vec2& q0, const glm::vec2& q1, const
 
 __global__ void cylinderFrustumBBoxClassifyKernel(
     const Cylinder* __restrict__ cylinders,
+    const glm::vec4* __restrict__ spheres,
     unsigned int* __restrict__ smallCylinderIndices,
     unsigned int* __restrict__ smallCylinderCount,
     unsigned long long* __restrict__ d_tile_entity_pairs,
@@ -256,9 +257,11 @@ __global__ void cylinderFrustumBBoxClassifyKernel(
     if (idx >= hybridCst.cylinderCount) return;
     
     Cylinder cyl = cylinders[idx];
-    glm::vec3 pa = glm::vec3(cyl.pa_r);
-    glm::vec3 pb = glm::vec3(cyl.pb_r);
-    float radius = cyl.pa_r.w;
+    glm::vec4 sA = spheres[cyl.sphereIndexA];
+    glm::vec4 sB = spheres[cyl.sphereIndexB];
+    glm::vec3 pa = glm::vec3(sA);
+    glm::vec3 pb = glm::vec3(sB);
+    float radius = cyl.radius;
     if (!isCylinderInsideFrustum(pa, pb, radius)) return;
     
     if (hybridCst.benchmark) atomicAdd(frustumPassedCount, 1u);
@@ -336,6 +339,7 @@ extern "C" void launchSphereFrustumBBoxClassify(
 
 extern "C" void launchCylinderFrustumBBoxClassify(
     const Cylinder* d_cylinders,
+    const glm::vec4* d_spheres,
     unsigned int* d_smallCylinderIndices,
     unsigned int* d_smallCylinderCount,
     unsigned long long* d_tile_entity_pairs,
@@ -348,6 +352,6 @@ extern "C" void launchCylinderFrustumBBoxClassify(
     dim3 block(CULL_BLOCK_SIZE);
     dim3 grid((cylinderCount + block.x - 1) / block.x);
     cylinderFrustumBBoxClassifyKernel<<<grid, block, 0, stream>>>(
-        d_cylinders, d_smallCylinderIndices, d_smallCylinderCount,
+        d_cylinders, d_spheres, d_smallCylinderIndices, d_smallCylinderCount,
         d_tile_entity_pairs, d_pair_count, d_frustumPassedCount, maxPairs);
 }

@@ -48,13 +48,19 @@ layout(std430, binding = 5) buffer TileCylinderIndices {
 // Entity Data Bindings
 // -----------------------------------------------------------------------------
 
-struct Cylinder {
-    vec4 pa_r;
-    vec4 pb_r;
+struct CylinderIndex {
+    uint sphereIndexA;
+    uint sphereIndexB;
+    float radius;
+    uint _padding;
+};
+
+layout(std430, binding = 6) buffer SphereBuffer {
+    vec4 spheres[];
 };
 
 layout(std430, binding = 7) buffer CylinderBuffer {
-    Cylinder cylinders[];
+    CylinderIndex cylinderIndices[];
 };
 
 // -----------------------------------------------------------------------------
@@ -274,13 +280,16 @@ void main() {
             uint entityIdx = batchStart + localIndex;
             if (entityIdx < cylinderCount) {
                 uint cylIndex = tileCylinderIndices[tileIndex * maxEntitiesPerTile + entityIdx];
-                Cylinder cyl = cylinders[cylIndex];
-                shCylPa[localIndex] = cyl.pa_r;
-                shCylPb[localIndex] = cyl.pb_r;
+                CylinderIndex c = cylinderIndices[cylIndex];
+                vec3 pa = spheres[c.sphereIndexA].xyz;
+                vec3 pb = spheres[c.sphereIndexB].xyz;
+                float ra = c.radius;
+                shCylPa[localIndex] = vec4(pa, ra);
+                shCylPb[localIndex] = vec4(pb, 0.0);
                 
                 // Compute rotated quad corners
                 vec2 corners[4];
-                computeCylinderQuad(cyl.pa_r.xyz, cyl.pb_r.xyz, cyl.pa_r.w, corners);
+                computeCylinderQuad(pa, pb, ra, corners);
                 
                 // Store in shared memory
                 shCylQuad[localIndex * 4 + 0] = corners[0];

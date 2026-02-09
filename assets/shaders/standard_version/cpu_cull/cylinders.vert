@@ -1,14 +1,21 @@
 #version 460
 
-struct Cylinder 
+struct CylinderIndex
 {
-    vec4 pa_r;
-    vec4 pb_r;
+    uint sphereIndexA;
+    uint sphereIndexB;
+    float radius;
+    uint _padding;
+};
+
+layout(std430, binding = 6) buffer SphereBuffer
+{
+    vec4 spheres[];
 };
 
 layout(std430, binding = 2) buffer CylinderBuffer 
 {
-    Cylinder cylinders[];
+    CylinderIndex cylinderIndices[];
 };
 
 uniform mat4 view;
@@ -23,10 +30,10 @@ flat out uint  id;
 void main()
 {
     id = gl_VertexID;
-    Cylinder cylinder = cylinders[gl_VertexID];
-    pa = cylinder.pa_r.xyz;
-    pb = cylinder.pb_r.xyz;
-    cylinderRad = cylinder.pa_r.w;
+    CylinderIndex cylinder = cylinderIndices[gl_VertexID];
+    pa = spheres[cylinder.sphereIndexA].xyz;
+    pb = spheres[cylinder.sphereIndexB].xyz;
+    cylinderRad = cylinder.radius;
     paCamPos = vec3( view * vec4( pa, 1. ) );
     pbCamPos = vec3( view * vec4( pb, 1. ) );
 

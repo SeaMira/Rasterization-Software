@@ -37,11 +37,14 @@ struct Constants {
 
 static __constant__ Constants cst;
 
-struct Cylinder 
+struct CylinderIndex
 {
-    glm::vec4 pa_r;
-    glm::vec4 pb_r;
+    unsigned int sphereIndexA;
+    unsigned int sphereIndexB;
+    float radius;
+    unsigned int _padding;
 };
+using Cylinder = CylinderIndex;
 
 struct BBox3D
 {
@@ -213,6 +216,7 @@ __device__ inline float onCylDepth(const glm::vec3& rd, int px, int py, const gl
 __global__ void cylinderRasterKernelNoOcc(
     // buffers (device pointers)
     Cylinder* __restrict__ cylinders,
+    const glm::vec4* __restrict__ spheres,
     // storage buffers (lineal)
     unsigned int* __restrict__ depthBuffer,            // in uint bits of float depth, length = screenW*screenH
     // counters
@@ -226,17 +230,16 @@ __global__ void cylinderRasterKernelNoOcc(
     if (idx >= cst.cylinderCount) return;
 
     Cylinder c = cylinders[idx];
-    // glm::vec4 posr = s.positionr;
+    glm::vec4 sA = spheres[c.sphereIndexA];
+    glm::vec4 sB = spheres[c.sphereIndexB];
+    glm::vec3 pa = glm::vec3(sA);
+    glm::vec3 pb = glm::vec3(sB);
+    float ra = c.radius;
 
     // Frustum test
-    if (!isCylinderInside(glm::vec3(c.pa_r.x, c.pa_r.y, c.pa_r.z), glm::vec3(c.pb_r.x, c.pb_r.y, c.pb_r.z), c.pa_r.w)) return;
+    if (!isCylinderInside(pa, pb, ra)) return;
 
     if (cst.benchmark == 1) atomicAdd(frustCullcounter, 1u);
-
-    glm::vec3 pa = glm::vec3(c.pa_r.x, c.pa_r.y, c.pa_r.z);
-    glm::vec3 pb = glm::vec3(c.pb_r.x, c.pb_r.y, c.pb_r.z);
-
-    float ra = c.pa_r.w;
     glm::vec3 camSpaceCylA = glm::vec3(cst.view * glm::vec4(pa, 1.0f));
     glm::vec3 camSpaceCylB = glm::vec3(cst.view * glm::vec4(pb, 1.0f));
 
@@ -392,6 +395,7 @@ __global__ void cylinderRasterKernelNoOcc(
 
 extern "C" void cylinderRasterNoOcc(
     Cylinder* cylinders,
+    const glm::vec4* d_spheres,
     int c_cylinderCount,
     glm::mat4 c_view,
     glm::mat4 c_proj,
@@ -445,6 +449,7 @@ extern "C" void cylinderRasterNoOcc(
     dim3 grid((c_cylinderCount + block.x - 1) / block.x);
     cylinderRasterKernelNoOcc<<<grid, block, 0, stream>>>(
         cylinders,
+        d_spheres,
         d_depthBuffer,
         d_frustCullcounter,
         outputImage

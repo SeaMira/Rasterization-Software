@@ -164,6 +164,7 @@ void sphereRasterNoOcc(
 
 void cylinderRaster(
     Cylinder* cylinders,
+    const glm::vec4* d_spheres,
     int c_cylinderCount,
     glm::mat4 c_view,
     glm::mat4 c_proj,
@@ -195,6 +196,7 @@ void cylinderRaster(
 
 void cylinderRasterNoOcc(
     Cylinder* cylinders,
+    const glm::vec4* d_spheres,
     int c_cylinderCount,
     glm::mat4 c_view,
     glm::mat4 c_proj,
@@ -521,6 +523,7 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
 
             cylinderRaster(
                 cylinderBufferPtr,
+                (const glm::vec4*)sphereBufferPtr,
                 cylinder_count,
                 camera.getView(),
                 camera.getProjection(),
@@ -845,6 +848,7 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
 
             cylinderRasterNoOcc(
                 cylinderBufferPtr,
+                (const glm::vec4*)sphereBufferPtr,
                 cylinder_count,
                 camera.getView(),
                 camera.getProjection(),

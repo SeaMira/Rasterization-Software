@@ -20,7 +20,7 @@ std::unique_ptr<Scene> FileSceneLoader::load()
     
     // Load spheres and cylinders using existing utility function
     std::vector<glm::vec4> sphereData;
-    std::vector<Cylinder> cylinders;
+    std::vector<CylinderIndex> cylinders;
     
     loaded_complete_scene(
         path,
@@ -123,9 +123,9 @@ void GridSceneLoader::generateCylinders(Scene& scene) const
                 if (x < gridW - 1)
                 {
                     int neighborIdx = getIndex(x + 1, y, z);
-                    scene.addCylinder(Cylinder(
-                        spheres[currentIdx].m_position,
-                        spheres[neighborIdx].m_position,
+                    scene.addCylinder(CylinderIndex(
+                        static_cast<uint32_t>(currentIdx),
+                        static_cast<uint32_t>(neighborIdx),
                         radius
                     ));
                 }
@@ -134,9 +134,9 @@ void GridSceneLoader::generateCylinders(Scene& scene) const
                 if (y < gridH - 1)
                 {
                     int neighborIdx = getIndex(x, y + 1, z);
-                    scene.addCylinder(Cylinder(
-                        spheres[currentIdx].m_position,
-                        spheres[neighborIdx].m_position,
+                    scene.addCylinder(CylinderIndex(
+                        static_cast<uint32_t>(currentIdx),
+                        static_cast<uint32_t>(neighborIdx),
                         radius
                     ));
                 }
@@ -145,9 +145,9 @@ void GridSceneLoader::generateCylinders(Scene& scene) const
                 if (z < gridD - 1)
                 {
                     int neighborIdx = getIndex(x, y, z + 1);
-                    scene.addCylinder(Cylinder(
-                        spheres[currentIdx].m_position,
-                        spheres[neighborIdx].m_position,
+                    scene.addCylinder(CylinderIndex(
+                        static_cast<uint32_t>(currentIdx),
+                        static_cast<uint32_t>(neighborIdx),
                         radius
                     ));
                 }

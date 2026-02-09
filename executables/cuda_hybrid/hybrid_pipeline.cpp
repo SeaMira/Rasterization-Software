@@ -177,6 +177,7 @@ public:
         
         executeCylinderPipeline(
             d_cylinders,
+            d_spheres,
             m_cylinderCount,
             d_depthBuffer,
             outputImage,

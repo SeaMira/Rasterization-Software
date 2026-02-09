@@ -16,15 +16,21 @@ layout(std430, binding = 5) buffer VisibilityFrameBuffer
     FramePixelsCount visibilityFrameBuffer[];
 };
 
-struct Cylinder 
+struct CylinderIndex 
 {
-    vec4 pa_r;  // (x, y, z, r)
-    vec4 pb_r;  // (x, y, z, r)
+    uint sphereIndexA;
+    uint sphereIndexB;
+    float radius;
+    uint _padding;
+};
+
+layout(std430, binding = 6) buffer SphereBuffer {
+    vec4 spheres[];
 };
 
 layout(std430, binding = 9) buffer CylinderBuffer 
 {
-    Cylinder cylinders[];
+    CylinderIndex cylinderIndices[];
 };
 
 struct CylinderBillboard 
@@ -258,11 +264,8 @@ bool isBillboardVisible(int xcoords[pixelsToCheck], int ycoords[pixelsToCheck], 
     return false;
 }
 
-void storeCylinderBBox(Cylinder cylinder, uint cylinderIndex)
+void storeCylinderBBox(vec3 pa, vec3 pb, float ra, uint cylinderIndex)
 {
-    vec3 pa = cylinder.pa_r.xyz;
-    vec3 pb = cylinder.pb_r.xyz;
-    float ra = cylinder.pa_r.w;
     vec3 camSpaceCylA = vec3(view * vec4(pa, 1.0f));
     vec3 camSpaceCylB = vec3(view * vec4(pb, 1.0f));
 
@@ -356,7 +359,7 @@ void storeCylinderBBox(Cylinder cylinder, uint cylinderIndex)
         
         uint currentCounter = atomicAdd(counter, 1);
         cylinderBillboardData[int(currentCounter)] =
-            CylinderBillboard(cylinder.pa_r, cylinder.pb_r, 
+            CylinderBillboard(vec4(pa, ra), vec4(pb, 0.0), 
                 projectedPoints[0], projectedPoints[1], 
                 projectedPoints[2], projectedPoints[3], 
                 visFrameBufferId, 0, 0, 0);
@@ -366,7 +369,7 @@ void storeCylinderBBox(Cylinder cylinder, uint cylinderIndex)
 
         uint currentCounter = atomicAdd(counter, 1);
         cylinderBillboardData[int(currentCounter)] =
-            CylinderBillboard(cylinder.pa_r, cylinder.pb_r, 
+            CylinderBillboard(vec4(pa, ra), vec4(pb, 0.0), 
                 projectedPoints[0], projectedPoints[1], 
                 projectedPoints[2], projectedPoints[3], 
                 visFrameBufferId, 0, 0, 0);
@@ -385,11 +388,14 @@ void main()
     }
 
     // Get cylinder bbox
-    Cylinder c = cylinders[index];
-    if (isCylinderInside(c.pa_r.xyz, c.pb_r.xyz, c.pa_r.w))
+    CylinderIndex c = cylinderIndices[index];
+    vec3 pa = spheres[c.sphereIndexA].xyz;
+    vec3 pb = spheres[c.sphereIndexB].xyz;
+    float ra = c.radius;
+    if (isCylinderInside(pa, pb, ra))
     {
         atomicAdd(frustCounter, 1);
-        storeCylinderBBox(c, index);
+        storeCylinderBBox(pa, pb, ra, index);
     }
     visibilityFrameBuffer[visibilityFrameBufferIndexOffset + index].pixels = 0;
     

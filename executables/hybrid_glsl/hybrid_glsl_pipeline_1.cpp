@@ -193,7 +193,7 @@ public:
             6, spheres.data(), GL_STATIC_DRAW);
         
         // ---------------------------------------------------------------------
-        // Binding 7: Cylinder Data (Cylinder struct has pa_r and pb_r as glm::vec4)
+        // Binding 7: Cylinder Data (CylinderIndex struct with sphereIndexA, sphereIndexB, radius)
         // ---------------------------------------------------------------------
         m_cylinderBuffer = std::make_unique<StorageBuffer>(
             GL_SHADER_STORAGE_BUFFER,
