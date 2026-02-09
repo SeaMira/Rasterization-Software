@@ -60,10 +60,8 @@ __device__ inline glm::vec4 iCylinder(const glm::vec3& ro, const glm::vec3& rd,
     return glm::vec4(-1.0f);
 }
 
-__device__ inline glm::vec3 computeRayDirection(int px, int py, float fovTan, float halfFovTan) {
-    glm::vec2 p = (-glm::vec2(hybridCst.screenWidth, hybridCst.screenHeight) +
-                   2.0f * glm::vec2(px, py)) / glm::vec2(hybridCst.screenWidth, hybridCst.screenHeight);
-    return glm::normalize(p.x * hybridCst.right * halfFovTan + p.y * hybridCst.up * fovTan + hybridCst.front);
+__device__ inline glm::vec3 fastNormalize(const glm::vec3& v) {
+    return v * rsqrtf(glm::dot(v, v));
 }
 
 __global__ void smallSphereRasterKernel(
@@ -76,7 +74,7 @@ __global__ void smallSphereRasterKernel(
     unsigned int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= smallSphereCount) return;
 
-    unsigned int sphereIdx = smallSphereIndices[idx];
+    unsigned int sphereIdx = __ldg(&smallSphereIndices[idx]);
 
     glm::vec4 spherePosR = spheres[sphereIdx];
     glm::vec3 spherePos = glm::vec3(spherePosR);
@@ -124,31 +122,26 @@ __global__ void smallSphereRasterKernel(
     float dify = float(screenMaxY - screenMinY);
     if (difx * dify <= 2.0f) return;
 
-    float aspectRatio = __fdividef(float(hybridCst.screenWidth), float(hybridCst.screenHeight));
-    float fovRad = glm::radians(hybridCst.fov);
-    float fovTan = __tanf(fovRad * 0.5f);
-    float halfFovTan = fovTan * aspectRatio;
-
-
     float proj22 = hybridCst.proj[2][2];
     float proj32 = hybridCst.proj[3][2];
 
     for (int py = screenMinY; py < screenMaxY; py++) {
         glm::vec3 rayColStart = hybridCst.rayStart + (float)py * hybridCst.dy;
         for (int px = screenMinX; px < screenMaxX; px++) {
-            glm::vec3 rd = computeRayDirection(px, py, fovTan, halfFovTan);
+            glm::vec3 ray = rayColStart + (float)px * hybridCst.dx;
+            glm::vec3 rd = fastNormalize(ray.x * hybridCst.right + ray.y * hybridCst.up - ray.z * hybridCst.front);
             float t = iSphere(hybridCst.cameraPos, rd, spherePos, radius);
 
             if (t > 0.0f) {
-                glm::vec3 hit = (rayColStart + (float)px * hybridCst.dx) * t;
+                glm::vec3 hit = ray * t;
                 float depth = __fdividef(fmaf(hit.z, proj22, proj32), -hit.z);
                 unsigned int depthU = __float_as_uint(depth);
 
                 int pixelIdx = py * hybridCst.screenWidth + px;
                 unsigned int old = atomicMin(&depthBuffer[pixelIdx], depthU);
                 if (__uint_as_float(old) > depth) {
-                    glm::vec3 normal = glm::normalize(hybridCst.cameraPos + rd * t - glm::vec3(spherePosR));
-                    float lambert = fmaxf(0.0f, glm::dot(normal, -glm::normalize(rd * t)));
+                    glm::vec3 normal = fastNormalize(hybridCst.cameraPos + rd * t - glm::vec3(spherePosR));
+                    float lambert = fmaxf(0.0f, glm::dot(normal, -rd));
                     glm::vec3 color = glm::vec3(atomsColor[0], atomsColor[1], atomsColor[2]) * lambert * diffuse;
                     uchar4 ucharColor = make_uchar4(
                         (unsigned char)(color.x * 255.0f),
@@ -170,7 +163,7 @@ __global__ void smallCylinderRasterKernel(
 {
     unsigned int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= smallCylinderCount) return;
-    unsigned int cylIdx = smallCylinderIndices[idx];
+    unsigned int cylIdx = __ldg(&smallCylinderIndices[idx]);
     Cylinder cyl = cylinders[cylIdx];
     glm::vec3 pa = glm::vec3(cyl.pa_r), pb = glm::vec3(cyl.pb_r);
     float radius = cyl.pa_r.w;
@@ -247,50 +240,57 @@ __global__ void smallCylinderRasterKernel(
     }
     
 
-    float aspectRatio = fdividef(hybridCst.screenWidth, hybridCst.screenHeight);
-    float fovRad = glm::radians(hybridCst.fov);
-    float fovTan = __tanf(fovRad * 0.5f);
-    float halfFovTan = fovTan * aspectRatio;
-
     for (int py = fminf(hybridCst.screenHeight-1, maxY); py >= fmaxf(0, minY); --py)
     {
-        float xIntersections[4];
-        int intersections = 0;
 
+        
+        float fpy = float(py) + 0.5f; // Centro del pixel en Y
+        
+        // Encontrar startX y endX para esta fila específica
+        // Inicializamos invertidos para acumular min/max
+        float rowMinX = float(hybridCst.screenWidth);
+        float rowMaxX = -1.0f;
+        
+        // Recorremos las 4 aristas del polígono proyectado (unroll manual o loop corto)
         #pragma unroll 4
         for (int i = 0; i < 4; ++i) 
         {
-            const glm::vec2 a = projectedPoints[i];
-            const glm::vec2 b = projectedPoints[(i + 1) % 4];
+            glm::vec2 v1 = projectedPoints[i];
+            glm::vec2 v2 = projectedPoints[(i + 1) % 4];
 
-            if ((py >= a.y && py <= b.y) || (py >= b.y && py <= a.y)) 
+            // Comprobar si la linea cruza esta fila Y
+            // Nota: Usamos (>= y <) para evitar doble conteo en vértices exactos
+            bool crossing = (v1.y <= fpy && v2.y > fpy) || (v2.y <= fpy && v1.y > fpy);
+            
+            if (crossing) 
             {
-                float x = intersectX(a, b, py);
-                xIntersections[intersections] = x;
-                intersections++;
+                // Calcular intersección X sin llamadas a funciones externas
+                float t = (fpy - v1.y) / (v2.y - v1.y);
+                float intersectX = v1.x + t * (v2.x - v1.x);
+                
+                rowMinX = min(rowMinX, intersectX);
+                rowMaxX = max(rowMaxX, intersectX);
             }
         }
 
-        if (intersections >= 2)
-        {
-            float xMin = xIntersections[0];
-            float xMax = xIntersections[0];
+        // Convertir span a enteros y clampear
+        int startX = max(0, int(floor(rowMinX)));
+        int endX   = min(hybridCst.screenWidth - 1, int(ceil(rowMaxX)));
 
-            for (int i = 1; i < intersections; ++i) 
-            {
-                xMin = fminf(xMin, xIntersections[i]);
-                xMax = fmaxf(xMax, xIntersections[i]);
-            }
+        if (startX <= endX)
+        {
+
             glm::vec3 rayColStart = hybridCst.rayStart + (float)py * hybridCst.dy;
-            for (int px = max(0, __float2int_ru(xMin)); px <= min(__float2int_rd(xMax), hybridCst.screenWidth -1); ++px)
+            for (int px = max(0, startX); px <= min(endX, hybridCst.screenWidth -1); ++px)
             {
-                glm::vec3 rd = computeRayDirection(px, py, fovTan, halfFovTan);
+                glm::vec3 ray = rayColStart + (float)px * hybridCst.dx;
+                glm::vec3 rd = fastNormalize(ray.x * hybridCst.right + ray.y * hybridCst.up - ray.z * hybridCst.front);
                 glm::vec4 tnor = iCylinder(glm::vec3(hybridCst.cameraPos), rd, pa, pb, radius);
                 int index = px + hybridCst.screenWidth*py;
 
                 if (tnor.x > 0.0f) {
                     float t = tnor.x;
-                    glm::vec3 hit = (rayColStart + (float)px * hybridCst.dx) * t;
+                    glm::vec3 hit = ray * t;
                     float depth = __fdividef(fmaf(hit.z, hybridCst.proj[2][2], hybridCst.proj[3][2]), -hit.z);
 
                     unsigned int depthU = __float_as_uint(depth);
@@ -301,8 +301,8 @@ __global__ void smallCylinderRasterKernel(
                     // if we won (old > depth)
                     if (__uint_as_float(old) > depth) {
                         // own the pixel
-                        glm::vec3 normal = glm::normalize(glm::vec3(tnor.y, tnor.z, tnor.w));
-                        float lambert = glm::max(0.0f, glm::dot(normal, -glm::normalize(rd * t)));
+                        glm::vec3 normal = fastNormalize(glm::vec3(tnor.y, tnor.z, tnor.w));
+                        float lambert = fmaxf(0.0f, glm::dot(normal, -rd));
                         glm::vec3 color = glm::vec3(bondsColor[0], bondsColor[1], bondsColor[2]) * lambert * diffuse;
                         uchar4 ucharColor = make_uchar4(
                             (unsigned char)(color.x * 255.0f),

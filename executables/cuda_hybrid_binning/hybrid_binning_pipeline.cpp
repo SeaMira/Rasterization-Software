@@ -288,6 +288,7 @@ int main(int argc, char* argv[]) {
         profiler.updateProfiler(benchmark.getCheckpointID(), visibleSpheres, drawnSpheres, visibleCylinders, drawnCylinders);
 
         Frustum frustum(camera);
+        pipeline.setSmallEntityThreshold(config.smallEntityThreshold);
         pipeline.executeFrame(d_spheres, d_cylinders, depthBuffer, outputSurface, camera, frustum, stream);
         cudaStreamSynchronize(stream);  // ensure all kernels and D2H copies finish before reading stats
 
