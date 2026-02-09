@@ -1,0 +1,344 @@
+#version 460
+
+// =============================================================================
+// tiled_cylinder_raster.compute - Tiled Rasterization for Large Cylinders
+// =============================================================================
+//
+// This shader processes large cylinders using a tiled approach:
+// - Each work group = one tile (variable size: 8, 16, 32, or 64)
+// - Work group size is fixed at 16x16 (256 threads)
+// - For small tiles: some threads idle
+// - For large tiles: each thread processes multiple pixels
+//
+// Dispatch: (tilesX, tilesY, 1)
+// =============================================================================
+
+layout(local_size_x = 16, local_size_y = 16) in;
+
+// -----------------------------------------------------------------------------
+// Constants
+// -----------------------------------------------------------------------------
+
+#define TILE_SIZE 16
+#define BATCH_SIZE 64
+
+// -----------------------------------------------------------------------------
+// Output Bindings
+// -----------------------------------------------------------------------------
+
+layout(rgba8, binding = 0) uniform image2D outputImage;
+
+layout(std430, binding = 1) buffer DepthBuffer {
+    uint depthBuffer[];
+};
+
+// -----------------------------------------------------------------------------
+// Tile Data Bindings
+// -----------------------------------------------------------------------------
+
+layout(std430, binding = 3) buffer TileCylinderCounts {
+    uint tileCylinderCounts[];
+};
+
+layout(std430, binding = 5) buffer TileCylinderIndices {
+    uint tileCylinderIndices[];
+};
+
+// -----------------------------------------------------------------------------
+// Entity Data Bindings
+// -----------------------------------------------------------------------------
+
+struct Cylinder {
+    vec4 pa_r;
+    vec4 pb_r;
+};
+
+layout(std430, binding = 7) buffer CylinderBuffer {
+    Cylinder cylinders[];
+};
+
+// -----------------------------------------------------------------------------
+// Uniforms
+// -----------------------------------------------------------------------------
+
+uniform mat4 view;
+uniform mat4 proj;
+
+uniform vec3 front;
+uniform vec3 up;
+uniform vec3 right;
+uniform vec3 cameraPos;
+
+uniform ivec2 screenResolution;
+uniform float fov;
+
+uniform int tilesX;
+uniform int tilesY;
+uniform int maxEntitiesPerTile;
+
+// Screen ray casting uniforms (computed on CPU)
+uniform vec3 rayStart;  // Bottom-left corner ray direction (world space)
+uniform vec3 rayDx;     // Delta per pixel in X
+uniform vec3 rayDy;     // Delta per pixel in Y
+
+// -----------------------------------------------------------------------------
+// Shared Memory
+// -----------------------------------------------------------------------------
+
+shared vec4 shCylPa[BATCH_SIZE];
+shared vec4 shCylPb[BATCH_SIZE];
+// Store 4 corners of the rotated quad per cylinder (in screen space)
+shared vec2 shCylQuad[BATCH_SIZE * 4];  // [i*4+0..i*4+3] = 4 corners of cylinder i
+
+// -----------------------------------------------------------------------------
+// Constants
+// -----------------------------------------------------------------------------
+
+const vec3 lightColor = vec3(0.01, 1.0, 0.05);
+const float diffuseI = 0.9;
+
+// -----------------------------------------------------------------------------
+// Rotated Quad Computation (same as in cylinder_classify.compute)
+// -----------------------------------------------------------------------------
+
+void computeCylinderQuad(vec3 pa, vec3 pb, float cylRadius, out vec2 corners[4]) {
+    // Transform to camera space
+    vec3 camSpaceCylA = vec3(view * vec4(pa, 1.0));
+    vec3 camSpaceCylB = vec3(view * vec4(pb, 1.0));
+    
+    // Order by depth (A closer, B farther)
+    vec3 camImpPosA, camImpPosB;
+    if (camSpaceCylA.z < camSpaceCylB.z) {
+        camImpPosA = camSpaceCylB;
+        camImpPosB = camSpaceCylA;
+    } else {
+        camImpPosA = camSpaceCylA;
+        camImpPosB = camSpaceCylB;
+    }
+    
+    // Cylinder axis
+    vec3 z = normalize(camImpPosB - camImpPosA);
+    vec3 center = normalize((camImpPosA + camImpPosB) * 0.5);
+    
+    // Find orthonormal axes
+    vec3 x = normalize(cross(center, z));
+    vec3 y = normalize(cross(x, z));
+    
+    // Compute impostor construction vectors
+    float dV0 = length(camImpPosA);
+    float dV1 = length(camImpPosB);
+    
+    float sinAngle = cylRadius / dV0;
+    float angle = asin(min(sinAngle, 0.999));
+    vec3 y1 = y * cylRadius;
+    vec3 x2 = x * cylRadius * cos(angle);
+    vec3 y2 = y1 * sinAngle;
+    angle = asin(min(cylRadius / dV1, 0.999));
+    vec3 x3 = x * (dV1 - cylRadius) * tan(angle);
+    
+    // Compute impostor vertices
+    vec3 v1 = camImpPosA - x2 + y2;
+    vec3 v2 = camImpPosA + x2 + y2;
+    vec3 v3 = camImpPosB - x3 + y1;
+    vec3 v4 = camImpPosB + x3 + y1;
+    
+    // Project to screen
+    vec4 v1Proj = proj * vec4(v1, 1.0);
+    vec4 v2Proj = proj * vec4(v2, 1.0);
+    vec4 v3Proj = proj * vec4(v3, 1.0);
+    vec4 v4Proj = proj * vec4(v4, 1.0);
+    
+    vec2 ndc1 = v1Proj.xy / v1Proj.w;
+    vec2 ndc2 = v2Proj.xy / v2Proj.w;
+    vec2 ndc3 = v3Proj.xy / v3Proj.w;
+    vec2 ndc4 = v4Proj.xy / v4Proj.w;
+    
+    // Convert to screen coordinates
+    corners[0] = (ndc1 * 0.5 + 0.5) * vec2(screenResolution);
+    corners[1] = (ndc2 * 0.5 + 0.5) * vec2(screenResolution);
+    corners[2] = (ndc4 * 0.5 + 0.5) * vec2(screenResolution);  // Note order: v4 before v3
+    corners[3] = (ndc3 * 0.5 + 0.5) * vec2(screenResolution);
+    
+    // Clamp to screen
+    for (int i = 0; i < 4; i++) {
+        corners[i] = clamp(corners[i], vec2(0.0), vec2(screenResolution));
+    }
+}
+
+// Cross product of 2D vectors
+float cross2D(vec2 a, vec2 b) {
+    return a.x * b.y - a.y * b.x;
+}
+
+// Check if point is inside convex quadrilateral
+bool pointInQuad(vec2 p, vec2 q0, vec2 q1, vec2 q2, vec2 q3) {
+    float c0 = cross2D(q1 - q0, p - q0);
+    float c1 = cross2D(q2 - q1, p - q1);
+    float c2 = cross2D(q3 - q2, p - q2);
+    float c3 = cross2D(q0 - q3, p - q3);
+    
+    return (c0 >= 0 && c1 >= 0 && c2 >= 0 && c3 >= 0) ||
+           (c0 <= 0 && c1 <= 0 && c2 <= 0 && c3 <= 0);
+}
+
+// -----------------------------------------------------------------------------
+// Ray-Cylinder Intersection
+// -----------------------------------------------------------------------------
+
+vec4 iCylinder(vec3 ro, vec3 rd, vec3 pa, vec3 pb, float ra) 
+{
+    vec3  ba = pb - pa;
+    vec3  oc = ro - pa;
+
+    float baba = dot(ba,ba);
+    float bard = dot(ba,rd);
+    float baoc = dot(ba,oc);
+    
+    float k2 = baba - bard*bard;
+    float k1 = baba*dot(oc,rd) - baoc*bard;
+    float k0 = baba*dot(oc,oc) - baoc*baoc - ra*ra*baba;
+    
+    
+    float h = k1*k1 - k2*k0;
+    if( h<0.0f ) return vec4(-1.0f);
+    h = sqrt(h);
+    float t = (-k1-h)/k2;
+
+    // body
+    float y = baoc + t*bard;
+    if( y>0.0f && y<baba ) return vec4( t, oc+t*rd - ba*y/baba );
+    
+    // caps
+    // t = ( ((y<0.0f) ? 0.0f : baba) - baoc)/bard;
+    // if( abs(k1+k2*t)<h ) return vec4( t, ba*sign(y)/sqrt(baba) );
+
+    return vec4(-1.0f);
+}
+
+// -----------------------------------------------------------------------------
+// Ray Direction
+// -----------------------------------------------------------------------------
+
+vec3 computeRd(int px, int py, float fovTan, float halfFovTan) {
+    vec2 p = (-vec2(screenResolution) + 2.0 * vec2(px, py)) / vec2(screenResolution);
+    return normalize(p.x * right * halfFovTan + p.y * up * fovTan + front);
+}
+
+// -----------------------------------------------------------------------------
+// Main
+// -----------------------------------------------------------------------------
+
+void main() {
+    int tileX = int(gl_WorkGroupID.x);
+    int tileY = int(gl_WorkGroupID.y);
+    int tileIndex = tileY * tilesX + tileX;
+    
+    int localX = int(gl_LocalInvocationID.x);
+    int localY = int(gl_LocalInvocationID.y);
+    int localIndex = localY * TILE_SIZE + localX;
+
+    int pixelX = tileX * TILE_SIZE + localX;
+    int pixelY = tileY * TILE_SIZE + localY;
+
+    if (!(pixelX < screenResolution.x && pixelY < screenResolution.y))
+        return;
+    
+    
+    // Load tile cylinder count
+    uint cylinderCount = min(tileCylinderCounts[tileIndex], uint(maxEntitiesPerTile));
+    
+    if (cylinderCount == 0) {
+        return;
+    }
+    
+    // Precompute ray parameters
+    float aspectRatio = float(screenResolution.x) / float(screenResolution.y);
+    float fovRad = radians(fov);
+    float fovTan = tan(fovRad * 0.5);
+    float halfFovTan = fovTan * aspectRatio;
+
+    vec3 rd = computeRd(pixelX, pixelY, fovTan, halfFovTan);
+
+    float minDepth = 1e10;
+    vec3 finalColor = vec3(0.0);
+    bool hasHit = false;
+    
+    // Process cylinders in batches
+    uint numBatches = (cylinderCount + BATCH_SIZE - 1) / BATCH_SIZE;
+    
+    for (uint batch = 0; batch < numBatches; batch++) {
+        uint batchStart = batch * BATCH_SIZE;
+        
+        // Cooperative loading into shared memory
+        if (localIndex < BATCH_SIZE) {
+            uint entityIdx = batchStart + localIndex;
+            if (entityIdx < cylinderCount) {
+                uint cylIndex = tileCylinderIndices[tileIndex * maxEntitiesPerTile + entityIdx];
+                Cylinder cyl = cylinders[cylIndex];
+                shCylPa[localIndex] = cyl.pa_r;
+                shCylPb[localIndex] = cyl.pb_r;
+                
+                // Compute rotated quad corners
+                vec2 corners[4];
+                computeCylinderQuad(cyl.pa_r.xyz, cyl.pb_r.xyz, cyl.pa_r.w, corners);
+                
+                // Store in shared memory
+                shCylQuad[localIndex * 4 + 0] = corners[0];
+                shCylQuad[localIndex * 4 + 1] = corners[1];
+                shCylQuad[localIndex * 4 + 2] = corners[2];
+                shCylQuad[localIndex * 4 + 3] = corners[3];
+            }
+        }
+        barrier();
+        
+        // Process this batch
+        uint batchCount = min(BATCH_SIZE, cylinderCount - batchStart);
+        
+        
+        // Each thread processes multiple pixels if needed
+        for (int i = 0; i < batchCount; i++) {
+            vec4 pa_r = shCylPa[i];
+            vec4 pb_r = shCylPb[i];
+
+            vec2 q0 = shCylQuad[i * 4 + 0];
+            vec2 q1 = shCylQuad[i * 4 + 1];
+            vec2 q2 = shCylQuad[i * 4 + 2];
+            vec2 q3 = shCylQuad[i * 4 + 3];
+                
+            // Check if pixel is inside the rotated quad
+            vec2 pixelCenter = vec2(float(pixelX) + 0.5, float(pixelY) + 0.5);
+            if (!pointInQuad(pixelCenter, q0, q1, q2, q3)) {
+                continue;
+            }
+            
+            vec4 tnor = iCylinder(cameraPos, rd, pa_r.xyz, pb_r.xyz, pa_r.w);
+            
+            if (tnor.x > 0.0) {
+                float t = tnor.x;
+                vec3 rayColStart = rayStart + float(pixelY) * rayDy;
+                vec3 hit = (rayColStart + float(pixelX) * rayDx) * t;
+                float depth = (hit.z * proj[2].z + proj[3].z) / -hit.z;
+                
+                if (depth < minDepth) {
+                    minDepth = depth;
+                    hasHit = true;
+                    
+                    vec3 normal = normalize(tnor.yzw);
+                    float lambertCos = dot(normal, -normalize(t * rd));
+                    finalColor = lambertCos * lightColor * diffuseI;
+                }
+            }
+        }
+        barrier();
+    }
+     // Write result
+    if (hasHit) {
+        int pixelIndex = pixelY * screenResolution.x + pixelX;
+        uint depthU = floatBitsToUint(minDepth);
+                
+        if (depthBuffer[pixelIndex] > depthU) {
+            imageStore(outputImage, ivec2(pixelX, pixelY), vec4(finalColor, 1.0));
+            depthBuffer[pixelIndex] = depthU;
+        }
+    }
+}
