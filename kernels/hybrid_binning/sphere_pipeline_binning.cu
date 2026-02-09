@@ -39,25 +39,6 @@ extern "C" void sortPairs64AndBuildTileOffsets(
     size_t temp_scan_bytes,
     cudaStream_t stream);
 extern "C" void getRleTempStorageBytesForPairs64(size_t* out_bytes, int maxPairs);
-extern "C" void buildTileOffsetsFromRLE(
-    const unsigned int* d_unique_out,
-    const unsigned int* d_counts_out,
-    unsigned int num_runs,
-    unsigned int num_pairs,
-    unsigned int total_tiles,
-    unsigned int* d_run_offsets,
-    unsigned int* d_tile_offsets,
-    void* d_temp_scan,
-    size_t temp_scan_bytes,
-    cudaStream_t stream);
-extern "C" void launchScatterAndFillTileOffsets(
-    const unsigned int* d_unique_out,
-    const unsigned int* d_run_offsets,
-    unsigned int num_runs,
-    unsigned int num_pairs,
-    unsigned int total_tiles,
-    unsigned int* d_tile_offsets,
-    cudaStream_t stream);
 extern "C" void launchSmallSphereRaster(
     const glm::vec4* d_spheres,
     const unsigned int* d_smallSphereIndices,
@@ -65,18 +46,25 @@ extern "C" void launchSmallSphereRaster(
     unsigned int* d_depthBuffer,
     cudaSurfaceObject_t outputImage,
     cudaStream_t stream);
-extern "C" void launchTiledSphereRasterBinning(
+extern "C" void launchExpandWorkGroups(
+    const unsigned int* d_unique_out,
+    const unsigned int* d_counts_out,
+    const unsigned int* d_run_offsets,
+    unsigned int numRuns,
+    unsigned int* d_wg_tileId,
+    unsigned int* d_wg_entityStart,
+    unsigned int* d_wg_entityCount,
+    unsigned int* d_wg_totalCount,
+    cudaStream_t stream);
+extern "C" void launchTiledSphereRasterWG(
     const glm::vec4* d_spheres,
-    const unsigned int* d_tile_offsets,
     const unsigned long long* d_tile_entity_pairs_sorted,
+    const unsigned int* d_wg_tileId,
+    const unsigned int* d_wg_entityStart,
+    const unsigned int* d_wg_entityCount,
+    unsigned int totalWorkGroups,
     unsigned int* d_depthBuffer,
     cudaSurfaceObject_t outputImage,
-    unsigned int tilesX,
-    unsigned int tilesY,
-    unsigned int* d_lightTileList,
-    unsigned int* d_heavyTileIndices,
-    unsigned int* d_heavyBatchStarts,
-    unsigned int* d_tileClassifyCounts,
     cudaStream_t stream);
 
 #define CUDA_CHECK(call) do { cudaError_t e = call; if (e != cudaSuccess) printf("CUDA error %d: %s\n", e, cudaGetErrorString(e)); } while(0)
@@ -123,7 +111,14 @@ void initSphereBinningResources(SphereBinningResources* r, int maxSpheres, int t
     if (r->temp_sort64_bytes > 0) CUDA_CHECK(cudaMalloc(&r->d_temp_sort64, r->temp_sort64_bytes));
     if (r->temp_rle_bytes > 0) CUDA_CHECK(cudaMalloc(&r->d_temp_rle, r->temp_rle_bytes));
     if (r->temp_scan_bytes > 0) CUDA_CHECK(cudaMalloc(&r->d_temp_scan, r->temp_scan_bytes));
-    CUDA_CHECK(cudaMalloc(&r->d_tileClassifyCounts, 2 * sizeof(unsigned int)));
+
+    // Work-group expansion buffers
+    r->maxWorkGroups = r->maxPairs / SHARED_BATCH_SIZE + totalTiles;
+    CUDA_CHECK(cudaMalloc(&r->d_wg_tileId, r->maxWorkGroups * sizeof(unsigned int)));
+    CUDA_CHECK(cudaMalloc(&r->d_wg_entityStart, r->maxWorkGroups * sizeof(unsigned int)));
+    CUDA_CHECK(cudaMalloc(&r->d_wg_entityCount, r->maxWorkGroups * sizeof(unsigned int)));
+    CUDA_CHECK(cudaMalloc(&r->d_wg_totalCount, sizeof(unsigned int)));
+    CUDA_CHECK(cudaHostAlloc(&r->h_wg_totalCount, sizeof(unsigned int), cudaHostAllocDefault));
 }
 
 void freeSphereBinningResources(SphereBinningResources* r) {
@@ -145,7 +140,11 @@ void freeSphereBinningResources(SphereBinningResources* r) {
     if (r->d_temp_sort64) cudaFree(r->d_temp_sort64);
     if (r->d_temp_rle) cudaFree(r->d_temp_rle);
     if (r->d_temp_scan) cudaFree(r->d_temp_scan);
-    cudaFree(r->d_tileClassifyCounts);
+    cudaFree(r->d_wg_tileId);
+    cudaFree(r->d_wg_entityStart);
+    cudaFree(r->d_wg_entityCount);
+    cudaFree(r->d_wg_totalCount);
+    cudaFreeHost(r->h_wg_totalCount);
 }
 
 void resetSphereBinningCounters(SphereBinningResources* r, cudaStream_t stream) {
@@ -196,29 +195,36 @@ void executeSpherePipelineBinning(
         cudaStreamSynchronize(stream);
         if (numRuns > numPairs) numRuns = numPairs;
 
-        buildTileOffsetsFromRLE(
-            r->d_unique_out, r->d_counts_out, numRuns, numPairs, r->totalTiles,
-            r->d_run_offsets, r->d_tile_offsets,
-            r->d_temp_scan, r->temp_scan_bytes, stream);
-        launchScatterAndFillTileOffsets(
-            r->d_unique_out, r->d_run_offsets, numRuns, numPairs, r->totalTiles,
-            r->d_tile_offsets, stream);
-    } else {
-        cudaMemsetAsync(r->d_tile_offsets, 0, (r->totalTiles + 1) * sizeof(unsigned int), stream);
+        // ExclusiveSum on counts -> run_offsets (start of each tile's entities in sorted array)
+        cub::DeviceScan::ExclusiveSum(
+            r->d_temp_scan, r->temp_scan_bytes,
+            r->d_counts_out, r->d_run_offsets,
+            numRuns, stream);
+
+        // Expand RLE runs into work-group dispatch list
+        cudaMemsetAsync(r->d_wg_totalCount, 0, sizeof(unsigned int), stream);
+        launchExpandWorkGroups(
+            r->d_unique_out, r->d_counts_out, r->d_run_offsets, numRuns,
+            r->d_wg_tileId, r->d_wg_entityStart, r->d_wg_entityCount,
+            r->d_wg_totalCount, stream);
+
+        // Read total work groups
+        cudaMemcpyAsync(r->h_wg_totalCount, r->d_wg_totalCount,
+            sizeof(unsigned int), cudaMemcpyDeviceToHost, stream);
+        cudaStreamSynchronize(stream);
+        unsigned int totalWorkGroups = *r->h_wg_totalCount;
+
+        // Launch tiled sphere raster
+        if (totalWorkGroups > 0) {
+            launchTiledSphereRasterWG(
+                d_spheres, r->d_tile_entity_pairs_sorted,
+                r->d_wg_tileId, r->d_wg_entityStart, r->d_wg_entityCount,
+                totalWorkGroups, d_depthBuffer, outputImage, stream);
+        }
     }
 
     if (smallCount > 0) {
         launchSmallSphereRaster(d_spheres, r->d_smallIndices, smallCount, d_depthBuffer, outputImage, stream);
-    }
-
-    // TODO: Re-enable when sort/RLE/tile-offset pipeline is uncommented above.
-    // Without valid tile offsets, this reads garbage memory and crashes CUDA.
-    if (numPairs > 0) {
-        launchTiledSphereRasterBinning(
-            d_spheres, r->d_tile_offsets, r->d_tile_entity_pairs_sorted,
-            d_depthBuffer, outputImage, r->tilesX, r->tilesY,
-            r->d_unique_out, r->d_counts_out, r->d_run_offsets,
-            r->d_tileClassifyCounts, stream);
     }
 }
 

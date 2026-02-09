@@ -38,7 +38,13 @@ struct CylinderBinningResources {
     int tilesX;
     int tilesY;
     int totalTiles;
-    unsigned int* d_tileClassifyCounts; // [0]=lightCount, [1]=heavyCount
+    // Work-group expansion buffers
+    unsigned int* d_wg_tileId;       ///< tile index for each work group
+    unsigned int* d_wg_entityStart;  ///< start offset in sorted pairs for each WG
+    unsigned int* d_wg_entityCount;  ///< entity count per WG (<= SHARED_BATCH_SIZE)
+    unsigned int* d_wg_totalCount;   ///< single uint: atomicAdd counter for total WGs
+    unsigned int* h_wg_totalCount;   ///< pinned host copy of total WG count
+    int maxWorkGroups;               ///< allocated size of WG arrays
 };
 
 void initCylinderBinningResources(CylinderBinningResources* r, int maxCylinders, int tilesX, int tilesY, int totalTiles, int avgEntitiesPerTile = 0);
