@@ -121,6 +121,9 @@ void StreamingManager::processRequests(const uint32_t* h_requestBuffer,
                                        uint64_t currentFrame,
                                        cudaStream_t uploadStream)
 {
+    std::cout << "[OOC] processRequests: " << requestCount << " requests, cwd=" 
+          << std::filesystem::current_path().string() << std::endl;
+          
     int writeBuf = 1 - m_pool.activeBuffer;
     auto& slots  = m_cpuSlots[writeBuf];
     int readBuf  = m_pool.activeBuffer;
@@ -186,7 +189,11 @@ void StreamingManager::processRequests(const uint32_t* h_requestBuffer,
 
         std::vector<glm::vec4> atomData;
         if (!readBlock(m_blockFilePath, m_blockMeta[blockId], atomData))
+        {
+            std::cerr << "[OOC] readBlock FAILED for block " << blockId 
+            << " path=" << m_blockFilePath << std::endl;
             continue;
+        }
 
         size_t count = atomData.size();
         if (stagingOffset + count > (m_stagingCapacity / sizeof(glm::vec4)))

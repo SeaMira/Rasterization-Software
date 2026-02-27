@@ -109,6 +109,31 @@ cmake -B build -DBUILD_CUDA_VERSION=ON
 cmake --build build --target cuda_outofcore_pipeline
 ```
 
+## Modo verbose (construcción del octree paso a paso)
+
+Para observar la construcción del octree durante el preprocesamiento, ejecuta con `-v` o `--verbose`:
+
+```bash
+./cuda_outofcore_pipeline -v
+# En Windows: cuda_outofcore_pipeline.exe -v
+```
+
+### Visual Studio
+
+1. Clic derecho en el proyecto **cuda_outofcore_pipeline** → **Propiedades**
+2. **Configuración** → **Depuración** → **Argumentos de comando**
+3. Escribe `-v` en el campo
+4. Ejecuta con F5 (depuración) o Ctrl+F5 (sin depurador)
+
+La salida se verá en la ventana de consola al iniciar la aplicación.
+
+### Contenido del modo verbose
+
+- Cada nodo: índice, profundidad, número de bloques
+- **Región espacial**: AABB de la celda del octree (`regionMin`, `regionMax`)
+- **AABB bloques**: bounding box real de los bloques en ese nodo
+- Partición por octante (para nodos interiores)
+
 ## Dependencias CUDA utilizadas
 
 | Función                  | Header               | Uso                                    |

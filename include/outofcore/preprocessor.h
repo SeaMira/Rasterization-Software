@@ -35,11 +35,13 @@ struct PreprocessResult {
  * @param atoms       Raw atom positions (xyz + radius in w).
  * @param numAtoms    Total atom count.
  * @param outputDir   Directory where the block file is written.
+ * @param verbose     If true, prints step-by-step octree construction to stdout.
  * @return PreprocessResult with all metadata needed at runtime.
  */
 PreprocessResult preprocess(const glm::vec4* atoms,
                             uint32_t numAtoms,
-                            const std::string& outputDir);
+                            const std::string& outputDir,
+                            bool verbose = false);
 
 } // namespace ooc
 

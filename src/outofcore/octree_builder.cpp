@@ -10,6 +10,8 @@
 #include "outofcore/octree_builder.h"
 #include <algorithm>
 #include <cstring>
+#include <iomanip>
+#include <iostream>
 #include <vector>
 
 namespace ooc {
@@ -50,11 +52,22 @@ void buildRecursive(std::vector<OocOctreeNode>& nodes,
                     const OocBlockMetadata* blocks,
                     int idxStart, int idxEnd,
                     glm::vec3 regionMin, glm::vec3 regionMax,
-                    int depth, int maxDepth)
+                    int depth, int maxDepth, bool verbose,
+                    int parentNodeIdx, int childOctant)
 {
     int blockCount = idxEnd - idxStart;
     int nodeIdx = static_cast<int>(nodes.size());
     nodes.push_back({});
+
+    if (verbose) {
+        std::string indent(depth * 2, ' ');
+        std::cout << indent << "[Nodo " << nodeIdx;
+        if (depth > 0) std::cout << " | hijo octante " << childOctant << " de " << parentNodeIdx;
+        std::cout << "] Profundidad " << depth << ", bloques " << blockCount << std::endl;
+        std::cout << indent << "  Region espacial: min=(" << std::fixed << std::setprecision(2)
+                  << regionMin.x << "," << regionMin.y << "," << regionMin.z << ") max=("
+                  << regionMax.x << "," << regionMax.y << "," << regionMax.z << ")";
+    }
 
     glm::vec3 aabbMin(1e18f);
     glm::vec3 aabbMax(-1e18f);
@@ -71,14 +84,24 @@ void buildRecursive(std::vector<OocOctreeNode>& nodes,
     nodes[nodeIdx]._pad1 = 0.0f;
     std::memset(nodes[nodeIdx]._reserved, 0, sizeof(nodes[nodeIdx]._reserved));
 
+    if (verbose) {
+        std::cout << std::endl << std::string(depth * 2, ' ')
+                  << "  AABB bloques:    min=(" << std::fixed << std::setprecision(2)
+                  << aabbMin.x << "," << aabbMin.y << "," << aabbMin.z << ") max=("
+                  << aabbMax.x << "," << aabbMax.y << "," << aabbMax.z << ")";
+    }
+
     if (blockCount <= OOC_BLOCKS_PER_LEAF || depth >= maxDepth) 
     {
         nodes[nodeIdx].childBaseIndex  = -1;
         nodes[nodeIdx].childMask       = 0;
         nodes[nodeIdx].blockRangeStart = idxStart;
         nodes[nodeIdx].blockRangeEnd   = idxEnd;
+        if (verbose) std::cout << " -> HOJA" << std::endl;
         return;
     }
+
+    if (verbose) std::cout << " -> INTERIOR" << std::endl;
 
     glm::vec3 mid = (regionMin + regionMax) * 0.5f;
 
@@ -132,6 +155,16 @@ void buildRecursive(std::vector<OocOctreeNode>& nodes,
     int childBase = static_cast<int>(nodes.size());
     nodes[nodeIdx].childBaseIndex = childBase;
 
+    if (verbose) {
+        std::string indent(depth * 2, ' ');
+        std::cout << indent << "  Particion: ";
+        for (int oct = 0; oct < 8; oct++) {
+            if (bucketCount[oct] > 0)
+                std::cout << "oct" << oct << "=" << bucketCount[oct] << " ";
+        }
+        std::cout << std::endl;
+    }
+
     for (int oct = 0; oct < 8; oct++) 
     {
         if (bucketCount[oct] == 0) continue;
@@ -139,7 +172,8 @@ void buildRecursive(std::vector<OocOctreeNode>& nodes,
                        bucketStart[oct], bucketEnd[oct],
                        octantMin(oct, regionMin, mid),
                        octantMax(oct, regionMin, mid, regionMax),
-                       depth + 1, maxDepth);
+                       depth + 1, maxDepth, verbose,
+                       nodeIdx, oct);
     }
 }
 
@@ -161,8 +195,19 @@ std::vector<OocOctreeNode> buildReducedOctree(
     indexBuffer.resize(numBlocks);
     for (uint32_t i = 0; i < numBlocks; i++) indexBuffer[i] = i;
 
+    if (verbose) {
+        std::cout << "\n[OOC] === Construccion del octree (paso a paso) ===" << std::endl;
+        std::cout << "[OOC] Bloques totales: " << numBlocks
+                  << ", profundidad maxima: " << maxDepth
+                  << ", bloques por hoja: " << OOC_BLOCKS_PER_LEAF << "\n" << std::endl;
+    }
+
     buildRecursive(nodes, indexBuffer, blocks, 0, static_cast<int>(numBlocks),
-                   sceneMin, sceneMax, 0, maxDepth);
+                   sceneMin, sceneMax, 0, maxDepth, verbose, -1, -1);
+
+    if (verbose) {
+        std::cout << "\n[OOC] === Fin construccion: " << nodes.size() << " nodos ===" << std::endl;
+    }
 
     return nodes;
 }

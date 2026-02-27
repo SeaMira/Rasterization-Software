@@ -21,6 +21,7 @@
  */
 
 #include <iostream>
+#include <string>
 #include <vector>
 #include <algorithm>
 
@@ -238,9 +239,20 @@ int main(int argc, char* argv[]) {
     sphereCount = static_cast<int>(spheres.size());
     std::cout << "Loaded " << sphereCount << " atoms." << std::endl;
 
+    // ── Parse verbose flag for octree construction ──
+    bool octreeVerbose = false;
+    for (int i = 1; i < argc; i++) {
+        std::string arg(argv[i]);
+        if (arg == "-v" || arg == "--verbose") {
+            octreeVerbose = true;
+            std::cout << "[OOC] Modo verbose activado: se mostrara la construccion paso a paso del octree." << std::endl;
+            break;
+        }
+    }
+
     // ── Preprocess (once) ──
     ooc::PreprocessResult prep = ooc::preprocess(
-        spheres.data(), static_cast<uint32_t>(sphereCount), "ooc_data");
+        spheres.data(), static_cast<uint32_t>(sphereCount), "ooc_data", octreeVerbose);
 
     int totalBlocks = static_cast<int>(prep.blocks.size());
     int poolSlots   = std::min(OOC_MAX_BLOCK_POOL_SLOTS, totalBlocks);
@@ -334,6 +346,12 @@ int main(int argc, char* argv[]) {
     bool isRunning = true;
 
     while (isRunning) {
+        if (frameId % 60 == 0) 
+        {
+            std::cout << "[OOC] Frame " << frameId 
+                      << " visible=" << numVisible << " filtered=" << numFiltered 
+                      << " active=" << activeCount << std::endl;
+        }
         cameraController.cameraUpdate();
         benchmark.update();
         profiler.updateProfiler(benchmark.getCheckpointID(),
@@ -385,7 +403,8 @@ int main(int argc, char* argv[]) {
         unsigned int* inCount  = gpu.d_queueCountA;
         unsigned int* outCount = gpu.d_queueCountB;
 
-        for (int level = 0; level < OOC_MAX_OCTREE_DEPTH + 1; level++) {
+        for (int level = 0; level < OOC_MAX_OCTREE_DEPTH + 1; level++) 
+        {
             cudaMemsetAsync(outCount, 0, sizeof(unsigned int), renderStream);
 
             cudaMemcpyAsync(h_queueCount, inCount, sizeof(unsigned int),
@@ -458,6 +477,11 @@ int main(int argc, char* argv[]) {
                                     cudaMemcpyDeviceToHost, renderStream);
                     cudaStreamSynchronize(renderStream);
                 }
+                // Después de obtener numVisible
+                if (frameId % 60 == 0) {
+                    std::cout << "[OOC] numVisible=" << numVisible << " numFiltered=" << numFiltered 
+                    << " numRequests=" << numRequests << std::endl;
+                }
 
                 // Read back filtered block IDs for LRU refresh
                 cudaMemcpyAsync(h_filteredBlockIds, gpu.d_filteredBlockIds,
@@ -488,6 +512,15 @@ int main(int argc, char* argv[]) {
                 drawnAtoms = static_cast<int>(activeCount);
 
                 if (activeCount > 0) {
+                    std::vector<glm::vec4> debugAtoms(std::min(5u, activeCount));
+                    cudaMemcpy(debugAtoms.data(), gpu.d_activeAtoms, 
+                            debugAtoms.size() * sizeof(glm::vec4), cudaMemcpyDeviceToHost);
+                    std::cout << "[OOC] First atoms: ";
+                    for (int i = 0; i < debugAtoms.size(); i++)
+                        std::cout << "(" << debugAtoms[i].x << "," << debugAtoms[i].y << "," 
+                                << debugAtoms[i].z << ",r=" << debugAtoms[i].w << ") ";
+                    std::cout << std::endl;
+
                     launchSphereRasterOoc(
                         gpu.d_activeAtoms, activeCount,
                         depthBuffer, outputSurface, renderStream);

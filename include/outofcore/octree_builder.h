@@ -27,6 +27,7 @@ namespace ooc {
  * @param maxDepth     Maximum octree depth.
  * @param[out] indexBuffer For leaves, blockRangeStart/End index into this buffer.
  *                         Contains block IDs in octant order. Must be non-null.
+ * @param verbose         If true, prints step-by-step construction to stdout.
  * @return Linear array of OocOctreeNode ready for GPU upload.
  */
 std::vector<OocOctreeNode> buildReducedOctree(
@@ -35,7 +36,8 @@ std::vector<OocOctreeNode> buildReducedOctree(
     glm::vec3 sceneMin,
     glm::vec3 sceneMax,
     int maxDepth,
-    std::vector<uint32_t>& indexBuffer);
+    std::vector<uint32_t>& indexBuffer,
+    bool verbose = false);
 
 } // namespace ooc
 

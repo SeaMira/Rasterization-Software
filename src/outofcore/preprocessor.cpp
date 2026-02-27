@@ -17,7 +17,8 @@ namespace ooc {
 
 PreprocessResult preprocess(const glm::vec4* atoms,
                             uint32_t numAtoms,
-                            const std::string& outputDir)
+                            const std::string& outputDir,
+                            bool verbose)
 {
     PreprocessResult result{};
     std::cout << "[OOC] Preprocessing " << numAtoms << " atoms..." << std::endl;
@@ -78,7 +79,8 @@ PreprocessResult preprocess(const glm::vec4* atoms,
         result.blocks.data(),
         static_cast<uint32_t>(result.blocks.size()),
         sceneMin, sceneMax, OOC_MAX_OCTREE_DEPTH,
-        result.blockIndexBuffer);
+        result.blockIndexBuffer,
+        verbose);
 
     std::cout << "[OOC] Octree built: " << result.octreeNodes.size()
               << " nodes, " << result.blocks.size() << " blocks." << std::endl;
