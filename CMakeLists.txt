@@ -9,6 +9,7 @@
 #   3. SND_PARALLEL  - Segunda versión con OpenGL compute shaders
 #   4. STANDARD      - Pipeline estándar de OpenGL
 #   5. CUDA          - Interop CUDA-OpenGL para kernels de rasterización
+#   6. CUDA_OUTOFCORE - Out-of-core octree streaming con CUDA
 #
 # Uso:
 #   cmake -B build -DBUILD_SEQUENTIAL_VERSION=ON -DBUILD_CUDA_VERSION=OFF
