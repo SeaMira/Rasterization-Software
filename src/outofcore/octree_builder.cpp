@@ -185,7 +185,8 @@ std::vector<OocOctreeNode> buildReducedOctree(
     glm::vec3 sceneMin,
     glm::vec3 sceneMax,
     int maxDepth,
-    std::vector<uint32_t>& indexBuffer)
+    std::vector<uint32_t>& indexBuffer,
+    bool verbose)
 {
     std::vector<OocOctreeNode> nodes;
     nodes.reserve(numBlocks * 2);

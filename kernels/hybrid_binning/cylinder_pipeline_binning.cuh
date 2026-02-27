@@ -14,7 +14,6 @@
 struct CylinderBinningResources {
     unsigned int* d_smallIndices;
     unsigned int* d_smallCount;
-    unsigned int* d_largeCount;
     unsigned int* d_frustumPassedCount;
     unsigned int* h_smallCount;
     unsigned int* h_pairCount;
@@ -22,6 +21,7 @@ struct CylinderBinningResources {
     unsigned long long* d_tile_entity_pairs;
     unsigned long long* d_tile_entity_pairs_sorted;
     unsigned int* d_pairCount;
+
     unsigned int* d_tile_offsets;
     unsigned int* d_unique_out;
     unsigned int* d_counts_out;

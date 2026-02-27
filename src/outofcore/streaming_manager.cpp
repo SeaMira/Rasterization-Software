@@ -13,6 +13,7 @@
 #include <iostream>
 #include <algorithm>
 #include <vector>
+#include <filesystem>
 
 #define OOC_CUDA_CHECK(call)                                                   \
     do {                                                                       \
@@ -121,8 +122,6 @@ void StreamingManager::processRequests(const uint32_t* h_requestBuffer,
                                        uint64_t currentFrame,
                                        cudaStream_t uploadStream)
 {
-    std::cout << "[OOC] processRequests: " << requestCount << " requests, cwd=" 
-          << std::filesystem::current_path().string() << std::endl;
           
     int writeBuf = 1 - m_pool.activeBuffer;
     auto& slots  = m_cpuSlots[writeBuf];

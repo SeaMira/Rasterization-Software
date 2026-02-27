@@ -77,6 +77,19 @@ struct OocConstants {
     int       octreeNodeCount;
     float     visibilityThreshold;
     int       maxPoolSlots;
+
+    /** Pre-computed screen ray casting (camera space). Same as HybridConstants.
+     *  ray(px,py) = rayStart + px*dx + py*dy. rd = normalize(ray.x*right + ray.y*up - ray.z*front). */
+    glm::vec3 rayStart;
+    glm::vec3 dx;
+    glm::vec3 dy;
+    glm::vec3 right;
+    glm::vec3 up;
+    glm::vec3 front;
+
+    /** Raster color constants (atoms). */
+    glm::vec3 atomsColor;
+    float     diffuse;
 };
 
 // ─────────────────── Block pool slot (CPU side) ───────────────────

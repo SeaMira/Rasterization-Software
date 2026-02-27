@@ -2,8 +2,9 @@
  * @file sphere_raster_ooc.cu
  * @brief Direct sphere rasterisation for the out-of-core pipeline.
  *
- * One thread per atom: projects a screen-space bounding box, then
- * ray-tests each pixel for exact sphere intersection.
+ * Same algorithm as smallSphereRasterKernel in small_entity_raster.cu:
+ * one thread per atom, projects screen-space bounding box, ray-tests each
+ * pixel for exact sphere intersection. Uses pre-computed rayStart/dx/dy.
  */
 
 #include <cuda_runtime.h>
@@ -20,7 +21,8 @@ extern "C" void uploadOocRasterConstants(const OocConstants& constants, cudaStre
 }
 
 __device__ inline float iSphereOoc(const glm::vec3& ro, const glm::vec3& rd,
-                                   const glm::vec3& center, float radius) {
+                                   const glm::vec3& center, float radius) 
+                                   {
     glm::vec3 oc = ro - center;
     float b = glm::dot(oc, rd);
     float c = glm::dot(oc, oc) - radius * radius;
@@ -29,24 +31,8 @@ __device__ inline float iSphereOoc(const glm::vec3& ro, const glm::vec3& rd,
     return -b - sqrtf(h);
 }
 
-__device__ inline glm::vec3 computeRayOoc(int px, int py) {
-    float aspect = static_cast<float>(oocRasterCst.screenWidth) /
-                   static_cast<float>(oocRasterCst.screenHeight);
-    float fovRad = glm::radians(oocRasterCst.fov);
-    float fovTan = tanf(fovRad * 0.5f);
-    float halfFovTan = fovTan * aspect;
-
-    glm::vec2 p = (-glm::vec2(oocRasterCst.screenWidth, oocRasterCst.screenHeight) +
-                   2.0f * glm::vec2(px, py)) /
-                  glm::vec2(oocRasterCst.screenWidth, oocRasterCst.screenHeight);
-
-    glm::vec3 camRight = glm::vec3(oocRasterCst.view[0][0], oocRasterCst.view[1][0], oocRasterCst.view[2][0]);
-    glm::vec3 camUp    = glm::vec3(oocRasterCst.view[0][1], oocRasterCst.view[1][1], oocRasterCst.view[2][1]);
-    glm::vec3 camFront = -glm::vec3(oocRasterCst.view[0][2], oocRasterCst.view[1][2], oocRasterCst.view[2][2]);
-
-    return glm::normalize(p.x * camRight * halfFovTan +
-                          p.y * camUp    * fovTan     +
-                          camFront);
+__device__ inline glm::vec3 fastNormalize(const glm::vec3& v) {
+    return v * rsqrtf(glm::dot(v, v));
 }
 
 __global__ void sphereRasterOocKernel(
@@ -62,61 +48,73 @@ __global__ void sphereRasterOocKernel(
     glm::vec3 pos  = glm::vec3(atom);
     float     rad  = atom.w;
 
-    // Project to screen-space bounding box
     glm::vec4 camSpace4 = oocRasterCst.view * glm::vec4(pos, 1.0f);
-    glm::vec3 cs = glm::vec3(camSpace4);
-    glm::vec3 ncs = glm::normalize(cs);
-    glm::vec3 imp = cs - ncs * rad;
+    glm::vec3 cameraSpaceSphere = glm::vec3(camSpace4);
+    glm::vec3 normCamSpaceSphere = glm::normalize(cameraSpaceSphere);
+    glm::vec3 camImposPos = cameraSpaceSphere - normCamSpaceSphere * rad;
 
-    float dist = glm::length(cs) + 1e-6f;
-    float sinA = rad / dist;
-    float tanA = tanf(asinf(fminf(sinA, 0.999f)));
-    float qs   = tanA * glm::length(imp);
+    float dist = glm::length(cameraSpaceSphere) + 1e-6f;
+    float sinAngle = __fdividef(rad, dist);
+    float tanAngle = tanf(asinf(fminf(sinAngle, 0.999f)));
+    float quadScale = tanAngle * glm::length(camImposPos);
 
-    glm::vec3 up(0.0f, 1.0f, 0.0f);
-    glm::vec3 u = glm::normalize(glm::cross(ncs, up));
-    if (glm::length(u) < 0.001f) u = glm::vec3(1.0f, 0.0f, 0.0f);
-    glm::vec3 v = glm::cross(u, ncs) * qs;
-    u *= qs;
+    glm::vec3 upVec(0.0f, 1.0f, 0.0f);
+    glm::vec3 impU = glm::normalize(glm::cross(normCamSpaceSphere, upVec));
+    if (glm::length(impU) < 0.001f) impU = glm::vec3(1.0f, 0.0f, 0.0f);
+    glm::vec3 impV = glm::cross(impU, normCamSpaceSphere) * quadScale;
+    impU *= quadScale;
 
     glm::vec3 corners[4] = {
-        imp + u + v, imp - u + v, imp + u - v, imp - u - v
+        camImposPos + impU + impV, camImposPos - impU + impV,
+        camImposPos + impU - impV, camImposPos - impU - impV
     };
 
     glm::vec2 minC(1e6f), maxC(-1e6f);
+    #pragma unroll
     for (int i = 0; i < 4; i++) {
         glm::vec4 clip = oocRasterCst.proj * glm::vec4(corners[i], 1.0f);
-        float iw = fdividef(1.0f, clip.w);
-        float cx = clip.x * iw;
-        float cy = clip.y * iw;
-        minC.x = fminf(minC.x, cx); minC.y = fminf(minC.y, cy);
-        maxC.x = fmaxf(maxC.x, cx); maxC.y = fmaxf(maxC.y, cy);
+        float iw = __fdividef(1.0f, clip.w);
+        float x = clip.x * iw;
+        float y = clip.y * iw;
+        minC.x = fminf(minC.x, x); minC.y = fminf(minC.y, y);
+        maxC.x = fmaxf(maxC.x, x); maxC.y = fmaxf(maxC.y, y);
     }
 
-    int sMinX = max(0, (int)floorf((minC.x * 0.5f + 0.5f) * oocRasterCst.screenWidth));
-    int sMinY = max(0, (int)floorf((minC.y * 0.5f + 0.5f) * oocRasterCst.screenHeight));
-    int sMaxX = min(oocRasterCst.screenWidth,  (int)ceilf((maxC.x * 0.5f + 0.5f) * oocRasterCst.screenWidth));
-    int sMaxY = min(oocRasterCst.screenHeight, (int)ceilf((maxC.y * 0.5f + 0.5f) * oocRasterCst.screenHeight));
+    int screenMinX = max(0, __float2int_rd(fmaf(minC.x, 0.5f, 0.5f) * oocRasterCst.screenWidth));
+    int screenMinY = max(0, __float2int_rd(fmaf(minC.y, 0.5f, 0.5f) * oocRasterCst.screenHeight));
+    int screenMaxX = min(oocRasterCst.screenWidth,  __float2int_ru(fmaf(maxC.x, 0.5f, 0.5f) * oocRasterCst.screenWidth));
+    int screenMaxY = min(oocRasterCst.screenHeight, __float2int_ru(fmaf(maxC.y, 0.5f, 0.5f) * oocRasterCst.screenHeight));
 
-    for (int py = sMinY; py < sMaxY; py++) {
-        for (int px = sMinX; px < sMaxX; px++) {
-            glm::vec3 rd = computeRayOoc(px, py);
+    float difx = float(screenMaxX - screenMinX);
+    float dify = float(screenMaxY - screenMinY);
+    if (difx * dify <= 2.0f) return;
+
+    float proj22 = oocRasterCst.proj[2][2];
+    float proj32 = oocRasterCst.proj[3][2];
+
+    for (int py = screenMinY; py < screenMaxY; py++) {
+        glm::vec3 rayColStart = oocRasterCst.rayStart + (float)py * oocRasterCst.dy;
+        for (int px = screenMinX; px < screenMaxX; px++) {
+            glm::vec3 ray = rayColStart + (float)px * oocRasterCst.dx;
+            glm::vec3 rd = fastNormalize(ray.x * oocRasterCst.right + ray.y * oocRasterCst.up - ray.z * oocRasterCst.front);
             float t = iSphereOoc(oocRasterCst.cameraPos, rd, pos, rad);
+
             if (t > 0.0f) {
-                glm::vec3 hit = oocRasterCst.cameraPos + rd * t;
-                glm::vec4 hitClip = oocRasterCst.proj * (oocRasterCst.view * glm::vec4(hit, 1.0f));
-                float depth = hitClip.z / hitClip.w;
+                glm::vec3 hit = ray * t;
+                float depth = __fdividef(fmaf(hit.z, proj22, proj32), -hit.z);
                 unsigned int depthU = __float_as_uint(depth);
+
                 int pixelIdx = py * oocRasterCst.screenWidth + px;
-                if (atomicMin(&depthBuffer[pixelIdx], depthU) != depthU) {
-                    glm::vec3 normal = glm::normalize(hit - pos);
-                    float lambert = fmaxf(0.0f, glm::dot(normal, -glm::normalize(rd)));
-                    glm::vec3 color = glm::vec3(0.01f, 1.0f, 0.05f) * lambert * 0.9f;
-                    uchar4 pixel = make_uchar4(
-                        static_cast<unsigned char>(color.x * 255.0f),
-                        static_cast<unsigned char>(color.y * 255.0f),
-                        static_cast<unsigned char>(color.z * 255.0f), 255);
-                    surf2Dwrite(pixel, outputImage, px * sizeof(uchar4), py);
+                unsigned int old = atomicMin(&depthBuffer[pixelIdx], depthU);
+                if (__uint_as_float(old) > depth) {
+                    glm::vec3 normal = fastNormalize(oocRasterCst.cameraPos + rd * t - pos);
+                    float lambert = fmaxf(0.0f, glm::dot(normal, -rd));
+                    glm::vec3 color = glm::vec3(oocRasterCst.atomsColor.x, oocRasterCst.atomsColor.y, oocRasterCst.atomsColor.z) * lambert * oocRasterCst.diffuse;
+                    uchar4 ucharColor = make_uchar4(
+                        (unsigned char)(color.x * 255.0f),
+                        (unsigned char)(color.y * 255.0f),
+                        (unsigned char)(color.z * 255.0f), 255);
+                    surf2Dwrite(ucharColor, outputImage, px * sizeof(uchar4), py);
                 }
             }
         }
@@ -125,10 +123,10 @@ __global__ void sphereRasterOocKernel(
 
 extern "C" void launchSphereRasterOoc(
     const glm::vec4*    d_activeAtoms,
-    unsigned int        activeCount,
-    unsigned int*       d_depthBuffer,
+    unsigned int       activeCount,
+    unsigned int*      d_depthBuffer,
     cudaSurfaceObject_t outputImage,
-    cudaStream_t        stream)
+    cudaStream_t       stream)
 {
     if (activeCount == 0) return;
     dim3 block(256);
