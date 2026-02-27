@@ -224,11 +224,9 @@ extern "C" void launchProbabilisticOcclusion(
 // ═════════════════════════════════════════════════════════
 //
 // Alternative implementation: parent kernel launches child kernels per chunk.
-// Each child runs the recurrence for its chunk. Children execute sequentially
-// (same stream). Useful to demonstrate dynamic parallelism; for large counts
-// the single-thread version or a parallel scan-based approach may be faster.
-//
-// Requires: compile with -rdc=true if child is in different compilation unit.
+// The parent first precomputes v_start for each chunk (sequential loop), then
+// launches all children. Children are independent and can run in parallel.
+// No cudaDeviceSynchronize in device code (host-only API).
 // ═════════════════════════════════════════════════════════
 
 static constexpr unsigned int OOC_OCCLUSION_CHUNK_SIZE = 64;
@@ -241,8 +239,7 @@ __global__ void probabilisticOcclusionChildKernel(
     float                    totalArea,
     float                    threshold,
     unsigned int*            __restrict__ filteredBlockIds,
-    unsigned int*            __restrict__ filteredCount,
-    float*                   __restrict__ d_vEndOut)
+    unsigned int*            __restrict__ filteredCount)
 {
     float v = vStart;
     for (unsigned int c = start; c < end; c++) {
@@ -255,7 +252,6 @@ __global__ void probabilisticOcclusionChildKernel(
             filteredBlockIds[out] = sorted[c].blockId;
         }
     }
-    *d_vEndOut = v;
 }
 
 __global__ void probabilisticOcclusionParentKernel(
@@ -263,28 +259,35 @@ __global__ void probabilisticOcclusionParentKernel(
     unsigned int             count,
     unsigned int*            __restrict__ filteredBlockIds,
     unsigned int*            __restrict__ filteredCount,
-    float*                   __restrict__ d_vEndBuffer)
+    float*                   __restrict__ d_vStartArray)
 {
     float totalArea = static_cast<float>(oocCst.screenWidth) *
                       static_cast<float>(oocCst.screenHeight);
     float threshold = oocCst.visibilityThreshold;
 
-    for (unsigned int chunkStart = 0; chunkStart < count;
-         chunkStart += OOC_OCCLUSION_CHUNK_SIZE)
-    {
-        unsigned int chunkIdx  = chunkStart / OOC_OCCLUSION_CHUNK_SIZE;
-        float vStart = (chunkIdx == 0) ? 1.0f : d_vEndBuffer[chunkIdx - 1];
+    // Phase 1: precompute v_start for each chunk (sequential)
+    unsigned int numChunks = (count + OOC_OCCLUSION_CHUNK_SIZE - 1) / OOC_OCCLUSION_CHUNK_SIZE;
+    float v = 1.0f;
+    for (unsigned int k = 0; k < numChunks; k++) {
+        d_vStartArray[k] = v;
+        unsigned int chunkStart = k * OOC_OCCLUSION_CHUNK_SIZE;
+        unsigned int chunkEnd   = min(chunkStart + OOC_OCCLUSION_CHUNK_SIZE, count);
+        for (unsigned int c = chunkStart; c < chunkEnd; c++) {
+            float Dc = sorted[c].projectedArea / totalArea;
+            Dc = fminf(fmaxf(Dc, 0.0f), 1.0f);
+            v *= (1.0f - Dc);
+        }
+    }
 
-        unsigned int chunkEnd = min(chunkStart + OOC_OCCLUSION_CHUNK_SIZE, count);
+    // Phase 2: launch child kernels (all independent, no sync needed)
+    for (unsigned int k = 0; k < numChunks; k++) {
+        unsigned int chunkStart = k * OOC_OCCLUSION_CHUNK_SIZE;
+        unsigned int chunkEnd   = min(chunkStart + OOC_OCCLUSION_CHUNK_SIZE, count);
         if (chunkStart >= chunkEnd) break;
 
         probabilisticOcclusionChildKernel<<<1, 1>>>(
-            sorted, chunkStart, chunkEnd, vStart,
-            totalArea, threshold,
-            filteredBlockIds, filteredCount,
-            d_vEndBuffer + chunkIdx);
-
-        cudaDeviceSynchronize();
+            sorted, chunkStart, chunkEnd, d_vStartArray[k],
+            totalArea, threshold, filteredBlockIds, filteredCount);
     }
 }
 
