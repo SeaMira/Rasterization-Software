@@ -19,6 +19,7 @@ struct PreprocessResult {
     std::string                  blockFilePath;
     std::vector<OocBlockMetadata> blocks;
     std::vector<OocOctreeNode>    octreeNodes;
+    std::vector<uint32_t>        blockIndexBuffer;  ///< For leaves, blockRangeStart/End index here
     glm::vec3                    sceneMin;
     glm::vec3                    sceneMax;
 };

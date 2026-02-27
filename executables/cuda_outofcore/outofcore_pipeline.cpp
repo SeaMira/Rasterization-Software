@@ -63,8 +63,9 @@ extern "C" void launchScreenClearOoc(
     float farPlane, cudaStream_t stream);
 
 extern "C" void launchOctreeFrustumCullLevel(
-    const OocOctreeNode* d_octree, const unsigned int* d_inQueue,
-    unsigned int inCount, unsigned int* d_outQueue, unsigned int* d_outCount,
+    const OocOctreeNode* d_octree, const unsigned int* d_blockIndexBuffer,
+    const unsigned int* d_inQueue, unsigned int inCount,
+    unsigned int* d_outQueue, unsigned int* d_outCount,
     unsigned int* d_visibleBlockIds, unsigned int* d_visibleBlockCount,
     int maxVisibleBlocks, cudaStream_t stream);
 
@@ -96,7 +97,8 @@ extern "C" void launchSphereRasterOoc(
 
 // ─────────────────── Thrust comparator ───────────────────
 
-struct DepthInfoLess {
+struct DepthInfoLess 
+{
     __host__ __device__
     bool operator()(const OocBlockDepthInfo& a, const OocBlockDepthInfo& b) const {
         return a.depth < b.depth;
@@ -105,8 +107,10 @@ struct DepthInfoLess {
 
 // ─────────────────── Pipeline GPU resources ───────────────────
 
-struct OocGpuResources {
-    OocOctreeNode*    d_octree          = nullptr;
+struct OocGpuResources 
+{
+    OocOctreeNode*    d_octree           = nullptr;
+    unsigned int*     d_blockIndexBuffer = nullptr;
     OocBlockMetadata* d_blockMeta       = nullptr;
     unsigned int*     d_blockAtomCounts = nullptr;
 
@@ -145,12 +149,15 @@ static void allocGpuResources(OocGpuResources& r,
     r.maxOctreeNodes = numNodes;
     r.maxActiveAtoms = maxActiveAtoms;
 
-    cudaMalloc(&r.d_octree,    numNodes  * sizeof(OocOctreeNode));
-    cudaMalloc(&r.d_blockMeta, numBlocks * sizeof(OocBlockMetadata));
-    cudaMalloc(&r.d_blockAtomCounts, numBlocks * sizeof(unsigned int));
+    cudaMalloc(&r.d_octree,           numNodes  * sizeof(OocOctreeNode));
+    cudaMalloc(&r.d_blockIndexBuffer, numBlocks * sizeof(unsigned int));
+    cudaMalloc(&r.d_blockMeta,        numBlocks * sizeof(OocBlockMetadata));
+    cudaMalloc(&r.d_blockAtomCounts,  numBlocks * sizeof(unsigned int));
 
     cudaMemcpy(r.d_octree, prep.octreeNodes.data(),
                numNodes * sizeof(OocOctreeNode), cudaMemcpyHostToDevice);
+    cudaMemcpy(r.d_blockIndexBuffer, prep.blockIndexBuffer.data(),
+               numBlocks * sizeof(unsigned int), cudaMemcpyHostToDevice);
     cudaMemcpy(r.d_blockMeta, prep.blocks.data(),
                numBlocks * sizeof(OocBlockMetadata), cudaMemcpyHostToDevice);
 
@@ -181,6 +188,7 @@ static void allocGpuResources(OocGpuResources& r,
 
 static void freeGpuResources(OocGpuResources& r) {
     cudaFree(r.d_octree);
+    cudaFree(r.d_blockIndexBuffer);
     cudaFree(r.d_blockMeta);
     cudaFree(r.d_blockAtomCounts);
     cudaFree(r.d_queueA);
@@ -216,7 +224,8 @@ int main(int argc, char* argv[]) {
 
     int deviceCount = 0;
     cudaGetDeviceCount(&deviceCount);
-    if (deviceCount == 0) {
+    if (deviceCount == 0) 
+    {
         std::cerr << "No CUDA devices found." << std::endl;
         return 1;
     }
@@ -386,8 +395,8 @@ int main(int argc, char* argv[]) {
             if (currentCount == 0) break;
 
             launchOctreeFrustumCullLevel(
-                gpu.d_octree, inQueue, currentCount, outQueue, outCount,
-                gpu.d_visibleBlockIds, gpu.d_visibleBlockCount,
+                gpu.d_octree, gpu.d_blockIndexBuffer, inQueue, currentCount,
+                outQueue, outCount, gpu.d_visibleBlockIds, gpu.d_visibleBlockCount,
                 gpu.maxBlocks, renderStream);
 
             std::swap(inQueue, outQueue);

@@ -73,11 +73,12 @@ PreprocessResult preprocess(const glm::vec4* atoms,
         return result;
     }
 
-    // 5. Build reduced octree
+    // 5. Build reduced octree (partitions blocks by octant; produces index buffer)
     result.octreeNodes = buildReducedOctree(
         result.blocks.data(),
         static_cast<uint32_t>(result.blocks.size()),
-        sceneMin, sceneMax);
+        sceneMin, sceneMax, OOC_MAX_OCTREE_DEPTH,
+        result.blockIndexBuffer);
 
     std::cout << "[OOC] Octree built: " << result.octreeNodes.size()
               << " nodes, " << result.blocks.size() << " blocks." << std::endl;

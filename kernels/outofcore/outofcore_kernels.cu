@@ -42,10 +42,11 @@ __device__ inline bool aabbInsideFrustum(glm::vec3 bmin, glm::vec3 bmax) {
 /**
  * Each thread processes one node from the input queue. If visible and
  * interior, its children are appended to the output queue. If visible
- * and leaf, its block range is appended to the visible-blocks list.
+ * and leaf, its block IDs (from blockIndexBuffer) are appended.
  */
 __global__ void octreeFrustumCullLevelKernel(
     const OocOctreeNode* __restrict__ octree,
+    const unsigned int*  __restrict__ blockIndexBuffer,
     const unsigned int*  __restrict__ inQueue,
     unsigned int                      inCount,
     unsigned int*        __restrict__ outQueue,
@@ -64,12 +65,13 @@ __global__ void octreeFrustumCullLevelKernel(
 
     if (node.childBaseIndex < 0) 
     {
-        // Leaf — emit block IDs
-        for (int b = node.blockRangeStart; b < node.blockRangeEnd; b++) 
+        // Leaf — emit block IDs from index buffer
+        for (int i = node.blockRangeStart; i < node.blockRangeEnd; i++) 
         {
+            unsigned int bid = blockIndexBuffer[i];
             unsigned int out = atomicAdd(visibleBlockCount, 1u);
             if (out < static_cast<unsigned int>(maxVisibleBlocks))
-                visibleBlockIds[out] = static_cast<unsigned int>(b);
+                visibleBlockIds[out] = bid;
         }
     } else 
     {
@@ -90,6 +92,7 @@ __global__ void octreeFrustumCullLevelKernel(
 
 extern "C" void launchOctreeFrustumCullLevel(
     const OocOctreeNode* d_octree,
+    const unsigned int*  d_blockIndexBuffer,
     const unsigned int*  d_inQueue,
     unsigned int         inCount,
     unsigned int*        d_outQueue,
@@ -103,7 +106,7 @@ extern "C" void launchOctreeFrustumCullLevel(
     dim3 block(256);
     dim3 grid((inCount + block.x - 1) / block.x);
     octreeFrustumCullLevelKernel<<<grid, block, 0, stream>>>(
-        d_octree, d_inQueue, inCount, d_outQueue, d_outCount,
+        d_octree, d_blockIndexBuffer, d_inQueue, inCount, d_outQueue, d_outCount,
         d_visibleBlockIds, d_visibleBlockCount, maxVisibleBlocks);
 }
 

@@ -18,12 +18,15 @@ namespace ooc {
 
 /**
  * Build a reduced octree over the given blocks.
+ * Partitions blocks by octant at each level; produces nodes and an index buffer.
  *
- * @param blocks   Block metadata array (must be sorted by Morton code).
- * @param numBlocks Number of blocks.
- * @param sceneMin Scene AABB minimum.
- * @param sceneMax Scene AABB maximum.
- * @param maxDepth Maximum octree depth.
+ * @param blocks       Block metadata array (must be sorted by Morton code).
+ * @param numBlocks    Number of blocks.
+ * @param sceneMin     Scene AABB minimum.
+ * @param sceneMax     Scene AABB maximum.
+ * @param maxDepth     Maximum octree depth.
+ * @param[out] indexBuffer For leaves, blockRangeStart/End index into this buffer.
+ *                         Contains block IDs in octant order. Must be non-null.
  * @return Linear array of OocOctreeNode ready for GPU upload.
  */
 std::vector<OocOctreeNode> buildReducedOctree(
@@ -31,7 +34,8 @@ std::vector<OocOctreeNode> buildReducedOctree(
     uint32_t numBlocks,
     glm::vec3 sceneMin,
     glm::vec3 sceneMax,
-    int maxDepth = OOC_MAX_OCTREE_DEPTH);
+    int maxDepth,
+    std::vector<uint32_t>& indexBuffer);
 
 } // namespace ooc
 
