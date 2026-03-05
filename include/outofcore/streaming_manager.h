@@ -47,7 +47,9 @@ public:
     void initialize(int numSlots,
                     int totalBlocks,
                     const std::string& blockFilePath,
-                    const std::vector<OocBlockMetadata>& blockMeta);
+                    const std::vector<OocBlockMetadata>& blockMeta,
+                    int atomsPerBlock,
+                    int maxRequestsPerFrame);
 
     void destroy();
 
@@ -92,6 +94,8 @@ private:
     std::vector<OocBlockMetadata>   m_blockMeta;
     std::string                     m_blockFilePath;
     int                             m_totalBlocks = 0;
+    int                             m_atomsPerBlock = OOC_DEFAULT_ATOMS_PER_BLOCK;
+    int                             m_maxRequestsPerFrame = OOC_DEFAULT_MAX_REQUESTS_PER_FRAME;
 
     // Batched upload: pinned staging buffer + GPU staging
     glm::vec4*  m_h_stagingBuffer = nullptr;

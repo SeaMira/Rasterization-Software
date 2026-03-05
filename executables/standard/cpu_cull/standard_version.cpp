@@ -150,24 +150,23 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
     cylindersShader.linkProgram();
 
     std::vector<Sphere> spheres = getScene(sphere_count);
-    sphere_count = spheres.size(); 
-    
     std::vector<Cylinder> cylinders = getCylinderScene(cylinder_count);
-    cylinder_count = cylinders.size(); 
+    const int actualSphereCount = static_cast<int>(spheres.size());
+    const int actualCylinderCount = static_cast<int>(cylinders.size());
 
     std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints = getCheckpoints(sphere_count, spheres, cylinders);
 
-    visibleSpheresCount = sphere_count;
+    visibleSpheresCount = actualSphereCount;
     
-    visibleCylindersCount = cylinder_count;
+    visibleCylindersCount = actualCylinderCount;
 
     std::cout << "Spheres buffer " << std::endl;
-    std::vector<SphereContainer> visibleSpheres(sphere_count);
-    StorageBuffer sphereBuffer(GL_SHADER_STORAGE_BUFFER, sphere_count * sizeof(SphereContainer), 1, 
+    std::vector<SphereContainer> visibleSpheres(actualSphereCount);
+    StorageBuffer sphereBuffer(GL_SHADER_STORAGE_BUFFER, actualSphereCount * sizeof(SphereContainer), 1, 
         nullptr, GL_STATIC_DRAW);
 
-    std::vector<GLuint> visibleSpheresIndexes(sphere_count, 0);
-    StorageBuffer visibleSpheresBuffer(GL_SHADER_STORAGE_BUFFER, sphere_count * sizeof(GLuint), 4, 
+    std::vector<GLuint> visibleSpheresIndexes(actualSphereCount, 0);
+    StorageBuffer visibleSpheresBuffer(GL_SHADER_STORAGE_BUFFER, actualSphereCount * sizeof(GLuint), 4, 
         visibleSpheresIndexes.data(), GL_STATIC_DRAW);
 
     
@@ -176,18 +175,18 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
     StorageBuffer visibleEntitiesAtomicCounter(GL_SHADER_STORAGE_BUFFER, sizeof(GLuint), 3, 
     &zero, GL_STATIC_DRAW);
     
-    std::vector<CylinderContainer> visibleCylinders(cylinder_count);
-    StorageBuffer cylinderBuffer(GL_SHADER_STORAGE_BUFFER, cylinder_count * sizeof(CylinderContainer), 2, 
+    std::vector<CylinderContainer> visibleCylinders(actualCylinderCount);
+    StorageBuffer cylinderBuffer(GL_SHADER_STORAGE_BUFFER, actualCylinderCount * sizeof(CylinderContainer), 2, 
         nullptr, GL_STATIC_DRAW);
 
-    std::vector<GLuint> visibleCylindersIndexes(cylinder_count, 0);
-    StorageBuffer visibleCylindersBuffer(GL_SHADER_STORAGE_BUFFER, cylinder_count * sizeof(GLuint), 5, 
+    std::vector<GLuint> visibleCylindersIndexes(actualCylinderCount, 0);
+    StorageBuffer visibleCylindersBuffer(GL_SHADER_STORAGE_BUFFER, actualCylinderCount * sizeof(GLuint), 5, 
         visibleCylindersIndexes.data(), GL_STATIC_DRAW);
 
 
 
     ////////////// Buffers for occlusion culling
-    int totalEntities = sphere_count + cylinder_count;
+    int totalEntities = actualSphereCount + actualCylinderCount;
     std::vector<GLuint> visibilityFrames(2 * totalEntities, 10);
     StorageBuffer visibilityFramesBuffer(GL_SHADER_STORAGE_BUFFER, 2 * totalEntities * sizeof(GLuint), 6, 
         visibilityFrames.data(), GL_DYNAMIC_COPY);
@@ -204,15 +203,15 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
     std::string process_times_path = base_path + "_process_times.csv";
     Profiler profiler(window, 
         frame_times_path, 
-        process_times_path, sphere_count, cylinder_count, downsampleLevel, timerDuration);
+        process_times_path, actualSphereCount, actualCylinderCount, downsampleLevel, timerDuration);
 
     window.setupSceneInfoGui("Scene Info", scene_data);
     window.setupCameraGui("Camera Info", &camera);
     window.setupInputInfoGui("General Input Info");
     window.setupBenchmarkInfoGui("Benchmark", &benchmark);
 
-    GLuint numGroupsXSpheres = (sphere_count + workGroupSizeXPerSphere - 1) / workGroupSizeXPerSphere;
-    GLuint numGroupsXCylinders = (cylinder_count + workGroupSizeXPerCylinder - 1) / workGroupSizeXPerCylinder;
+    GLuint numGroupsXSpheres = (actualSphereCount + workGroupSizeXPerSphere - 1) / workGroupSizeXPerSphere;
+    GLuint numGroupsXCylinders = (actualCylinderCount + workGroupSizeXPerCylinder - 1) / workGroupSizeXPerCylinder;
     GLuint numGroupsY = 1;
 
     glm::ivec2 screenResolution(SCR_WIDTH, SCR_HEIGHT);
@@ -304,7 +303,7 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
 
             cylindersCullingShader.use();
             cylindersCullingShader.setInt("cylinderCount", visibleCylindersCount);
-            cylindersCullingShader.setUint("indexOffset", sphere_count);
+            cylindersCullingShader.setUint("indexOffset", actualSphereCount);
             cylindersCullingShader.setVec2I("screenResolution", screenResolution);
             setCameraUniforms(cylindersCullingShader, camera);
             numGroupsXCylinders = (visibleCylindersCount + workGroupSizeXPerCylinder - 1) / workGroupSizeXPerCylinder;
@@ -385,27 +384,26 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
     cylindersShader.linkProgram();
 
     std::vector<Sphere> spheres = getScene(sphere_count);
-    sphere_count = spheres.size(); 
-    
     std::vector<Cylinder> cylinders = getCylinderScene(cylinder_count);
-    cylinder_count = cylinders.size(); 
+    const int actualSphereCount = static_cast<int>(spheres.size());
+    const int actualCylinderCount = static_cast<int>(cylinders.size());
 
     std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints = getCheckpoints(sphere_count, spheres, cylinders);
 
-    visibleSpheresCount = sphere_count;
+    visibleSpheresCount = actualSphereCount;
     
-    visibleCylindersCount = cylinder_count;
+    visibleCylindersCount = actualCylinderCount;
 
     std::cout << "Spheres buffer " << std::endl;
-    StorageBuffer sphereBuffer(GL_SHADER_STORAGE_BUFFER, sphere_count * sizeof(Sphere), 1, 
+    StorageBuffer sphereBuffer(GL_SHADER_STORAGE_BUFFER, actualSphereCount * sizeof(Sphere), 1, 
         spheres.data(), GL_STATIC_DRAW);
     
-    std::vector<Sphere> visibleSpheres(sphere_count);
+    std::vector<Sphere> visibleSpheres(actualSphereCount);
     
-    StorageBuffer cylinderBuffer(GL_SHADER_STORAGE_BUFFER, cylinder_count * sizeof(Cylinder), 2, 
+    StorageBuffer cylinderBuffer(GL_SHADER_STORAGE_BUFFER, actualCylinderCount * sizeof(Cylinder), 2, 
         cylinders.data(), GL_STATIC_DRAW);
 
-    std::vector<Cylinder> visibleCylinders(cylinder_count);
+    std::vector<Cylinder> visibleCylinders(actualCylinderCount);
 
     GLuint emptyVAO;
     glCreateVertexArrays(1, &emptyVAO);
@@ -418,15 +416,15 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
     std::string process_times_path = base_path + "_process_times.csv";
     Profiler profiler(window, 
         frame_times_path, 
-        process_times_path, sphere_count, cylinder_count, 0, timerDuration);
+        process_times_path, actualSphereCount, actualCylinderCount, 0, timerDuration);
 
     window.setupSceneInfoGui("Scene Info", scene_data);
     window.setupCameraGui("Camera Info", &camera);
     window.setupInputInfoGui("General Input Info");
     window.setupBenchmarkInfoGui("Benchmark", &benchmark);
 
-    GLuint numGroupsXSpheres = (sphere_count + workGroupSizeXPerSphere - 1) / workGroupSizeXPerSphere;
-    GLuint numGroupsXCylinders = (cylinder_count + workGroupSizeXPerCylinder - 1) / workGroupSizeXPerCylinder;
+    GLuint numGroupsXSpheres = (actualSphereCount + workGroupSizeXPerSphere - 1) / workGroupSizeXPerSphere;
+    GLuint numGroupsXCylinders = (actualCylinderCount + workGroupSizeXPerCylinder - 1) / workGroupSizeXPerCylinder;
     GLuint numGroupsY = 1;
 
     glm::ivec2 screenResolution(SCR_WIDTH, SCR_HEIGHT);

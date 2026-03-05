@@ -12,23 +12,55 @@
 #define OUTOFCORE_TYPES_H
 
 #include <cstdint>
+#include <string>
 #include <glm/glm.hpp>
 
 #ifdef __CUDACC__
 #include <cuda_runtime.h>
 #endif
 
-static constexpr int OOC_ATOMS_PER_BLOCK       = 512;
-static constexpr int OOC_MAX_OCTREE_DEPTH       = 10;
-static constexpr int OOC_BLOCKS_PER_LEAF        = 4;
-static constexpr int OOC_MAX_BLOCK_POOL_SLOTS   = 2048;
-static constexpr int OOC_MAX_REQUESTS_PER_FRAME = 256;
-static constexpr float OOC_VISIBILITY_THRESHOLD = 0.01f;
+// Default values (used when no JSON config is loaded)
+static constexpr int OOC_DEFAULT_ATOMS_PER_BLOCK       = 512;
+static constexpr int OOC_DEFAULT_MAX_OCTREE_DEPTH      = 10;
+static constexpr int OOC_DEFAULT_BLOCKS_PER_LEAF       = 4;
+static constexpr int OOC_DEFAULT_MAX_BLOCK_POOL_SLOTS  = 2048;
+static constexpr int OOC_DEFAULT_MAX_REQUESTS_PER_FRAME = 256;
+static constexpr float OOC_DEFAULT_VISIBILITY_THRESHOLD = 0.01f;
 
 /**
  * Magic number for the binary block file header ("OOCBLKDT").
  */
 static constexpr uint64_t OOC_BLOCK_FILE_MAGIC = 0x4F4F43424C4B4454ULL;
+
+// ─────────────────── Occlusion method enum ───────────────────
+
+enum class OocOcclusionMethod : int {
+    NONE                  = 0,
+    PROBABILISTIC         = 1,
+    PROBABILISTIC_OVERLAP = 2,
+    HIZ                   = 3,
+    HIZ_PROBABILISTIC     = 4
+};
+
+inline OocOcclusionMethod parseOcclusionMethod(const std::string& s) {
+    if (s == "probabilistic")         return OocOcclusionMethod::PROBABILISTIC;
+    if (s == "probabilistic_overlap") return OocOcclusionMethod::PROBABILISTIC_OVERLAP;
+    if (s == "hiz")                   return OocOcclusionMethod::HIZ;
+    if (s == "hiz_probabilistic")     return OocOcclusionMethod::HIZ_PROBABILISTIC;
+    return OocOcclusionMethod::NONE;
+}
+
+// ─────────────────── Runtime OOC config (from JSON) ──────────────────
+
+struct OocConfig {
+    int   atomsPerBlock       = OOC_DEFAULT_ATOMS_PER_BLOCK;
+    int   maxOctreeDepth      = OOC_DEFAULT_MAX_OCTREE_DEPTH;
+    int   blocksPerLeaf       = OOC_DEFAULT_BLOCKS_PER_LEAF;
+    int   maxBlockPoolSlots   = OOC_DEFAULT_MAX_BLOCK_POOL_SLOTS;
+    int   maxRequestsPerFrame = OOC_DEFAULT_MAX_REQUESTS_PER_FRAME;
+    float visibilityThreshold = OOC_DEFAULT_VISIBILITY_THRESHOLD;
+    OocOcclusionMethod occlusionMethod = OocOcclusionMethod::NONE;
+};
 
 // ─────────────────── Block metadata ───────────────────
 
@@ -77,9 +109,10 @@ struct OocConstants {
     int       octreeNodeCount;
     float     visibilityThreshold;
     int       maxPoolSlots;
+    int       atomsPerBlock;
+    int       occlusionMethod;
 
-    /** Pre-computed screen ray casting (camera space). Same as HybridConstants.
-     *  ray(px,py) = rayStart + px*dx + py*dy. rd = normalize(ray.x*right + ray.y*up - ray.z*front). */
+    /** Pre-computed screen ray casting (camera space). */
     glm::vec3 rayStart;
     glm::vec3 dx;
     glm::vec3 dy;
@@ -90,6 +123,9 @@ struct OocConstants {
     /** Raster color constants (atoms). */
     glm::vec3 atomsColor;
     float     diffuse;
+
+    float     nearPlane;
+    float     farPlane;
 };
 
 // ─────────────────── Block pool slot (CPU side) ───────────────────
@@ -118,7 +154,16 @@ struct OocBlockDepthInfo {
     uint32_t blockId;
     float    depth;
     float    projectedArea;
-    float    _pad;
+    float    screenMinX;
+    float    screenMinY;
+    float    screenMaxX;
+    float    screenMaxY;
+    uint32_t atomCount;
+    float    minNdcDepth;    ///< Closest NDC depth of the AABB (for HiZ test)
+    float    screenMinU;     ///< UV-space min X (0..1) for HiZ sampling
+    float    screenMinV;     ///< UV-space min Y (0..1) for HiZ sampling
+    float    screenMaxU;     ///< UV-space max X (0..1) for HiZ sampling
+    float    screenMaxV;     ///< UV-space max Y (0..1) for HiZ sampling
 };
 
 #endif // OUTOFCORE_TYPES_H

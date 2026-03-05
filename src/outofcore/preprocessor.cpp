@@ -18,6 +18,7 @@ namespace ooc {
 PreprocessResult preprocess(const glm::vec4* atoms,
                             uint32_t numAtoms,
                             const std::string& outputDir,
+                            const OocConfig& config,
                             bool verbose)
 {
     PreprocessResult result{};
@@ -33,19 +34,21 @@ PreprocessResult preprocess(const glm::vec4* atoms,
         sceneMax = glm::max(sceneMax, p + glm::vec3(r));
     }
     glm::vec3 sceneExtent = sceneMax - sceneMin;
-    float maxExtent = std::max({sceneExtent.x, sceneExtent.y, sceneExtent.z});
-    if (maxExtent < 1e-6f) maxExtent = 1.0f;
+    glm::vec3 safeExtent(
+        sceneExtent.x > 1e-6f ? sceneExtent.x : 1.0f,
+        sceneExtent.y > 1e-6f ? sceneExtent.y : 1.0f,
+        sceneExtent.z > 1e-6f ? sceneExtent.z : 1.0f);
 
     result.sceneMin = sceneMin;
     result.sceneMax = sceneMax;
 
-    // 2. Compute Morton codes
+    // 2. Compute Morton codes (normalize each axis independently)
     std::vector<uint32_t> mortonCodes(numAtoms);
     for (uint32_t i = 0; i < numAtoms; i++) {
         glm::vec3 p(atoms[i]);
-        float nx = (p.x - sceneMin.x) / maxExtent;
-        float ny = (p.y - sceneMin.y) / maxExtent;
-        float nz = (p.z - sceneMin.z) / maxExtent;
+        float nx = (p.x - sceneMin.x) / safeExtent.x;
+        float ny = (p.y - sceneMin.y) / safeExtent.y;
+        float nz = (p.z - sceneMin.z) / safeExtent.z;
         mortonCodes[i] = mortonFromNormalized(nx, ny, nz);
     }
 
@@ -69,7 +72,7 @@ PreprocessResult preprocess(const glm::vec4* atoms,
     result.blockFilePath = outputDir + "/block_data.bin";
 
     if (!writeBlockFile(result.blockFilePath, sortedAtoms.data(), numAtoms,
-                        sceneMin, sceneMax, result.blocks)) {
+                        sceneMin, sceneMax, config.atomsPerBlock, result.blocks)) {
         std::cerr << "[OOC] Failed to write block file!" << std::endl;
         return result;
     }
@@ -78,7 +81,7 @@ PreprocessResult preprocess(const glm::vec4* atoms,
     result.octreeNodes = buildReducedOctree(
         result.blocks.data(),
         static_cast<uint32_t>(result.blocks.size()),
-        sceneMin, sceneMax, OOC_MAX_OCTREE_DEPTH,
+        sceneMin, sceneMax, config.maxOctreeDepth, config.blocksPerLeaf,
         result.blockIndexBuffer,
         verbose);
 

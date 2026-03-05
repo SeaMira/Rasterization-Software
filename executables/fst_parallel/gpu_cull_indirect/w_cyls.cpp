@@ -142,19 +142,19 @@ int main(int argc, char* argv[])
     std::vector<Sphere> spheres;
     std::vector<Cylinder> cylinders;
     getCompleteScene(spheres, sphere_count, cylinders, cylinder_count);
-    sphere_count = spheres.size(); 
-    cylinder_count = cylinders.size(); 
+    const int actualSphereCount = static_cast<int>(spheres.size());
+    const int actualCylinderCount = static_cast<int>(cylinders.size());
 
     std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints = getCheckpoints(sphere_count, spheres, cylinders);
     
-    visibleSpheresCount = sphere_count;
-    visibleCylindersCount = cylinder_count;
+    visibleSpheresCount = actualSphereCount;
+    visibleCylindersCount = actualCylinderCount;
     
     // Buffers de geometría
-    StorageBuffer sphereBuffer(GL_SHADER_STORAGE_BUFFER, sphere_count * sizeof(Sphere), 6, 
+    StorageBuffer sphereBuffer(GL_SHADER_STORAGE_BUFFER, actualSphereCount * sizeof(Sphere), 6, 
         spheres.data(), GL_STATIC_DRAW);
     
-    StorageBuffer cylinderBuffer(GL_SHADER_STORAGE_BUFFER, cylinder_count * sizeof(Cylinder), 7, 
+    StorageBuffer cylinderBuffer(GL_SHADER_STORAGE_BUFFER, actualCylinderCount * sizeof(Cylinder), 7, 
         cylinders.data(), GL_STATIC_DRAW);
 
     spheres.clear();
@@ -166,10 +166,10 @@ int main(int argc, char* argv[])
     
     // Buffers para índices de objetos visibles
     StorageBuffer visibleSphereIndicesBuffer(GL_SHADER_STORAGE_BUFFER, 
-        sphere_count * sizeof(GLuint), 10, nullptr, GL_DYNAMIC_COPY);
+        actualSphereCount * sizeof(GLuint), 10, nullptr, GL_DYNAMIC_COPY);
     
     StorageBuffer visibleCylinderIndicesBuffer(GL_SHADER_STORAGE_BUFFER, 
-        cylinder_count * sizeof(GLuint), 13, nullptr, GL_DYNAMIC_COPY);
+        actualCylinderCount * sizeof(GLuint), 13, nullptr, GL_DYNAMIC_COPY);
     
     // Contadores de objetos visibles
     GLuint zero = 0;
@@ -214,7 +214,7 @@ int main(int argc, char* argv[])
     std::string process_times_path = base_path + "_process_times.csv";
     Profiler profiler(window, 
         frame_times_path, 
-        process_times_path, sphere_count, cylinder_count, 0, timerDuration);
+        process_times_path, actualSphereCount, actualCylinderCount, 0, timerDuration);
 
     window.setupSceneInfoGui("Scene Info", scene_data);
     window.setupCameraGui("Camera Info", &camera);
@@ -225,8 +225,8 @@ int main(int argc, char* argv[])
     // Work Group Calculations
     // ===========================================================================
     
-    GLuint numGroupsXSpheres = (sphere_count + workGroupSizeXPerSphere - 1) / workGroupSizeXPerSphere;
-    GLuint numGroupsXCylinders = (cylinder_count + workGroupSizeXPerCylinder - 1) / workGroupSizeXPerCylinder;
+    GLuint numGroupsXSpheres = (actualSphereCount + workGroupSizeXPerSphere - 1) / workGroupSizeXPerSphere;
+    GLuint numGroupsXCylinders = (actualCylinderCount + workGroupSizeXPerCylinder - 1) / workGroupSizeXPerCylinder;
     GLuint numGroupsY = 1;
 
     canvas.bindTexture();
@@ -332,7 +332,7 @@ int main(int argc, char* argv[])
                 cylinderFrustumCullShader.setInt("benchmark", 0);
             #endif
             
-            cylinderFrustumCullShader.setInt("cylinderCount", cylinder_count);
+            cylinderFrustumCullShader.setInt("cylinderCount", actualCylinderCount);
             cylinderFrustumCullShader.setUint("workGroupSize", workGroupSizeXPerCylinder);
             setFrustumUniforms(cylinderFrustumCullShader, frustum);
             

@@ -19,6 +19,7 @@ bool writeBlockFile(const std::string& path,
                     uint32_t numAtoms,
                     glm::vec3 sceneMin,
                     glm::vec3 sceneMax,
+                    int atomsPerBlock,
                     std::vector<OocBlockMetadata>& blocks)
 {
     FILE* f = fopen(path.c_str(), "wb");
@@ -27,13 +28,14 @@ bool writeBlockFile(const std::string& path,
         return false;
     }
 
-    uint32_t numBlocks = (numAtoms + OOC_ATOMS_PER_BLOCK - 1) / OOC_ATOMS_PER_BLOCK;
+    uint32_t apb = static_cast<uint32_t>(atomsPerBlock);
+    uint32_t numBlocks = (numAtoms + apb - 1) / apb;
     blocks.resize(numBlocks);
 
     OocBlockFileHeader header{};
     header.magic        = OOC_BLOCK_FILE_MAGIC;
     header.numBlocks    = numBlocks;
-    header.atomsPerBlock = OOC_ATOMS_PER_BLOCK;
+    header.atomsPerBlock = apb;
     header.sceneMin     = sceneMin;
     header.sceneMax     = sceneMax;
     fwrite(&header, sizeof(header), 1, f);
@@ -41,9 +43,8 @@ bool writeBlockFile(const std::string& path,
     uint64_t offset = sizeof(header);
 
     for (uint32_t b = 0; b < numBlocks; b++) {
-        uint32_t start = b * OOC_ATOMS_PER_BLOCK;
-        uint32_t count = std::min(static_cast<uint32_t>(OOC_ATOMS_PER_BLOCK),
-                                  numAtoms - start);
+        uint32_t start = b * apb;
+        uint32_t count = std::min(apb, numAtoms - start);
 
         glm::vec3 bboxMin(1e18f);
         glm::vec3 bboxMax(-1e18f);

@@ -55,6 +55,16 @@ struct SceneSettings
     float timerDuration = 48.0f;
     bool benchmarkingEnabled = false;
 
+    // Out-of-core settings
+    int oocAtomsPerBlock       = 512;
+    int oocMaxOctreeDepth      = 10;
+    int oocBlocksPerLeaf       = 4;
+    int oocMaxBlockPoolSlots   = 2048;
+    int oocMaxRequestsPerFrame = 256;
+    float oocVisibilityThreshold = 0.01f;
+    // "none", "probabilistic", "probabilistic_overlap", "hiz"
+    std::string oocOcclusionMethod = "none";
+
     /**
      * @brief Gets the full path to the scene file.
      * @return Filesystem path to the scene file.

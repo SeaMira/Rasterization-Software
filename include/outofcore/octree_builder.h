@@ -36,6 +36,7 @@ std::vector<OocOctreeNode> buildReducedOctree(
     glm::vec3 sceneMin,
     glm::vec3 sceneMax,
     int maxDepth,
+    int blocksPerLeaf,
     std::vector<uint32_t>& indexBuffer,
     bool verbose = false);
 

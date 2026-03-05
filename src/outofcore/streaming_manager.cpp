@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <vector>
 #include <filesystem>
+#include <unordered_set>
 
 #define OOC_CUDA_CHECK(call)                                                   \
     do {                                                                       \
@@ -27,7 +28,7 @@ extern "C" void launchScatterStagingToPool(
     const glm::vec4* d_staging, glm::vec4* d_atomPool,
     const unsigned int* d_slotOffsets, const int32_t* d_slotIds,
     const unsigned int* d_atomCounts, unsigned int numUploads,
-    cudaStream_t stream);
+    int atomsPerBlock, cudaStream_t stream);
 
 extern "C" void launchApplySlotMapUpdates(
     int32_t* d_blockSlotMap, const uint32_t* d_blockIds,
@@ -44,14 +45,18 @@ StreamingManager::~StreamingManager()
 void StreamingManager::initialize(int numSlots,
                                   int totalBlocks,
                                   const std::string& blockFilePath,
-                                  const std::vector<OocBlockMetadata>& blockMeta)
+                                  const std::vector<OocBlockMetadata>& blockMeta,
+                                  int atomsPerBlock,
+                                  int maxRequestsPerFrame)
 {
-    m_pool.numSlots   = numSlots;
-    m_totalBlocks     = totalBlocks;
-    m_blockFilePath   = blockFilePath;
-    m_blockMeta       = blockMeta;
+    m_pool.numSlots       = numSlots;
+    m_totalBlocks         = totalBlocks;
+    m_blockFilePath       = blockFilePath;
+    m_blockMeta           = blockMeta;
+    m_atomsPerBlock       = atomsPerBlock;
+    m_maxRequestsPerFrame = maxRequestsPerFrame;
 
-    size_t atomPoolBytes = static_cast<size_t>(numSlots) * OOC_ATOMS_PER_BLOCK * sizeof(glm::vec4);
+    size_t atomPoolBytes = static_cast<size_t>(numSlots) * m_atomsPerBlock * sizeof(glm::vec4);
     size_t slotMapBytes  = static_cast<size_t>(totalBlocks) * sizeof(int32_t);
 
     for (int b = 0; b < 2; b++)
@@ -67,16 +72,16 @@ void StreamingManager::initialize(int numSlots,
         m_cpuSlots[b].resize(numSlots);
     }
 
-    m_stagingCapacity = static_cast<size_t>(OOC_MAX_REQUESTS_PER_FRAME) *
-                        OOC_ATOMS_PER_BLOCK * sizeof(glm::vec4);
+    m_stagingCapacity = static_cast<size_t>(m_maxRequestsPerFrame) *
+                        m_atomsPerBlock * sizeof(glm::vec4);
     OOC_CUDA_CHECK(cudaHostAlloc(&m_h_stagingBuffer, m_stagingCapacity, cudaHostAllocDefault));
     OOC_CUDA_CHECK(cudaMalloc(&m_d_stagingBuffer, m_stagingCapacity));
 
-    OOC_CUDA_CHECK(cudaMalloc(&m_d_slotOffsets, OOC_MAX_REQUESTS_PER_FRAME * sizeof(unsigned int)));
-    OOC_CUDA_CHECK(cudaMalloc(&m_d_slotIds,     OOC_MAX_REQUESTS_PER_FRAME * sizeof(int32_t)));
-    OOC_CUDA_CHECK(cudaMalloc(&m_d_atomCounts,  OOC_MAX_REQUESTS_PER_FRAME * sizeof(unsigned int)));
-    OOC_CUDA_CHECK(cudaMalloc(&m_d_slotMapBlockIds, OOC_MAX_REQUESTS_PER_FRAME * 2 * sizeof(uint32_t)));
-    OOC_CUDA_CHECK(cudaMalloc(&m_d_slotMapSlots,    OOC_MAX_REQUESTS_PER_FRAME * 2 * sizeof(int32_t)));
+    OOC_CUDA_CHECK(cudaMalloc(&m_d_slotOffsets, m_maxRequestsPerFrame * sizeof(unsigned int)));
+    OOC_CUDA_CHECK(cudaMalloc(&m_d_slotIds,     m_maxRequestsPerFrame * sizeof(int32_t)));
+    OOC_CUDA_CHECK(cudaMalloc(&m_d_atomCounts,  m_maxRequestsPerFrame * sizeof(unsigned int)));
+    OOC_CUDA_CHECK(cudaMalloc(&m_d_slotMapBlockIds, m_maxRequestsPerFrame * 2 * sizeof(uint32_t)));
+    OOC_CUDA_CHECK(cudaMalloc(&m_d_slotMapSlots,    m_maxRequestsPerFrame * 2 * sizeof(int32_t)));
 
     std::cout << "[OOC] StreamingManager: " << numSlots << " slots, "
               << totalBlocks << " blocks, pool = "
@@ -106,7 +111,7 @@ int StreamingManager::findEvictionSlot(int bufIdx, uint64_t currentFrame) const 
     {
         if (!m_cpuSlots[bufIdx][s].valid)
             return s;
-        if (m_cpuSlots[bufIdx][s].lastUsedFrame < oldest) 
+        if (m_cpuSlots[bufIdx][s].lastUsedFrame < oldest)
         {
             oldest = m_cpuSlots[bufIdx][s].lastUsedFrame;
             best = s;
@@ -122,7 +127,6 @@ void StreamingManager::processRequests(const uint32_t* h_requestBuffer,
                                        uint64_t currentFrame,
                                        cudaStream_t uploadStream)
 {
-          
     int writeBuf = 1 - m_pool.activeBuffer;
     auto& slots  = m_cpuSlots[writeBuf];
     int readBuf  = m_pool.activeBuffer;
@@ -136,47 +140,50 @@ void StreamingManager::processRequests(const uint32_t* h_requestBuffer,
     OOC_CUDA_CHECK(cudaMemcpyAsync(
         m_pool.d_atomPool[writeBuf],
         m_pool.d_atomPool[readBuf],
-        static_cast<size_t>(m_pool.numSlots) * OOC_ATOMS_PER_BLOCK * sizeof(glm::vec4),
+        static_cast<size_t>(m_pool.numSlots) * m_atomsPerBlock * sizeof(glm::vec4),
         cudaMemcpyDeviceToDevice, uploadStream));
 
-    for (uint32_t i = 0; i < usedCount; i++) {
-        uint32_t bid = h_usedBlockIds[i];
-        for (int s = 0; s < m_pool.numSlots; s++) {
-            if (slots[s].valid && slots[s].blockId == bid) {
-                slots[s].lastUsedFrame = currentFrame;
-                break;
-            }
-        }
+    std::unordered_set<uint32_t> usedBlockSet(h_usedBlockIds, h_usedBlockIds + usedCount);
+    for (int s = 0; s < m_pool.numSlots; s++) 
+    {
+        if (slots[s].valid && usedBlockSet.count(slots[s].blockId))
+            slots[s].lastUsedFrame = currentFrame;
     }
 
-    // Phase 1: gather all blocks into staging buffer, build metadata
     std::vector<unsigned int> slotOffsets;
     std::vector<int32_t>      slotIds;
     std::vector<unsigned int> atomCounts;
     std::vector<uint32_t>     slotMapBlockIds;
     std::vector<int32_t>      slotMapSlots;
 
-    slotOffsets.reserve(OOC_MAX_REQUESTS_PER_FRAME);
-    slotIds.reserve(OOC_MAX_REQUESTS_PER_FRAME);
-    atomCounts.reserve(OOC_MAX_REQUESTS_PER_FRAME);
-    slotMapBlockIds.reserve(OOC_MAX_REQUESTS_PER_FRAME * 2);
-    slotMapSlots.reserve(OOC_MAX_REQUESTS_PER_FRAME * 2);
+    slotOffsets.reserve(m_maxRequestsPerFrame);
+    slotIds.reserve(m_maxRequestsPerFrame);
+    atomCounts.reserve(m_maxRequestsPerFrame);
+    slotMapBlockIds.reserve(m_maxRequestsPerFrame * 2);
+    slotMapSlots.reserve(m_maxRequestsPerFrame * 2);
+
+    std::unordered_set<uint32_t> loadedBlockSet;
+    loadedBlockSet.reserve(m_pool.numSlots);
+    for (int s = 0; s < m_pool.numSlots; s++) {
+        if (slots[s].valid)
+            loadedBlockSet.insert(slots[s].blockId);
+    }
 
     unsigned int stagingOffset = 0;
 
-    for (uint32_t r = 0; r < requestCount && slotOffsets.size() < static_cast<size_t>(OOC_MAX_REQUESTS_PER_FRAME); r++) {
+    for (uint32_t r = 0; r < requestCount && slotOffsets.size() < static_cast<size_t>(m_maxRequestsPerFrame); r++) {
         uint32_t blockId = h_requestBuffer[r];
         if (blockId >= static_cast<uint32_t>(m_totalBlocks)) continue;
 
-        bool alreadyLoaded = false;
-        for (int s = 0; s < m_pool.numSlots; s++) {
-            if (slots[s].valid && slots[s].blockId == blockId) {
-                alreadyLoaded = true;
-                slots[s].lastUsedFrame = currentFrame;
-                break;
+        if (loadedBlockSet.count(blockId)) {
+            for (int s = 0; s < m_pool.numSlots; s++) {
+                if (slots[s].valid && slots[s].blockId == blockId) {
+                    slots[s].lastUsedFrame = currentFrame;
+                    break;
+                }
             }
+            continue;
         }
-        if (alreadyLoaded) continue;
 
         int slot = findEvictionSlot(writeBuf, currentFrame);
         if (slot < 0) break;
@@ -189,7 +196,7 @@ void StreamingManager::processRequests(const uint32_t* h_requestBuffer,
         std::vector<glm::vec4> atomData;
         if (!readBlock(m_blockFilePath, m_blockMeta[blockId], atomData))
         {
-            std::cerr << "[OOC] readBlock FAILED for block " << blockId 
+            std::cerr << "[OOC] readBlock FAILED for block " << blockId
             << " path=" << m_blockFilePath << std::endl;
             continue;
         }
@@ -211,12 +218,12 @@ void StreamingManager::processRequests(const uint32_t* h_requestBuffer,
         slots[slot].blockId       = blockId;
         slots[slot].lastUsedFrame = currentFrame;
         slots[slot].valid         = true;
+        loadedBlockSet.insert(blockId);
     }
 
     uint32_t numUploads = static_cast<uint32_t>(slotOffsets.size());
     if (numUploads == 0) return;
 
-    // Phase 2: single cudaMemcpyAsync for all atom data
     size_t totalAtoms = stagingOffset;
     OOC_CUDA_CHECK(cudaMemcpyAsync(
         m_d_stagingBuffer,
@@ -224,7 +231,6 @@ void StreamingManager::processRequests(const uint32_t* h_requestBuffer,
         totalAtoms * sizeof(glm::vec4),
         cudaMemcpyHostToDevice, uploadStream));
 
-    // Phase 3: scatter kernel (uses persistent buffers)
     OOC_CUDA_CHECK(cudaMemcpyAsync(m_d_slotOffsets, slotOffsets.data(),
                                     numUploads * sizeof(unsigned int),
                                     cudaMemcpyHostToDevice, uploadStream));
@@ -237,9 +243,9 @@ void StreamingManager::processRequests(const uint32_t* h_requestBuffer,
 
     launchScatterStagingToPool(
         m_d_stagingBuffer, m_pool.d_atomPool[writeBuf],
-        m_d_slotOffsets, m_d_slotIds, m_d_atomCounts, numUploads, uploadStream);
+        m_d_slotOffsets, m_d_slotIds, m_d_atomCounts, numUploads,
+        m_atomsPerBlock, uploadStream);
 
-    // Phase 4: single cudaMemcpyAsync + kernel for slot map updates
     uint32_t numSlotMapUpdates = static_cast<uint32_t>(slotMapBlockIds.size());
     if (numSlotMapUpdates > 0) {
         OOC_CUDA_CHECK(cudaMemcpyAsync(m_d_slotMapBlockIds, slotMapBlockIds.data(),
@@ -255,7 +261,7 @@ void StreamingManager::processRequests(const uint32_t* h_requestBuffer,
     }
 }
 
-void StreamingManager::swapBuffers() 
+void StreamingManager::swapBuffers()
 {
     m_pool.activeBuffer = 1 - m_pool.activeBuffer;
 }

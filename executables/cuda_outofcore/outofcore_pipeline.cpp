@@ -6,18 +6,16 @@
  *   1. Preprocess: Morton sort + block file + octree (once).
  *   2. Per frame:
  *      a) GPU: octree frustum culling (BFS by levels).
- *      b) GPU: depth+area computation, thrust sort, probabilistic occlusion.
+ *      b) GPU: depth+area computation, thrust sort, occlusion culling.
  *      c) GPU: request generation, uniqueness via thrust sort+unique.
  *      d) CPU: LRU eviction + async block upload (double buffered).
  *      e) GPU: build active atom list, rasterise.
  *
- * References:
- *   - Sharma et al., "Scalable and portable visualization of large
- *     atomistic datasets", CPC 2004. (Hierarchical view frustum culling
- *     and probabilistic occlusion culling.)
- *   - Crassin et al., "GigaVoxels: Ray-Guided Streaming for Efficient
- *     and Detailed Voxel Rendering", I3D 2009. (LRU brick pool,
- *     CPU-GPU coordination.)
+ * Occlusion culling method is selectable via scene_config.json:
+ *   "none"                  — no occlusion culling
+ *   "probabilistic"         — Atomsviewer probabilistic (real density)
+ *   "probabilistic_overlap" — same but with screen-space overlap check
+ *   "hiz"                   — HiZ per-block occlusion (previous frame)
  */
 
 #include <iostream>
@@ -48,6 +46,7 @@
 #include "vis/gl/cu/storage_buffer_cu.h"
 #include "vis/gl/texture.h"
 #include "vis/gl/cu/canvas_cu.h"
+#include "vis/gl/cu/depth_downsample_cu.h"
 
 #include "outofcore/outofcore_types.h"
 #include "outofcore/preprocessor.h"
@@ -75,9 +74,37 @@ extern "C" void launchComputeBlockDepthArea(
     unsigned int visibleCount, OocBlockDepthInfo* d_depthInfo,
     cudaStream_t stream);
 
+extern "C" void launchNoOcclusionPassthrough(
+    const OocBlockDepthInfo* d_depthInfo, unsigned int count,
+    unsigned int* d_filteredBlockIds, unsigned int* d_filteredCount,
+    cudaStream_t stream);
+
 extern "C" void launchProbabilisticOcclusion(
     const OocBlockDepthInfo* d_sorted, unsigned int count,
     unsigned int* d_filteredBlockIds, unsigned int* d_filteredCount,
+    cudaStream_t stream);
+
+extern "C" void launchProbabilisticOcclusionOverlap(
+    const OocBlockDepthInfo* d_sorted, unsigned int count,
+    unsigned int* d_filteredBlockIds, unsigned int* d_filteredCount,
+    cudaStream_t stream);
+
+extern "C" void launchHizOcclusionCull(
+    const OocBlockDepthInfo* d_depthInfo, unsigned int count,
+    cudaTextureObject_t hizTexture, int hizWidth, int hizHeight,
+    unsigned int* d_filteredBlockIds, unsigned int* d_filteredCount,
+    cudaStream_t stream);
+
+extern "C" void launchHizProbabilisticOcclusion(
+    const OocBlockDepthInfo* d_depthInfo, unsigned int count,
+    cudaTextureObject_t hizTexture, int hizWidth, int hizHeight,
+    unsigned int* d_hizPassIndices, unsigned int* d_hizPassCount,
+    unsigned int* d_filteredBlockIds, unsigned int* d_filteredCount,
+    cudaStream_t stream);
+
+extern "C" void launchHizDownsample(
+    const unsigned int* d_depthBuffer, cudaSurfaceObject_t hizSurface,
+    int fullWidth, int fullHeight, int hizWidth, int hizHeight,
     cudaStream_t stream);
 
 extern "C" void launchComputeBlockRequests(
@@ -98,7 +125,7 @@ extern "C" void launchSphereRasterOoc(
 
 // ─────────────────── Thrust comparator ───────────────────
 
-struct DepthInfoLess 
+struct DepthInfoLess
 {
     __host__ __device__
     bool operator()(const OocBlockDepthInfo& a, const OocBlockDepthInfo& b) const {
@@ -108,14 +135,13 @@ struct DepthInfoLess
 
 // ─────────────────── Pipeline GPU resources ───────────────────
 
-struct OocGpuResources 
+struct OocGpuResources
 {
     OocOctreeNode*    d_octree           = nullptr;
     unsigned int*     d_blockIndexBuffer = nullptr;
     OocBlockMetadata* d_blockMeta       = nullptr;
     unsigned int*     d_blockAtomCounts = nullptr;
 
-    // BFS queues
     unsigned int* d_queueA       = nullptr;
     unsigned int* d_queueB       = nullptr;
     unsigned int* d_queueCountA  = nullptr;
@@ -135,6 +161,9 @@ struct OocGpuResources
     glm::vec4*    d_activeAtoms       = nullptr;
     unsigned int* d_activeCount       = nullptr;
 
+    unsigned int* d_hizPassIndices    = nullptr;
+    unsigned int* d_hizPassCount      = nullptr;
+
     int maxBlocks     = 0;
     int maxOctreeNodes = 0;
     int maxActiveAtoms = 0;
@@ -142,7 +171,8 @@ struct OocGpuResources
 
 static void allocGpuResources(OocGpuResources& r,
                                const ooc::PreprocessResult& prep,
-                               int maxActiveAtoms)
+                               int maxActiveAtoms,
+                               int maxRequestsPerFrame)
 {
     int numBlocks = static_cast<int>(prep.blocks.size());
     int numNodes  = static_cast<int>(prep.octreeNodes.size());
@@ -180,11 +210,14 @@ static void allocGpuResources(OocGpuResources& r,
     cudaMalloc(&r.d_filteredBlockIds, numBlocks * sizeof(unsigned int));
     cudaMalloc(&r.d_filteredCount,    sizeof(unsigned int));
 
-    cudaMalloc(&r.d_requestBuffer, OOC_MAX_REQUESTS_PER_FRAME * sizeof(unsigned int));
+    cudaMalloc(&r.d_requestBuffer, maxRequestsPerFrame * sizeof(unsigned int));
     cudaMalloc(&r.d_requestCount,  sizeof(unsigned int));
 
     cudaMalloc(&r.d_activeAtoms, maxActiveAtoms * sizeof(glm::vec4));
     cudaMalloc(&r.d_activeCount, sizeof(unsigned int));
+
+    cudaMalloc(&r.d_hizPassIndices, numBlocks * sizeof(unsigned int));
+    cudaMalloc(&r.d_hizPassCount,   sizeof(unsigned int));
 }
 
 static void freeGpuResources(OocGpuResources& r) {
@@ -205,6 +238,8 @@ static void freeGpuResources(OocGpuResources& r) {
     cudaFree(r.d_requestCount);
     cudaFree(r.d_activeAtoms);
     cudaFree(r.d_activeCount);
+    cudaFree(r.d_hizPassIndices);
+    cudaFree(r.d_hizPassCount);
 }
 
 // ═════════════════════════════════════════════════════════
@@ -223,9 +258,29 @@ int main(int argc, char* argv[]) {
     int screenHeight = settings.screenHeight;
     int sphereCount  = settings.sphereCount;
 
+    // Build OocConfig from JSON settings
+    OocConfig oocCfg;
+    oocCfg.atomsPerBlock       = settings.oocAtomsPerBlock;
+    oocCfg.maxOctreeDepth      = settings.oocMaxOctreeDepth;
+    oocCfg.blocksPerLeaf       = settings.oocBlocksPerLeaf;
+    oocCfg.maxBlockPoolSlots   = settings.oocMaxBlockPoolSlots;
+    oocCfg.maxRequestsPerFrame = settings.oocMaxRequestsPerFrame;
+    oocCfg.visibilityThreshold = settings.oocVisibilityThreshold;
+    oocCfg.occlusionMethod     = parseOcclusionMethod(settings.oocOcclusionMethod);
+
+    const char* methodNames[] = {"NONE", "PROBABILISTIC", "PROBABILISTIC_OVERLAP", "HIZ", "HIZ_PROBABILISTIC"};
+    std::cout << "[OOC] Config: atomsPerBlock=" << oocCfg.atomsPerBlock
+              << " maxDepth=" << oocCfg.maxOctreeDepth
+              << " blocksPerLeaf=" << oocCfg.blocksPerLeaf
+              << " poolSlots=" << oocCfg.maxBlockPoolSlots
+              << " maxReq=" << oocCfg.maxRequestsPerFrame
+              << " visThreshold=" << oocCfg.visibilityThreshold
+              << " occlusion=" << methodNames[static_cast<int>(oocCfg.occlusionMethod)]
+              << std::endl;
+
     int deviceCount = 0;
     cudaGetDeviceCount(&deviceCount);
-    if (deviceCount == 0) 
+    if (deviceCount == 0)
     {
         std::cerr << "No CUDA devices found." << std::endl;
         return 1;
@@ -236,27 +291,27 @@ int main(int argc, char* argv[]) {
     std::vector<glm::vec4> spheres;
     std::vector<CylinderIndex> cylinders;
     getCompleteScene(spheres, sphereCount, cylinders, 0);
-    sphereCount = static_cast<int>(spheres.size());
-    std::cout << "Loaded " << sphereCount << " atoms." << std::endl;
+    const int actualAtomCount = static_cast<int>(spheres.size());
+    std::cout << "Loaded " << actualAtomCount << " atoms." << std::endl;
 
-    // ── Parse verbose flag for octree construction ──
+    // ── Parse verbose flag ──
     bool octreeVerbose = false;
     for (int i = 1; i < argc; i++) {
         std::string arg(argv[i]);
         if (arg == "-v" || arg == "--verbose") {
             octreeVerbose = true;
-            std::cout << "[OOC] Modo verbose activado: se mostrara la construccion paso a paso del octree." << std::endl;
+            std::cout << "[OOC] Verbose mode enabled." << std::endl;
             break;
         }
     }
 
     // ── Preprocess (once) ──
     ooc::PreprocessResult prep = ooc::preprocess(
-        spheres.data(), static_cast<uint32_t>(sphereCount), "ooc_data", octreeVerbose);
+        spheres.data(), static_cast<uint32_t>(actualAtomCount), "ooc_data", oocCfg, octreeVerbose);
 
     int totalBlocks = static_cast<int>(prep.blocks.size());
-    int poolSlots   = std::min(OOC_MAX_BLOCK_POOL_SLOTS, totalBlocks);
-    int maxActiveAtoms = poolSlots * OOC_ATOMS_PER_BLOCK;
+    int poolSlots   = std::min(oocCfg.maxBlockPoolSlots, totalBlocks);
+    int maxActiveAtoms = poolSlots * oocCfg.atomsPerBlock;
 
     // ── Window + Camera ──
     AppOpenGL window("Out-of-Core Octree Streaming",
@@ -282,23 +337,35 @@ int main(int argc, char* argv[]) {
     cudaSurfaceObject_t outputSurface = texWrapper.getSurfaceObject();
     unsigned int* depthBuffer = canvas.getDepthDataCUDA().getDepthBuffer();
 
+    // ── HiZ for occlusion culling (previous frame depth) ──
+    int hizLevel = settings.downsampleLevel;
+    DepthDownsampleCUDA hizBuffer;
+    bool useHiz = (oocCfg.occlusionMethod == OocOcclusionMethod::HIZ ||
+                   oocCfg.occlusionMethod == OocOcclusionMethod::HIZ_PROBABILISTIC);
+    if (useHiz) {
+        hizBuffer.setup(hizLevel, screenWidth, screenHeight);
+    }
+    int hizWidth  = screenWidth  / (1 << hizLevel);
+    int hizHeight = screenHeight / (1 << hizLevel);
+
     // ── GPU resources ──
     OocGpuResources gpu;
-    allocGpuResources(gpu, prep, maxActiveAtoms);
+    allocGpuResources(gpu, prep, maxActiveAtoms, oocCfg.maxRequestsPerFrame);
 
     // ── Streaming manager ──
     ooc::StreamingManager streamMgr;
     streamMgr.initialize(poolSlots, totalBlocks,
-                         prep.blockFilePath, prep.blocks);
+                         prep.blockFilePath, prep.blocks,
+                         oocCfg.atomsPerBlock, oocCfg.maxRequestsPerFrame);
 
     // ── Benchmark / profiler ──
     Benchmark benchmark(cameraController, checkpoints);
     int visibleAtoms = 0, drawnAtoms = 0;
-    int dummyCyls = 0;
     Profiler profiler(window, "media/csv/cuda_outofcore/frame_times.csv",
                       "media/csv/cuda_outofcore/process_times.csv",
                       sphereCount, 0, 0, settings.timerDuration);
 
+    int oocMethodInt = static_cast<int>(oocCfg.occlusionMethod);
     std::unordered_map<std::string, int*> sceneData = {
         {"Screen width",   &screenWidth},
         {"Screen height",  &screenHeight},
@@ -306,7 +373,8 @@ int main(int argc, char* argv[]) {
         {"Visible atoms",  &visibleAtoms},
         {"Drawn atoms",    &drawnAtoms},
         {"Total blocks",   &totalBlocks},
-        {"Pool slots",     &poolSlots}
+        {"Pool slots",     &poolSlots},
+        {"Occlusion method", &oocMethodInt}
     };
     window.setupSceneInfoGui("Scene Info", sceneData);
     window.setupCameraGui("Camera Info", &camera);
@@ -318,7 +386,7 @@ int main(int argc, char* argv[]) {
     cudaStreamCreate(&renderStream);
     cudaStreamCreate(&uploadStream);
 
-    // Pinned host buffers for readback
+    // Pinned host buffers
     unsigned int* h_visibleBlockCount;
     unsigned int* h_filteredCount;
     unsigned int* h_requestCount;
@@ -333,7 +401,7 @@ int main(int argc, char* argv[]) {
     cudaHostAlloc(&h_activeCount,       sizeof(unsigned int), cudaHostAllocDefault);
     cudaHostAlloc(&h_queueCount,        sizeof(unsigned int), cudaHostAllocDefault);
     cudaHostAlloc(&h_requestBuffer,
-                  OOC_MAX_REQUESTS_PER_FRAME * sizeof(unsigned int),
+                  oocCfg.maxRequestsPerFrame * sizeof(unsigned int),
                   cudaHostAllocDefault);
     cudaHostAlloc(&h_filteredBlockIds,
                   totalBlocks * sizeof(unsigned int),
@@ -345,9 +413,8 @@ int main(int argc, char* argv[]) {
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
     bool isRunning = true;
 
-    while (isRunning) 
+    while (isRunning)
     {
-        
         cameraController.cameraUpdate();
         benchmark.update();
         profiler.updateProfiler(benchmark.getCheckpointID(),
@@ -372,10 +439,13 @@ int main(int argc, char* argv[]) {
         cst.fov           = camera.getFov();
         cst.totalBlocks   = totalBlocks;
         cst.octreeNodeCount = gpu.maxOctreeNodes;
-        cst.visibilityThreshold = OOC_VISIBILITY_THRESHOLD;
+        cst.visibilityThreshold = oocCfg.visibilityThreshold;
         cst.maxPoolSlots  = poolSlots;
+        cst.atomsPerBlock = oocCfg.atomsPerBlock;
+        cst.occlusionMethod = static_cast<int>(oocCfg.occlusionMethod);
+        cst.nearPlane     = camera.getNear();
+        cst.farPlane      = camera.getFar();
 
-        // Pre-compute screen ray casting (same as hybrid_binning)
         cst.front = camera.getFront();
         cst.up    = camera.getUp();
         cst.right = camera.getRight();
@@ -417,7 +487,6 @@ int main(int argc, char* argv[]) {
         // ── Phase 1: Octree BFS frustum culling ──
         cudaMemsetAsync(gpu.d_visibleBlockCount, 0, sizeof(unsigned int), renderStream);
 
-        // Seed queue with root node (index 0)
         unsigned int rootIdx = 0;
         cudaMemcpyAsync(gpu.d_queueA, &rootIdx, sizeof(unsigned int),
                         cudaMemcpyHostToDevice, renderStream);
@@ -430,7 +499,7 @@ int main(int argc, char* argv[]) {
         unsigned int* inCount  = gpu.d_queueCountA;
         unsigned int* outCount = gpu.d_queueCountB;
 
-        for (int level = 0; level < OOC_MAX_OCTREE_DEPTH + 1; level++) 
+        for (int level = 0; level < oocCfg.maxOctreeDepth + 1; level++)
         {
             cudaMemsetAsync(outCount, 0, sizeof(unsigned int), renderStream);
 
@@ -453,15 +522,15 @@ int main(int argc, char* argv[]) {
                         sizeof(unsigned int), cudaMemcpyDeviceToHost, renderStream);
         cudaStreamSynchronize(renderStream);
         unsigned int numVisible = *h_visibleBlockCount;
-        visibleAtoms = static_cast<int>(numVisible) * OOC_ATOMS_PER_BLOCK;
+        visibleAtoms = static_cast<int>(numVisible) * oocCfg.atomsPerBlock;
 
         unsigned int numFiltered = 0;
         unsigned int numRequests = 0;
         unsigned int activeCount = 0;
 
-        if (numVisible > 0) 
+        if (numVisible > 0)
         {
-            // ── Phase 2: Depth + area, sort, probabilistic occlusion ──
+            // ── Phase 2: Depth + area, sort, occlusion culling ──
             launchComputeBlockDepthArea(
                 gpu.d_blockMeta, gpu.d_visibleBlockIds, numVisible,
                 gpu.d_depthInfo, renderStream);
@@ -471,41 +540,63 @@ int main(int argc, char* argv[]) {
                          depthPtr, depthPtr + numVisible, DepthInfoLess());
             cudaStreamSynchronize(renderStream);
 
-            // Debug: projected area and Dc for visible blocks (every 60 frames)
-            // if (frameId % 60 == 0 && numVisible > 0) {
-            //     unsigned int debugCount = std::min(8u, numVisible);
-            //     std::vector<OocBlockDepthInfo> debugInfo(debugCount);
-            //     cudaMemcpy(debugInfo.data(), gpu.d_depthInfo,
-            //                debugCount * sizeof(OocBlockDepthInfo), cudaMemcpyDeviceToHost);
-            //     float totalArea = static_cast<float>(screenWidth) * static_cast<float>(screenHeight);
-            //     std::cout << "[OOC] Projected area debug (frame " << frameId << ", visible=" << numVisible
-            //               << ", threshold=" << OOC_VISIBILITY_THRESHOLD << ", totalArea=" << totalArea << "):" << std::endl;
-            //     float vSim = 1.0f;
-            //     for (unsigned int i = 0; i < debugCount; i++) {
-            //         float Dc = debugInfo[i].projectedArea / totalArea;
-            //         Dc = std::min(std::max(Dc, 0.0f), 1.0f);
-            //         vSim *= (1.0f - Dc);
-            //         bool wouldPass = (vSim > OOC_VISIBILITY_THRESHOLD);
-            //         std::cout << "  Block " << debugInfo[i].blockId
-            //                   << " depth=" << debugInfo[i].depth
-            //                   << " area=" << debugInfo[i].projectedArea
-            //                   << " Dc=" << Dc
-            //                   << " v_after=" << vSim
-            //                   << " " << (wouldPass ? "PASS" : "FAIL") << std::endl;
-            //     }
-            // }
-
             cudaMemsetAsync(gpu.d_filteredCount, 0, sizeof(unsigned int), renderStream);
-            launchProbabilisticOcclusion(
-                gpu.d_depthInfo, numVisible,
-                gpu.d_filteredBlockIds, gpu.d_filteredCount, renderStream);
+
+            // Dispatch occlusion method
+            switch (oocCfg.occlusionMethod) {
+                case OocOcclusionMethod::NONE:
+                    launchNoOcclusionPassthrough(
+                        gpu.d_depthInfo, numVisible,
+                        gpu.d_filteredBlockIds, gpu.d_filteredCount, renderStream);
+                    break;
+
+                case OocOcclusionMethod::PROBABILISTIC:
+                    launchProbabilisticOcclusion(
+                        gpu.d_depthInfo, numVisible,
+                        gpu.d_filteredBlockIds, gpu.d_filteredCount, renderStream);
+                    break;
+
+                case OocOcclusionMethod::PROBABILISTIC_OVERLAP:
+                    launchProbabilisticOcclusionOverlap(
+                        gpu.d_depthInfo, numVisible,
+                        gpu.d_filteredBlockIds, gpu.d_filteredCount, renderStream);
+                    break;
+
+                case OocOcclusionMethod::HIZ:
+                    if (useHiz && hizBuffer.isValid()) {
+                        launchHizOcclusionCull(
+                            gpu.d_depthInfo, numVisible,
+                            hizBuffer.getTexture(), hizWidth, hizHeight,
+                            gpu.d_filteredBlockIds, gpu.d_filteredCount, renderStream);
+                    } else {
+                        launchNoOcclusionPassthrough(
+                            gpu.d_depthInfo, numVisible,
+                            gpu.d_filteredBlockIds, gpu.d_filteredCount, renderStream);
+                    }
+                    break;
+
+                case OocOcclusionMethod::HIZ_PROBABILISTIC:
+                    if (useHiz && hizBuffer.isValid()) {
+                        launchHizProbabilisticOcclusion(
+                            gpu.d_depthInfo, numVisible,
+                            hizBuffer.getTexture(), hizWidth, hizHeight,
+                            gpu.d_hizPassIndices, gpu.d_hizPassCount,
+                            gpu.d_filteredBlockIds, gpu.d_filteredCount, renderStream);
+                    } else {
+                        launchProbabilisticOcclusion(
+                            gpu.d_depthInfo, numVisible,
+                            gpu.d_filteredBlockIds, gpu.d_filteredCount, renderStream);
+                    }
+                    break;
+            }
 
             cudaMemcpyAsync(h_filteredCount, gpu.d_filteredCount,
                             sizeof(unsigned int), cudaMemcpyDeviceToHost, renderStream);
             cudaStreamSynchronize(renderStream);
-            numFiltered = *h_filteredCount;
+            numFiltered = std::min(*h_filteredCount,
+                                   static_cast<unsigned int>(poolSlots));
 
-            if (numFiltered > 0) 
+            if (numFiltered > 0)
             {
                 // ── Phase 3: Request generation ──
                 cudaMemsetAsync(gpu.d_requestCount, 0, sizeof(unsigned int), renderStream);
@@ -513,16 +604,15 @@ int main(int argc, char* argv[]) {
                     gpu.d_filteredBlockIds, numFiltered,
                     streamMgr.getReadSlotMap(),
                     gpu.d_requestBuffer, gpu.d_requestCount,
-                    OOC_MAX_REQUESTS_PER_FRAME, renderStream);
+                    oocCfg.maxRequestsPerFrame, renderStream);
 
-                // Sort + unique on request buffer
                 cudaMemcpyAsync(h_requestCount, gpu.d_requestCount,
                                 sizeof(unsigned int), cudaMemcpyDeviceToHost, renderStream);
                 cudaStreamSynchronize(renderStream);
                 numRequests = std::min(*h_requestCount,
-                    static_cast<unsigned int>(OOC_MAX_REQUESTS_PER_FRAME));
+                    static_cast<unsigned int>(oocCfg.maxRequestsPerFrame));
 
-                if (numRequests > 0) 
+                if (numRequests > 0)
                 {
                     thrust::device_ptr<unsigned int> reqPtr(gpu.d_requestBuffer);
                     thrust::sort(thrust::cuda::par.on(renderStream),
@@ -536,68 +626,63 @@ int main(int argc, char* argv[]) {
                                     cudaMemcpyDeviceToHost, renderStream);
                     cudaStreamSynchronize(renderStream);
                 }
-                
-                // Read back filtered block IDs for LRU refresh
+
                 cudaMemcpyAsync(h_filteredBlockIds, gpu.d_filteredBlockIds,
                                 numFiltered * sizeof(unsigned int),
                                 cudaMemcpyDeviceToHost, renderStream);
                 cudaStreamSynchronize(renderStream);
-                
-                // ── Phase 4: CPU streaming (upload to write buffer) ──
+
+                // ── Phase 4: CPU streaming (uploads go to write buffer, async) ──
                 streamMgr.processRequests(
                     h_requestBuffer, numRequests,
                     h_filteredBlockIds, numFiltered,
                     frameId, uploadStream);
-                    cudaStreamSynchronize(uploadStream);
-                    
-                    // ── Phase 5: Build active atom list + render ──
-                    cudaMemsetAsync(gpu.d_activeCount, 0, sizeof(unsigned int), renderStream);
-                    launchBuildActiveAtomList(
-                        streamMgr.getReadAtomPool(),
+                // No sync here — upload runs in parallel with render below.
+                // Uploaded blocks become available next frame after swapBuffers().
+
+                // ── Phase 5: Build active atom list + render ──
+                // Read from READ buffer (blocks loaded in previous frames).
+                // New blocks being uploaded to WRITE buffer will be available
+                // after swapBuffers() at the end of this frame.
+                cudaMemsetAsync(gpu.d_activeCount, 0, sizeof(unsigned int), renderStream);
+                launchBuildActiveAtomList(
+                    streamMgr.getReadAtomPool(),
                     streamMgr.getReadSlotMap(),
                     gpu.d_filteredBlockIds, numFiltered,
                     gpu.d_blockAtomCounts,
                     gpu.d_activeAtoms, gpu.d_activeCount, renderStream);
-                    
+
                 cudaMemcpyAsync(h_activeCount, gpu.d_activeCount,
                                 sizeof(unsigned int), cudaMemcpyDeviceToHost, renderStream);
                 cudaStreamSynchronize(renderStream);
                 activeCount = *h_activeCount;
                 drawnAtoms = static_cast<int>(activeCount);
-                // Después de obtener numVisible
-                
+
                 if (activeCount > 0) {
-                    std::vector<glm::vec4> debugAtoms(std::min(5u, activeCount));
-                    cudaMemcpy(debugAtoms.data(), gpu.d_activeAtoms, 
-                    debugAtoms.size() * sizeof(glm::vec4), cudaMemcpyDeviceToHost);
-                    if (octreeVerbose) 
-                    {
-                        std::cout << "[OOC] First atoms: ";
-                        for (int i = 0; i < debugAtoms.size(); i++)
-                        {
-                        std::cout << "(" << debugAtoms[i].x << "," << debugAtoms[i].y << "," 
-                            << debugAtoms[i].z << ",r=" << debugAtoms[i].w << ") ";
-                        }
-                        std::cout << std::endl;
-                    }
-                
-                launchSphereRasterOoc(
-                    gpu.d_activeAtoms, activeCount,
-                    depthBuffer, outputSurface, renderStream);
+                    launchSphereRasterOoc(
+                        gpu.d_activeAtoms, activeCount,
+                        depthBuffer, outputSurface, renderStream);
                     cudaStreamSynchronize(renderStream);
                 }
             }
         }
-        
-        if (frameId % 60 == 0 && octreeVerbose) 
-        {
-            std::cout << "[OOC] numVisible=" << numVisible << " numFiltered=" << numFiltered 
-            << " numRequests=" << numRequests << std::endl;
 
-            std::cout << "[OOC] Frame " << frameId 
-                    << " visible=" << numVisible << " filtered=" << numFiltered 
-                    << " active=" << activeCount << std::endl;
+        // ── HiZ update (for next frame) ──
+        if (useHiz && hizBuffer.isValid()) {
+            launchHizDownsample(depthBuffer, hizBuffer.getSurface(),
+                                screenWidth, screenHeight,
+                                hizWidth, hizHeight, renderStream);
         }
+
+        if (frameId % 60 == 0 && octreeVerbose)
+        {
+            std::cout << "[OOC] Frame " << frameId
+                      << " visible=" << numVisible << " filtered=" << numFiltered
+                      << " requests=" << numRequests << " active=" << activeCount << std::endl;
+        }
+
+        // Ensure upload stream finished before swapping buffers
+        cudaStreamSynchronize(uploadStream);
         streamMgr.swapBuffers();
 
         glBindFramebuffer(GL_READ_FRAMEBUFFER, canvas.getFramebuffer().getId());

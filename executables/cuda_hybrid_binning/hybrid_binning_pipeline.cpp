@@ -216,9 +216,9 @@ int main(int argc, char* argv[]) {
     std::vector<Sphere> spheres;
     std::vector<Cylinder> cylinders;
     getCompleteScene(spheres, config.sphereCount, cylinders, config.cylinderCount);
-    config.sphereCount = static_cast<int>(spheres.size());
-    config.cylinderCount = static_cast<int>(cylinders.size());
-    std::cout << "Scene: " << config.sphereCount << " spheres, " << config.cylinderCount << " cylinders" << std::endl;
+    const int actualSphereCount = static_cast<int>(spheres.size());
+    const int actualCylinderCount = static_cast<int>(cylinders.size());
+    std::cout << "Scene: " << actualSphereCount << " spheres, " << actualCylinderCount << " cylinders" << std::endl;
 
     std::vector<std::pair<glm::vec3, glm::vec3>> checkpoints = getCheckpoints(config.sphereCount, spheres, cylinders);
     CanvasCUDA canvas(GL_TEXTURE_2D, GL_RGBA8, config.screenWidth, config.screenHeight);
@@ -231,12 +231,12 @@ int main(int argc, char* argv[]) {
     cudaSurfaceObject_t outputSurface = texWrapper.getSurfaceObject();
     unsigned int* depthBuffer = canvas.getDepthDataCUDA().getDepthBuffer();
 
-    StorageBuffer sphereBuffer(GL_SHADER_STORAGE_BUFFER, config.sphereCount * sizeof(Sphere), 6, spheres.data(), GL_STATIC_DRAW);
+    StorageBuffer sphereBuffer(GL_SHADER_STORAGE_BUFFER, actualSphereCount * sizeof(Sphere), 6, spheres.data(), GL_STATIC_DRAW);
     StorageBufferCUDAWrapper sphereBufferCUDA(sphereBuffer);
     sphereBufferCUDA.cudaMapResources();
     glm::vec4* d_spheres = sphereBufferCUDA.getDevicePointer<glm::vec4>();
 
-    StorageBuffer cylinderBuffer(GL_SHADER_STORAGE_BUFFER, config.cylinderCount * sizeof(Cylinder), 7, cylinders.data(), GL_STATIC_DRAW);
+    StorageBuffer cylinderBuffer(GL_SHADER_STORAGE_BUFFER, actualCylinderCount * sizeof(Cylinder), 7, cylinders.data(), GL_STATIC_DRAW);
     StorageBufferCUDAWrapper cylinderBufferCUDA(cylinderBuffer);
     cylinderBufferCUDA.cudaMapResources();
     Cylinder* d_cylinders = cylinderBufferCUDA.getDevicePointer<Cylinder>();
@@ -245,16 +245,16 @@ int main(int argc, char* argv[]) {
     cylinders.clear();
 
     HybridBinningPipelineManager pipeline(config);
-    pipeline.initialize(config.sphereCount, config.cylinderCount);
+    pipeline.initialize(actualSphereCount, actualCylinderCount);
 
     Benchmark benchmark(cameraController, checkpoints);
-    int visibleSpheres = config.sphereCount, drawnSpheres = config.sphereCount;
-    int visibleCylinders = config.cylinderCount, drawnCylinders = config.cylinderCount;
+    int visibleSpheres = actualSphereCount, drawnSpheres = actualSphereCount;
+    int visibleCylinders = actualCylinderCount, drawnCylinders = actualCylinderCount;
     unsigned int sphereFrustum = 0, sphereSmall = 0, sphereLarge = 0;
     unsigned int cylFrustum = 0, cylSmall = 0, cylLarge = 0;
     Profiler profiler(window, "media/csv/cuda_hybrid_binning/frame_times.csv",
                       "media/csv/cuda_hybrid_binning/process_times.csv",
-                      config.sphereCount, config.cylinderCount, 0, config.timerDuration);
+                      actualSphereCount, actualCylinderCount, 0, config.timerDuration);
 
     std::unordered_map<std::string, int*> sceneData = {
         {"Screen width", &config.screenWidth},

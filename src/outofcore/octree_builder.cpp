@@ -3,8 +3,8 @@
  * @brief CPU-side reduced octree construction over spatially sorted blocks.
  *
  * Partitions blocks by octant at each level so that child nodes receive
- * the correct subset of blocks (bucketStart/bucketEnd correspond to
- * actual octant membership).
+ * the correct subset of blocks. Children are stored contiguously in the
+ * node array so the GPU kernel can index them as childBase + childIdx.
  */
 
 #include "outofcore/octree_builder.h"
@@ -43,21 +43,21 @@ glm::vec3 octantMax(int oct, glm::vec3 regionMin, glm::vec3 mid, glm::vec3 regio
 }
 
 /**
- * Recursively build octree. Partitions indices by octant at each level.
- * indices[start..end-1] are block IDs for this node; we partition them
- * in place so children receive the correct blocks.
+ * Build a subtree rooted at nodes[nodeIdx].
+ * nodeIdx has already been allocated in the vector; this function fills it.
+ * If this node is interior, it pre-allocates contiguous child slots and
+ * recurses into each.
  */
-void buildRecursive(std::vector<OocOctreeNode>& nodes,
-                    std::vector<uint32_t>& indices,
-                    const OocBlockMetadata* blocks,
-                    int idxStart, int idxEnd,
-                    glm::vec3 regionMin, glm::vec3 regionMax,
-                    int depth, int maxDepth, bool verbose,
-                    int parentNodeIdx, int childOctant)
+void buildAt(std::vector<OocOctreeNode>& nodes,
+             std::vector<uint32_t>& indices,
+             const OocBlockMetadata* blocks,
+             int nodeIdx,
+             int idxStart, int idxEnd,
+             glm::vec3 regionMin, glm::vec3 regionMax,
+             int depth, int maxDepth, int blocksPerLeaf,
+             bool verbose, int parentNodeIdx, int childOctant)
 {
     int blockCount = idxEnd - idxStart;
-    int nodeIdx = static_cast<int>(nodes.size());
-    nodes.push_back({});
 
     if (verbose) {
         std::string indent(depth * 2, ' ');
@@ -91,7 +91,8 @@ void buildRecursive(std::vector<OocOctreeNode>& nodes,
                   << aabbMax.x << "," << aabbMax.y << "," << aabbMax.z << ")";
     }
 
-    if (blockCount <= OOC_BLOCKS_PER_LEAF || depth >= maxDepth) 
+    // ── Leaf node ──
+    if (blockCount <= blocksPerLeaf || depth >= maxDepth) 
     {
         nodes[nodeIdx].childBaseIndex  = -1;
         nodes[nodeIdx].childMask       = 0;
@@ -103,9 +104,9 @@ void buildRecursive(std::vector<OocOctreeNode>& nodes,
 
     if (verbose) std::cout << " -> INTERIOR" << std::endl;
 
+    // ── Interior node ──
     glm::vec3 mid = (regionMin + regionMax) * 0.5f;
 
-    // Count blocks per octant
     int bucketCount[8] = {};
     for (int i = idxStart; i < idxEnd; i++) 
     {
@@ -113,7 +114,6 @@ void buildRecursive(std::vector<OocOctreeNode>& nodes,
         bucketCount[oct]++;
     }
 
-    // Prefix sum for bucket boundaries
     int bucketStart[8], bucketEnd[8];
     int cursor = idxStart;
     for (int oct = 0; oct < 8; oct++) 
@@ -123,7 +123,7 @@ void buildRecursive(std::vector<OocOctreeNode>& nodes,
         bucketEnd[oct] = cursor;
     }
 
-    // Partition: place each block ID into its octant bucket
+    // Partition indices into octant buckets
     std::vector<uint32_t> temp(blockCount);
     int bucketCur[8];
     for (int i = 0; i < 8; i++) bucketCur[i] = bucketStart[i];
@@ -140,20 +140,25 @@ void buildRecursive(std::vector<OocOctreeNode>& nodes,
         indices[idxStart + i] = temp[i];
     }
 
-    nodes[nodeIdx].childBaseIndex  = -1;
-    nodes[nodeIdx].childMask       = 0;
-    nodes[nodeIdx].blockRangeStart = -1;
-    nodes[nodeIdx].blockRangeEnd   = -1;
-
+    // Count non-empty children
     uint8_t mask = 0;
+    int numChildren = 0;
     for (int oct = 0; oct < 8; oct++) 
     {
-        if (bucketCount[oct] > 0) mask |= (1u << oct);
+        if (bucketCount[oct] > 0) {
+            mask |= (1u << oct);
+            numChildren++;
+        }
     }
-    nodes[nodeIdx].childMask = mask;
 
+    // Pre-allocate contiguous slots for direct children
     int childBase = static_cast<int>(nodes.size());
-    nodes[nodeIdx].childBaseIndex = childBase;
+    nodes.resize(nodes.size() + numChildren);
+
+    nodes[nodeIdx].childBaseIndex  = childBase;
+    nodes[nodeIdx].childMask       = mask;
+    nodes[nodeIdx].blockRangeStart = -1;
+    nodes[nodeIdx].blockRangeEnd   = -1;
 
     if (verbose) {
         std::string indent(depth * 2, ' ');
@@ -162,18 +167,22 @@ void buildRecursive(std::vector<OocOctreeNode>& nodes,
             if (bucketCount[oct] > 0)
                 std::cout << "oct" << oct << "=" << bucketCount[oct] << " ";
         }
-        std::cout << std::endl;
+        std::cout << "(childBase=" << childBase << ", numChildren=" << numChildren << ")" << std::endl;
     }
 
+    // Recurse into each non-empty octant
+    int childIdx = 0;
     for (int oct = 0; oct < 8; oct++) 
     {
         if (bucketCount[oct] == 0) continue;
-        buildRecursive(nodes, indices, blocks,
-                       bucketStart[oct], bucketEnd[oct],
-                       octantMin(oct, regionMin, mid),
-                       octantMax(oct, regionMin, mid, regionMax),
-                       depth + 1, maxDepth, verbose,
-                       nodeIdx, oct);
+        buildAt(nodes, indices, blocks,
+                childBase + childIdx,
+                bucketStart[oct], bucketEnd[oct],
+                octantMin(oct, regionMin, mid),
+                octantMax(oct, regionMin, mid, regionMax),
+                depth + 1, maxDepth, blocksPerLeaf,
+                verbose, nodeIdx, oct);
+        childIdx++;
     }
 }
 
@@ -185,6 +194,7 @@ std::vector<OocOctreeNode> buildReducedOctree(
     glm::vec3 sceneMin,
     glm::vec3 sceneMax,
     int maxDepth,
+    int blocksPerLeaf,
     std::vector<uint32_t>& indexBuffer,
     bool verbose)
 {
@@ -200,11 +210,13 @@ std::vector<OocOctreeNode> buildReducedOctree(
         std::cout << "\n[OOC] === Construccion del octree (paso a paso) ===" << std::endl;
         std::cout << "[OOC] Bloques totales: " << numBlocks
                   << ", profundidad maxima: " << maxDepth
-                  << ", bloques por hoja: " << OOC_BLOCKS_PER_LEAF << "\n" << std::endl;
+                  << ", bloques por hoja: " << blocksPerLeaf << "\n" << std::endl;
     }
 
-    buildRecursive(nodes, indexBuffer, blocks, 0, static_cast<int>(numBlocks),
-                   sceneMin, sceneMax, 0, maxDepth, verbose, -1, -1);
+    // Allocate root node (slot 0)
+    nodes.push_back({});
+    buildAt(nodes, indexBuffer, blocks, 0, 0, static_cast<int>(numBlocks),
+            sceneMin, sceneMax, 0, maxDepth, blocksPerLeaf, verbose, -1, -1);
 
     if (verbose) {
         std::cout << "\n[OOC] === Fin construccion: " << nodes.size() << " nodos ===" << std::endl;

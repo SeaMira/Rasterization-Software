@@ -41,6 +41,7 @@ struct PreprocessResult {
 PreprocessResult preprocess(const glm::vec4* atoms,
                             uint32_t numAtoms,
                             const std::string& outputDir,
+                            const OocConfig& config,
                             bool verbose = false);
 
 } // namespace ooc

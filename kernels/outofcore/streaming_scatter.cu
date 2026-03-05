@@ -1,9 +1,6 @@
 /**
  * @file streaming_scatter.cu
  * @brief Kernel to scatter batched block data from staging buffer to pool slots.
- *
- * Used by StreamingManager::processRequests to reduce many small cudaMemcpyAsync
- * calls to a single batched transfer + one scatter kernel.
  */
 
 #include <cuda_runtime.h>
@@ -12,16 +9,8 @@
 
 #include "outofcore/outofcore_types.h"
 
-/**
- * Scatter atoms from contiguous staging buffer to pool slots.
- *
- * @param d_staging     Contiguous staging buffer (all blocks laid out sequentially).
- * @param d_atomPool    Destination pool (slots * ATOMS_PER_BLOCK).
- * @param d_slotOffsets Staging offset per upload: slotOffsets[i] = atom index in staging.
- * @param d_slotIds     Slot index per upload.
- * @param d_atomCounts  Atom count per upload.
- * @param numUploads    Number of blocks being uploaded.
- */
+static __constant__ int scatterAtomsPerBlock;
+
 __global__ void scatterStagingToPoolKernel(
     const glm::vec4* __restrict__ d_staging,
     glm::vec4*       __restrict__ d_atomPool,
@@ -38,7 +27,7 @@ __global__ void scatterStagingToPoolKernel(
     unsigned int soff = d_slotOffsets[uploadIdx];
 
     const glm::vec4* src = d_staging + soff;
-    glm::vec4* dst       = d_atomPool + static_cast<size_t>(slot) * OOC_ATOMS_PER_BLOCK;
+    glm::vec4* dst       = d_atomPool + static_cast<size_t>(slot) * scatterAtomsPerBlock;
 
     for (unsigned int i = threadIdx.x; i < cnt; i += blockDim.x) {
         dst[i] = src[i];
@@ -52,17 +41,16 @@ extern "C" void launchScatterStagingToPool(
     const int32_t*      d_slotIds,
     const unsigned int* d_atomCounts,
     unsigned int        numUploads,
+    int                 atomsPerBlock,
     cudaStream_t        stream)
 {
     if (numUploads == 0) return;
+    cudaMemcpyToSymbolAsync(scatterAtomsPerBlock, &atomsPerBlock, sizeof(int), 0,
+                            cudaMemcpyHostToDevice, stream);
     scatterStagingToPoolKernel<<<numUploads, 256, 0, stream>>>(
         d_staging, d_atomPool, d_slotOffsets, d_slotIds, d_atomCounts, numUploads);
 }
 
-/**
- * Apply slot map updates from a batched host array.
- * Each entry: [blockId, slot].
- */
 __global__ void applySlotMapUpdatesKernel(
     int32_t*       __restrict__ d_blockSlotMap,
     const uint32_t* __restrict__ d_blockIds,

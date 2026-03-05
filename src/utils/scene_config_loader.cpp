@@ -195,6 +195,19 @@ SceneSettings SceneConfigLoader::loadFromFile(const std::string& configPath)
         settings.benchmarkingEnabled = parseBool(profilerSection, "benchmarking_enabled", settings.benchmarkingEnabled);
     }
 
+    // Parse out-of-core section
+    std::string oocSection = findJsonValue(json, "outofcore");
+    if (!oocSection.empty()) 
+    {
+        settings.oocAtomsPerBlock       = parseInt(oocSection, "atoms_per_block", settings.oocAtomsPerBlock);
+        settings.oocMaxOctreeDepth      = parseInt(oocSection, "max_octree_depth", settings.oocMaxOctreeDepth);
+        settings.oocBlocksPerLeaf       = parseInt(oocSection, "blocks_per_leaf", settings.oocBlocksPerLeaf);
+        settings.oocMaxBlockPoolSlots   = parseInt(oocSection, "max_block_pool_slots", settings.oocMaxBlockPoolSlots);
+        settings.oocMaxRequestsPerFrame = parseInt(oocSection, "max_requests_per_frame", settings.oocMaxRequestsPerFrame);
+        settings.oocVisibilityThreshold = parseFloat(oocSection, "visibility_threshold", settings.oocVisibilityThreshold);
+        settings.oocOcclusionMethod     = parseString(oocSection, "occlusion_method", settings.oocOcclusionMethod);
+    }
+
     std::cout << "Configuration loaded successfully." << std::endl;
     std::cout << "  Scene type: " << settings.sceneType << std::endl;
     std::cout << "  Scene file: " << settings.sceneFile << std::endl;
@@ -308,6 +321,17 @@ void SceneConfigLoader::saveToFile(const SceneSettings& settings, const std::str
     file << "    \"profiler\": {\n";
     file << "        \"timer_duration\": " << settings.timerDuration << ",\n";
     file << "        \"benchmarking_enabled\": " << (settings.benchmarkingEnabled ? "true" : "false") << "\n";
+    file << "    },\n";
+
+    // Out-of-core section
+    file << "    \"outofcore\": {\n";
+    file << "        \"atoms_per_block\": " << settings.oocAtomsPerBlock << ",\n";
+    file << "        \"max_octree_depth\": " << settings.oocMaxOctreeDepth << ",\n";
+    file << "        \"blocks_per_leaf\": " << settings.oocBlocksPerLeaf << ",\n";
+    file << "        \"max_block_pool_slots\": " << settings.oocMaxBlockPoolSlots << ",\n";
+    file << "        \"max_requests_per_frame\": " << settings.oocMaxRequestsPerFrame << ",\n";
+    file << "        \"visibility_threshold\": " << settings.oocVisibilityThreshold << ",\n";
+    file << "        \"occlusion_method\": \"" << settings.oocOcclusionMethod << "\"\n";
     file << "    }\n";
 
     file << "}\n";

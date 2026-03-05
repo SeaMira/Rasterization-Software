@@ -160,25 +160,24 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
     std::vector<glm::vec4> spheres;
     std::vector<Cylinder> cylinders;
     getCompleteScene(spheres, sphere_count, cylinders, cylinder_count);
-
-    sphere_count = spheres.size(); 
-    cylinder_count = cylinders.size();
+    const int actualSphereCount = static_cast<int>(spheres.size());
+    const int actualCylinderCount = static_cast<int>(cylinders.size());
     // SPHERES
     std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints = getCheckpoints(sphere_count, spheres, cylinders);
 
-    StorageBuffer sphereBuffer(GL_SHADER_STORAGE_BUFFER, sphere_count * sizeof(Sphere), 6, 
+    StorageBuffer sphereBuffer(GL_SHADER_STORAGE_BUFFER, actualSphereCount * sizeof(Sphere), 6, 
     spheres.data(), GL_STATIC_DRAW);
     
-    StorageBuffer sphereBillboardBuffer(GL_SHADER_STORAGE_BUFFER, sphere_count * sizeof(SphereBillboard), 7,
+    StorageBuffer sphereBillboardBuffer(GL_SHADER_STORAGE_BUFFER, actualSphereCount * sizeof(SphereBillboard), 7,
         nullptr, GL_STATIC_DRAW);
     //////////
 
     // CYLINDERS
 
-    StorageBuffer cylinderBuffer(GL_SHADER_STORAGE_BUFFER, cylinder_count * sizeof(Cylinder), 9,
+    StorageBuffer cylinderBuffer(GL_SHADER_STORAGE_BUFFER, actualCylinderCount * sizeof(Cylinder), 9,
     cylinders.data(), GL_STATIC_DRAW);
 
-    StorageBuffer cylinderBillboardBuffer(GL_SHADER_STORAGE_BUFFER, cylinder_count * sizeof(CylinderBillboard), 10,
+    StorageBuffer cylinderBillboardBuffer(GL_SHADER_STORAGE_BUFFER, actualCylinderCount * sizeof(CylinderBillboard), 10,
         nullptr, GL_STATIC_DRAW);
     //////////
 
@@ -192,7 +191,7 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
     StorageBuffer occlusionAtomicCounter(GL_SHADER_STORAGE_BUFFER, sizeof(GLuint), 11, 
         &zero, GL_STATIC_DRAW);
 
-    int totalEntities = sphere_count + cylinder_count;
+    int totalEntities = actualSphereCount + actualCylinderCount;
     std::vector<GLuint> visibilityFrames(2 * totalEntities, 10);
     StorageBuffer visibilityFramesBuffer(GL_SHADER_STORAGE_BUFFER, 2 * totalEntities * sizeof(GLuint), 5, 
     visibilityFrames.data(), GL_DYNAMIC_COPY);
@@ -206,7 +205,7 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
     std::string process_times_path = base_path + "_process_times.csv";
     Profiler profiler(window, 
         frame_times_path, 
-        process_times_path, sphere_count, cylinder_count, downsampleLevel, timerDuration);
+        process_times_path, actualSphereCount, actualCylinderCount, downsampleLevel, timerDuration);
     
     window.setupSceneInfoGui("Scene Info", scene_data);
     window.setupCameraGui("Camera Info", &camera);
@@ -214,8 +213,8 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
     window.setupBenchmarkInfoGui("Benchmark", &benchmark);
 
     // Calculating number of work groups (based on the number of threads and spheres)
-    GLuint numGroupsXSpheres = (sphere_count + workGroupSizeXPerSphere - 1) / workGroupSizeXPerSphere;
-    GLuint numGroupsXCylinders = (cylinder_count + workGroupSizeXPerCylinder - 1) / workGroupSizeXPerCylinder;
+    GLuint numGroupsXSpheres = (actualSphereCount + workGroupSizeXPerSphere - 1) / workGroupSizeXPerSphere;
+    GLuint numGroupsXCylinders = (actualCylinderCount + workGroupSizeXPerCylinder - 1) / workGroupSizeXPerCylinder;
     GLuint numGroupsY = 1;
 
     canvas.bindTexture();
@@ -262,7 +261,7 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
             ///// SPHERES //////////
             // bbox extraction shader
             sphBboxExtractionShader.use();
-            sphBboxExtractionShader.setInt("sphereCount", sphere_count);
+            sphBboxExtractionShader.setInt("sphereCount", actualSphereCount);
             sphBboxExtractionShader.setUint("visibilityFrameBufferIndexOffset", 0);
             sphBboxExtractionShader.setVec2I("screenResolution", screenResolution);
             setFrustumUniforms(sphBboxExtractionShader, frustum);
@@ -296,8 +295,8 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
 
             ///// CYLINDERS //////////
             cylBboxExtractionShader.use();
-            cylBboxExtractionShader.setInt("cylinderCount", cylinder_count); // visible sphere count given
-            cylBboxExtractionShader.setUint("visibilityFrameBufferIndexOffset", sphere_count);
+            cylBboxExtractionShader.setInt("cylinderCount", actualCylinderCount); // visible sphere count given
+            cylBboxExtractionShader.setUint("visibilityFrameBufferIndexOffset", actualSphereCount);
             cylBboxExtractionShader.setVec2I("screenResolution", screenResolution);
             setFrustumUniforms(cylBboxExtractionShader, frustum);
             setCameraUniforms(cylBboxExtractionShader, camera);
@@ -402,25 +401,24 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
     std::vector<glm::vec4> spheres;
     std::vector<Cylinder> cylinders;
     getCompleteScene(spheres, sphere_count, cylinders, cylinder_count);
-
-    sphere_count = spheres.size(); 
-    cylinder_count = cylinders.size();
+    const int actualSphereCount = static_cast<int>(spheres.size());
+    const int actualCylinderCount = static_cast<int>(cylinders.size());
     // SPHERES
     std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints = getCheckpoints(sphere_count, spheres, cylinders);
 
-    StorageBuffer sphereBuffer(GL_SHADER_STORAGE_BUFFER, sphere_count * sizeof(Sphere), 6, 
+    StorageBuffer sphereBuffer(GL_SHADER_STORAGE_BUFFER, actualSphereCount * sizeof(Sphere), 6,
     spheres.data(), GL_STATIC_DRAW);
     
-    StorageBuffer sphereBillboardBuffer(GL_SHADER_STORAGE_BUFFER, sphere_count * sizeof(SphereBillboard), 7,
+    StorageBuffer sphereBillboardBuffer(GL_SHADER_STORAGE_BUFFER, actualSphereCount * sizeof(SphereBillboard), 7,
         nullptr, GL_STATIC_DRAW);
     //////////
 
     // CYLINDERS
 
-    StorageBuffer cylinderBuffer(GL_SHADER_STORAGE_BUFFER, cylinder_count * sizeof(Cylinder), 9,
+    StorageBuffer cylinderBuffer(GL_SHADER_STORAGE_BUFFER, actualCylinderCount * sizeof(Cylinder), 9,
     cylinders.data(), GL_STATIC_DRAW);
 
-    StorageBuffer cylinderBillboardBuffer(GL_SHADER_STORAGE_BUFFER, cylinder_count * sizeof(CylinderBillboard), 10,
+    StorageBuffer cylinderBillboardBuffer(GL_SHADER_STORAGE_BUFFER, actualCylinderCount * sizeof(CylinderBillboard), 10,
         nullptr, GL_STATIC_DRAW);
     //////////
 
@@ -438,7 +436,7 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
     std::string process_times_path = base_path + "_process_times.csv";
     Profiler profiler(window, 
         frame_times_path, 
-        process_times_path, sphere_count, cylinder_count, 0, timerDuration);
+        process_times_path, actualSphereCount, actualCylinderCount, 0, timerDuration);
     
     window.setupSceneInfoGui("Scene Info", scene_data);
     window.setupCameraGui("Camera Info", &camera);
@@ -446,8 +444,8 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
     window.setupBenchmarkInfoGui("Benchmark", &benchmark);
 
     // Calculating number of work groups (based on the number of threads and spheres)
-    GLuint numGroupsXSpheres = (sphere_count + workGroupSizeXPerSphere - 1) / workGroupSizeXPerSphere;
-    GLuint numGroupsXCylinders = (cylinder_count + workGroupSizeXPerCylinder - 1) / workGroupSizeXPerCylinder;
+    GLuint numGroupsXSpheres = (actualSphereCount + workGroupSizeXPerSphere - 1) / workGroupSizeXPerSphere;
+    GLuint numGroupsXCylinders = (actualCylinderCount + workGroupSizeXPerCylinder - 1) / workGroupSizeXPerCylinder;
     GLuint numGroupsY = 1;
 
     canvas.bindTexture();
@@ -488,7 +486,7 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
             ///// SPHERES //////////
             // bbox extraction shader
             sphBboxExtractionShader.use();
-            sphBboxExtractionShader.setInt("sphereCount", sphere_count);
+            sphBboxExtractionShader.setInt("sphereCount", actualSphereCount);
             sphBboxExtractionShader.setVec2I("screenResolution", screenResolution);
             setFrustumUniforms(sphBboxExtractionShader, frustum);
             setCameraUniforms(sphBboxExtractionShader, camera);
@@ -516,7 +514,7 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
 
             ///// CYLINDERS //////////
             cylBboxExtractionShader.use();
-            cylBboxExtractionShader.setInt("cylinderCount", cylinder_count); // visible sphere count given
+            cylBboxExtractionShader.setInt("cylinderCount", actualCylinderCount); // visible sphere count given
             cylBboxExtractionShader.setVec2I("screenResolution", screenResolution);
             setFrustumUniforms(cylBboxExtractionShader, frustum);
             setCameraUniforms(cylBboxExtractionShader, camera);

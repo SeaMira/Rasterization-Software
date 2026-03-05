@@ -101,24 +101,24 @@ int main(int argc, char* argv[])
         nullptr, GL_DYNAMIC_COPY);
     
     std::vector<Sphere> spheres = getScene(sphere_count);
-    sphere_count = spheres.size(); 
+    const int actualSphereCount = static_cast<int>(spheres.size());
     std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints = getCheckpoints(sphere_count, spheres);
     
     // std::vector<SphereContainer> visibleSpheres(sphere_count);    
 
-    frustumSpheres = sphere_count;
+    frustumSpheres = actualSphereCount;
     // fillSpheresData(spheres, visibleSpheres);
     
-    StorageBuffer sphereBuffer(GL_SHADER_STORAGE_BUFFER, sphere_count * sizeof(Sphere), 6, 
+    StorageBuffer sphereBuffer(GL_SHADER_STORAGE_BUFFER, actualSphereCount * sizeof(Sphere), 6, 
         spheres.data(), GL_STATIC_DRAW);
     
-    std::vector<GLuint> visibilityFrames(2 * sphere_count, 10);
-    StorageBuffer visibilityFramesBuffer(GL_SHADER_STORAGE_BUFFER, 2 * sphere_count * sizeof(GLuint), 5, 
+    std::vector<GLuint> visibilityFrames(2 * actualSphereCount, 10);
+    StorageBuffer visibilityFramesBuffer(GL_SHADER_STORAGE_BUFFER, 2 * actualSphereCount * sizeof(GLuint), 5, 
         visibilityFrames.data(), GL_DYNAMIC_COPY);
 
     Benchmark benchmark(camera_controller, chkPoints);
     
-    Profiler profiler(window, "media/off/fst_parallel/gpu_frame_times.off", "media/off/fst_parallel/gpu_process_times.off", sphere_count, 0);
+    Profiler profiler(window, "media/off/fst_parallel/gpu_frame_times.off", "media/off/fst_parallel/gpu_process_times.off", actualSphereCount, 0);
     
     window.setupSceneInfoGui("Scene Info", scene_data);
     window.setupCameraGui("Camera Info", &camera);
@@ -126,7 +126,7 @@ int main(int argc, char* argv[])
     window.setupBenchmarkInfoGui("Benchmark", &benchmark);
     
     // Calculating number of work groups (based on the number of threads and spheres)
-    GLuint numGroupsX = (sphere_count + workGroupSizeXPerSphere - 1) / workGroupSizeXPerSphere;
+    GLuint numGroupsX = (actualSphereCount + workGroupSizeXPerSphere - 1) / workGroupSizeXPerSphere;
     GLuint numGroupsY = 1;
 
     canvas.bindTexture();
@@ -152,7 +152,7 @@ int main(int argc, char* argv[])
             Frustum frustum(camera);
             
             computeShader.use();
-            computeShader.setInt("sphereCount", sphere_count);
+            computeShader.setInt("sphereCount", actualSphereCount);
             setFrustumUniforms(computeShader, frustum);
             computeShader.setUint("visibilityFrameBufferIndexOffset", 0);
             computeShader.setVec2I("screenResolution", screenResolution);

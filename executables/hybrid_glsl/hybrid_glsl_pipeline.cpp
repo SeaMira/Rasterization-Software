@@ -717,12 +717,11 @@ int main(int argc, char* argv[]) {
     std::vector<Sphere> spheres;
     std::vector<Cylinder> cylinders;
     getCompleteScene(spheres, config.sphereCount, cylinders, config.cylinderCount);
+    const int actualSphereCount = static_cast<int>(spheres.size());
+    const int actualCylinderCount = static_cast<int>(cylinders.size());
     
-    config.sphereCount = static_cast<int>(spheres.size());
-    config.cylinderCount = static_cast<int>(cylinders.size());
-    
-    std::cout << "  Spheres: " << config.sphereCount << std::endl;
-    std::cout << "  Cylinders: " << config.cylinderCount << std::endl;
+    std::cout << "  Spheres: " << actualSphereCount << std::endl;
+    std::cout << "  Cylinders: " << actualCylinderCount << std::endl;
     std::cout << std::endl;
     
     config.print();
@@ -745,8 +744,11 @@ int main(int argc, char* argv[]) {
     // Initialize Resources
     // =========================================================================
     
+    HybridGLSLConfig initConfig = config;
+    initConfig.sphereCount = actualSphereCount;
+    initConfig.cylinderCount = actualCylinderCount;
     HybridGLSLResources resources;
-    resources.initialize(config, spheres, cylinders);
+    resources.initialize(initConfig, spheres, cylinders);
     
     spheres.clear();
     cylinders.clear();
@@ -768,13 +770,13 @@ int main(int argc, char* argv[]) {
     std::string frameTimesPath = basePath + "frame_times.csv";
     std::string processTimesPath = basePath + "process_times.csv";
     
-    int visibleSpheres = config.sphereCount;
-    int drawnSpheres = config.sphereCount;
-    int visibleCylinders = config.cylinderCount;
-    int drawnCylinders = config.cylinderCount;
+    int visibleSpheres = actualSphereCount;
+    int drawnSpheres = actualSphereCount;
+    int visibleCylinders = actualCylinderCount;
+    int drawnCylinders = actualCylinderCount;
     
     Profiler profiler(window, frameTimesPath, processTimesPath,
-                      config.sphereCount, config.cylinderCount, 0, config.timerDuration);
+                      actualSphereCount, actualCylinderCount, 0, config.timerDuration);
     
     // =========================================================================
     // Setup GUI

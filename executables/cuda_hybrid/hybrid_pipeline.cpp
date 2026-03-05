@@ -321,13 +321,12 @@ int main(int argc, char* argv[]) {
     std::vector<Sphere> spheres;
     std::vector<Cylinder> cylinders;
     getCompleteScene(spheres, config.sphereCount, cylinders, config.cylinderCount);
-    
-    config.sphereCount = static_cast<int>(spheres.size());
-    config.cylinderCount = static_cast<int>(cylinders.size());
+    const int actualSphereCount = static_cast<int>(spheres.size());
+    const int actualCylinderCount = static_cast<int>(cylinders.size());
     
     std::cout << "Scene loaded:" << std::endl;
-    std::cout << "  Spheres: " << config.sphereCount << std::endl;
-    std::cout << "  Cylinders: " << config.cylinderCount << std::endl;
+    std::cout << "  Spheres: " << actualSphereCount << std::endl;
+    std::cout << "  Cylinders: " << actualCylinderCount << std::endl;
     std::cout << std::endl;
     
     // Get checkpoints for benchmark
@@ -348,14 +347,14 @@ int main(int argc, char* argv[]) {
     
     // Create GPU buffers for scene data
     StorageBuffer sphereBuffer(GL_SHADER_STORAGE_BUFFER, 
-                               config.sphereCount * sizeof(Sphere), 6,
+                               actualSphereCount * sizeof(Sphere), 6,
                                spheres.data(), GL_STATIC_DRAW);
     StorageBufferCUDAWrapper sphereBufferCUDA(sphereBuffer);
     sphereBufferCUDA.cudaMapResources();
     glm::vec4* d_spheres = sphereBufferCUDA.getDevicePointer<glm::vec4>();
     
     StorageBuffer cylinderBuffer(GL_SHADER_STORAGE_BUFFER, 
-                                 config.cylinderCount * sizeof(Cylinder), 7,
+                                 actualCylinderCount * sizeof(Cylinder), 7,
                                  cylinders.data(), GL_STATIC_DRAW);
     StorageBufferCUDAWrapper cylinderBufferCUDA(cylinderBuffer);
     cylinderBufferCUDA.cudaMapResources();
@@ -367,7 +366,7 @@ int main(int argc, char* argv[]) {
     
     // Initialize pipeline manager
     HybridPipelineManager pipelineManager(config);
-    pipelineManager.initialize(config.sphereCount, config.cylinderCount);
+    pipelineManager.initialize(actualSphereCount, actualCylinderCount);
     
     // Setup benchmark and profiler
     Benchmark benchmark(camera_controller, checkpoints);
@@ -377,16 +376,16 @@ int main(int argc, char* argv[]) {
     std::string processTimesPath = basePath + "process_times.csv";
     
     // Statistics variables
-    int visibleSpheres = config.sphereCount;
-    int drawnSpheres = config.sphereCount;
-    int visibleCylinders = config.cylinderCount;
-    int drawnCylinders = config.cylinderCount;
+    int visibleSpheres = actualSphereCount;
+    int drawnSpheres = actualSphereCount;
+    int visibleCylinders = actualCylinderCount;
+    int drawnCylinders = actualCylinderCount;
     
     unsigned int sphereFrustum = 0, sphereSmall = 0, sphereLarge = 0;
     unsigned int cylFrustum = 0, cylSmall = 0, cylLarge = 0;
     
     Profiler profiler(window, frameTimesPath, processTimesPath,
-                      config.sphereCount, config.cylinderCount, 0, config.timerDuration);
+                      actualSphereCount, actualCylinderCount, 0, config.timerDuration);
     
     // Setup GUI
     std::unordered_map<std::string, int*> sceneData = {

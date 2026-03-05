@@ -36,5 +36,14 @@
   "profiler": {
     "timer_duration": 48.0,
     "benchmarking_enabled": false
+  },
+  "outofcore": {
+    "atoms_per_block": 512,
+    "max_octree_depth": 10,
+    "blocks_per_leaf": 4,
+    "max_block_pool_slots": 2048,
+    "max_requests_per_frame": 256,
+    "visibility_threshold": 0.01,
+    "occlusion_method": "hiz_probabilistic"
   }
 }

@@ -38,6 +38,7 @@ bool writeBlockFile(const std::string& path,
                     uint32_t numAtoms,
                     glm::vec3 sceneMin,
                     glm::vec3 sceneMax,
+                    int atomsPerBlock,
                     std::vector<OocBlockMetadata>& blocks);
 
 /**

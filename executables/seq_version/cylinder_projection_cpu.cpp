@@ -117,7 +117,7 @@ void renderFrameWithOcclusionCulling(std::vector<uint32_t>& framebuffer,
         {
             bool wasDrawn = drawCylinderWithOcclusionCulling(proj, view, up, front, right, camPos, SCR_WIDTH, SCR_HEIGHT, 
                 pa, pb, cylRadius, 
-                fov, framebuffer, depthBuffer, hizPyramid, cylinderVisibilityFrameCache[i], pixelOwnership, i + sphere_count, ownedPixelsMap[i + sphere_count]);
+                fov, framebuffer, depthBuffer, hizPyramid, cylinderVisibilityFrameCache[i], pixelOwnership, i + static_cast<int>(spheres.size()), ownedPixelsMap[i + static_cast<int>(spheres.size())]);
             frustumCylindersCount++;
             if (wasDrawn)
             {
@@ -165,7 +165,7 @@ void renderFrameWithOcclusionCulling(std::vector<uint32_t>& framebuffer,
         if (cylinderVisibilityFrameCache[i] & 0b10000000)
         {
             if (cylinderVisibilityLastFrameCache[i] <= (cylinderVisibilityFrameCache[i] & 0b01111111) &&
-                ownedPixelsMap[i + sphere_count] > 0) 
+                ownedPixelsMap[i + static_cast<int>(spheres.size())] > 0) 
                 cylinderVisibilityFrameCache[i] = 10;
         }
         cylinderVisibilityLastFrameCache[i] = cylinderVisibilityFrameCache[i] & 0b01111111;
@@ -245,9 +245,9 @@ int main(int argc, char* argv[])
     
    
     std::vector<CylinderIndex> cylinders = getCylinderScene(cylinder_count);
-    cylinder_count = cylinders.size();
     std::vector<Sphere> spheres = getScene(sphere_count);
-    sphere_count = spheres.size();
+    const int actualSphereCount = static_cast<int>(spheres.size());
+    const int actualCylinderCount = static_cast<int>(cylinders.size());
 
     std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints = getCheckpoints(sphere_count, spheres, cylinders);
     
@@ -260,7 +260,7 @@ int main(int argc, char* argv[])
     Profiler profiler(window, 
         frame_times_path, 
         process_times_path, 
-        sphere_count, cylinder_count, (withOcclusionCulling ? topLevel : 0), 48.0f);
+        actualSphereCount, actualCylinderCount, (withOcclusionCulling ? topLevel : 0), 48.0f);
     
     window.setupSceneInfoGui("Scene Info", scene_data);
     window.setupCameraGui("Camera Info", &camera);

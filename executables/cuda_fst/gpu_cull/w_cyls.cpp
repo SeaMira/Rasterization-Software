@@ -307,27 +307,27 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
     std::vector<Cylinder> cylinders;
     getCompleteScene(spheres, sphere_count, cylinders, cylinder_count);
 
-    sphere_count = spheres.size(); 
-    cylinder_count = cylinders.size(); 
+    const int actualSphereCount = static_cast<int>(spheres.size());
+    const int actualCylinderCount = static_cast<int>(cylinders.size());
 
     std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints = getCheckpoints(sphere_count, spheres, cylinders);
     
-    visibleSpheresCount = sphere_count;
+    visibleSpheresCount = actualSphereCount;
     
-    visibleCylindersCount = cylinder_count;
+    visibleCylindersCount = actualCylinderCount;
     GLint maxSSBOsize = 0;
     glGetIntegerv(GL_MAX_SHADER_STORAGE_BLOCK_SIZE, &maxSSBOsize);
     std::cout << "Max SSBO size: " << maxSSBOsize << std::endl;
     
     std::cout << "Spheres Buffer" << std::endl;
-    StorageBuffer sphereBuffer(GL_SHADER_STORAGE_BUFFER, sphere_count * sizeof(Sphere), 6, 
+    StorageBuffer sphereBuffer(GL_SHADER_STORAGE_BUFFER, actualSphereCount * sizeof(Sphere), 6, 
         spheres.data(), GL_STATIC_DRAW);
     StorageBufferCUDAWrapper sphereBufferCUDAWrapper(sphereBuffer);
     sphereBufferCUDAWrapper.cudaMapResources();
     Sphere * sphereBufferPtr = sphereBufferCUDAWrapper.getDevicePointer<Sphere>();
 
     std::cout << "Cylinders Buffer" << std::endl;
-    StorageBuffer cylinderBuffer(GL_SHADER_STORAGE_BUFFER, cylinder_count * sizeof(Cylinder), 7, 
+    StorageBuffer cylinderBuffer(GL_SHADER_STORAGE_BUFFER, actualCylinderCount * sizeof(Cylinder), 7, 
         cylinders.data(), GL_STATIC_DRAW);
     StorageBufferCUDAWrapper cylinderBufferCUDAWrapper(cylinderBuffer);
     cylinderBufferCUDAWrapper.cudaMapResources();
@@ -335,7 +335,7 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
 
     // all entities visibility info ssbo
     std::cout << "Visibility Frames Buffer" << std::endl;
-    int totalEntities = sphere_count + cylinder_count;
+    int totalEntities = actualSphereCount + actualCylinderCount;
     std::vector<GLuint> visibilityFrames(2 * totalEntities, 10);
     StorageBuffer visibilityFramesBuffer(GL_SHADER_STORAGE_BUFFER, 2 * totalEntities * sizeof(GLuint), 5, 
     visibilityFrames.data(), GL_DYNAMIC_COPY);
@@ -492,7 +492,7 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
 
             sphereRaster(
                 sphereBufferPtr,
-                sphere_count,
+                actualSphereCount,
                 camera.getView(),
                 camera.getProjection(),
                 glm::vec4(frustum.topFace.normal.x, frustum.topFace.normal.y, frustum.topFace.normal.z, frustum.topFace.distance),
@@ -524,7 +524,7 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
             cylinderRaster(
                 cylinderBufferPtr,
                 (const glm::vec4*)sphereBufferPtr,
-                cylinder_count,
+                actualCylinderCount,
                 camera.getView(),
                 camera.getProjection(),
                 glm::vec4(frustum.topFace.normal.x, frustum.topFace.normal.y, frustum.topFace.normal.z, frustum.topFace.distance),
@@ -543,7 +543,7 @@ void mainWithOcclusionCulling(Camera& camera, AppOpenGL& window)
                 depthBufferPtr,
                 pixelOwnershipBufferPtr,
                 visibilityFrameBufferPtr,
-                sphere_count,
+                actualSphereCount,
                 frustumCylindersCounter,
                 occlusionCylindersCounter,
                 1,
@@ -678,20 +678,20 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
     std::vector<Cylinder> cylinders;
     getCompleteScene(spheres, sphere_count, cylinders, cylinder_count);
 
-    sphere_count = spheres.size(); 
-    cylinder_count = cylinders.size(); 
+    const int actualSphereCount = static_cast<int>(spheres.size());
+    const int actualCylinderCount = static_cast<int>(cylinders.size());
 
     std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints = getCheckpoints(sphere_count, spheres, cylinders);
     
-    visibleSpheresCount = sphere_count;
+    visibleSpheresCount = actualSphereCount;
     
-    visibleCylindersCount = cylinder_count;
+    visibleCylindersCount = actualCylinderCount;
     GLint maxSSBOsize = 0;
     glGetIntegerv(GL_MAX_SHADER_STORAGE_BLOCK_SIZE, &maxSSBOsize);
     std::cout << "Max SSBO size: " << maxSSBOsize << std::endl;
     
     std::cout << "Spheres Buffer" << std::endl;
-    StorageBuffer sphereBuffer(GL_SHADER_STORAGE_BUFFER, sphere_count * sizeof(Sphere), 6, 
+    StorageBuffer sphereBuffer(GL_SHADER_STORAGE_BUFFER, actualSphereCount * sizeof(Sphere), 6, 
         spheres.data(), GL_STATIC_DRAW);
     StorageBufferCUDAWrapper sphereBufferCUDAWrapper(sphereBuffer);
     sphereBufferCUDAWrapper.cudaMapResources();
@@ -699,7 +699,7 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
     spheres.clear();
     
     std::cout << "Cylinders Buffer" << std::endl;
-    StorageBuffer cylinderBuffer(GL_SHADER_STORAGE_BUFFER, cylinder_count * sizeof(Cylinder), 7, 
+    StorageBuffer cylinderBuffer(GL_SHADER_STORAGE_BUFFER, actualCylinderCount * sizeof(Cylinder), 7, 
         cylinders.data(), GL_STATIC_DRAW);
     StorageBufferCUDAWrapper cylinderBufferCUDAWrapper(cylinderBuffer);
     cylinderBufferCUDAWrapper.cudaMapResources();
@@ -737,7 +737,7 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
     std::string process_times_path = base_path + "_process_times.csv";
     Profiler profiler(window, 
         frame_times_path, 
-        process_times_path, sphere_count, cylinder_count, downsampleLevel, timerDuration);
+        process_times_path, actualSphereCount, actualCylinderCount, downsampleLevel, timerDuration);
 
     window.setupSceneInfoGui("Scene Info", scene_data);
     window.setupCameraGui("Camera Info", &camera);
@@ -822,7 +822,7 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
 
             sphereRasterNoOcc(
                 sphereBufferPtr,
-                sphere_count,
+                actualSphereCount,
                 camera.getView(),
                 camera.getProjection(),
                 glm::vec4(frustum.topFace.normal.x, frustum.topFace.normal.y, frustum.topFace.normal.z, frustum.topFace.distance),
@@ -849,7 +849,7 @@ void mainWithoutOcclusionCulling(Camera& camera, AppOpenGL& window)
             cylinderRasterNoOcc(
                 cylinderBufferPtr,
                 (const glm::vec4*)sphereBufferPtr,
-                cylinder_count,
+                actualCylinderCount,
                 camera.getView(),
                 camera.getProjection(),
                 glm::vec4(frustum.topFace.normal.x, frustum.topFace.normal.y, frustum.topFace.normal.z, frustum.topFace.distance),
