@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstdint>
 #include <cub/cub.cuh>
+#include <nvtx3/nvToolsExt.h>
 #include "sphere_pipeline_binning.cuh"
 #include "hybrid_binning_types.h"
 
@@ -162,8 +163,8 @@ void executeSpherePipelineBinning(
     cudaStream_t stream)
 {
     if (sphereCount == 0) return;
-    
 
+    nvtxRangePushA("Sphere: Classify");
     launchSphereFrustumBBoxClassify(
         d_spheres, r->d_smallIndices, r->d_smallCount,
         r->d_tile_entity_pairs, r->d_pairCount, r->d_frustumPassedCount,
@@ -172,16 +173,15 @@ void executeSpherePipelineBinning(
     cudaMemcpyAsync(r->h_smallCount, r->d_smallCount, sizeof(unsigned int), cudaMemcpyDeviceToHost, stream);
     cudaMemcpyAsync(r->h_pairCount, r->d_pairCount, sizeof(unsigned int), cudaMemcpyDeviceToHost, stream);
     cudaMemcpyAsync(r->h_frustumPassedCount, r->d_frustumPassedCount, sizeof(unsigned int), cudaMemcpyDeviceToHost, stream);
-    // cudaStreamSynchronize(stream);
+    nvtxRangePop(); // Sphere: Classify
 
     unsigned int smallCount = *r->h_smallCount;
     unsigned int numPairs = *r->h_pairCount;
 
     if (numPairs > 0) {
-        
-        // cudaStreamSynchronize(stream);
         if (numPairs > (unsigned int)r->maxPairs) numPairs = r->maxPairs;
 
+        nvtxRangePushA("Sphere: Sort+RLE+TileOffsets");
         sortPairs64AndBuildTileOffsets(
             r->d_tile_entity_pairs, r->d_tile_entity_pairs_sorted,
             numPairs, r->totalTiles,
@@ -195,36 +195,39 @@ void executeSpherePipelineBinning(
         cudaStreamSynchronize(stream);
         if (numRuns > numPairs) numRuns = numPairs;
 
-        // ExclusiveSum on counts -> run_offsets (start of each tile's entities in sorted array)
         cub::DeviceScan::ExclusiveSum(
             r->d_temp_scan, r->temp_scan_bytes,
             r->d_counts_out, r->d_run_offsets,
             numRuns, stream);
+        nvtxRangePop(); // Sphere: Sort+RLE+TileOffsets
 
-        // Expand RLE runs into work-group dispatch list
+        nvtxRangePushA("Sphere: Expand WorkGroups");
         cudaMemsetAsync(r->d_wg_totalCount, 0, sizeof(unsigned int), stream);
         launchExpandWorkGroups(
             r->d_unique_out, r->d_counts_out, r->d_run_offsets, numRuns,
             r->d_wg_tileId, r->d_wg_entityStart, r->d_wg_entityCount,
             r->d_wg_totalCount, stream);
 
-        // Read total work groups
         cudaMemcpyAsync(r->h_wg_totalCount, r->d_wg_totalCount,
             sizeof(unsigned int), cudaMemcpyDeviceToHost, stream);
         cudaStreamSynchronize(stream);
         unsigned int totalWorkGroups = *r->h_wg_totalCount;
+        nvtxRangePop(); // Sphere: Expand WorkGroups
 
-        // Launch tiled sphere raster
         if (totalWorkGroups > 0) {
+            nvtxRangePushA("Sphere: Tiled Raster WG");
             launchTiledSphereRasterWG(
                 d_spheres, r->d_tile_entity_pairs_sorted,
                 r->d_wg_tileId, r->d_wg_entityStart, r->d_wg_entityCount,
                 totalWorkGroups, d_depthBuffer, outputImage, stream);
+            nvtxRangePop();
         }
     }
 
     if (smallCount > 0) {
+        nvtxRangePushA("Sphere: Small Raster");
         launchSmallSphereRaster(d_spheres, r->d_smallIndices, smallCount, d_depthBuffer, outputImage, stream);
+        nvtxRangePop();
     }
 }
 

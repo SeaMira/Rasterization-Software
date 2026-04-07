@@ -432,9 +432,11 @@ int main(int argc, char* argv[]) {
         }
         
         // Clear screen
+        nvtxRangePushA("Screen Clear");
         launchScreenClear(outputSurface, depthBuffer, 
                           config.screenWidth, config.screenHeight,
                           camera.getFar(), stream);
+        nvtxRangePop();
         
         // Create frustum for culling
         Frustum frustum(camera);
@@ -460,6 +462,7 @@ int main(int argc, char* argv[]) {
         // Display
         glBindFramebuffer(GL_READ_FRAMEBUFFER, canvas.getFramebuffer().getId());
         isRunning = window.update();
+        glFinish();
         
         // Screenshot
         if (window.getInput().isKeyDown(Key::F10)) {

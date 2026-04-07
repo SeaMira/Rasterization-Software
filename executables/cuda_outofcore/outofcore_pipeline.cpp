@@ -27,6 +27,7 @@
 #include <glad/glad.h>
 #include <SDL3/SDL.h>
 #include <cuda_runtime.h>
+#include <nvtx3/nvToolsExt.h>
 #include <thrust/device_vector.h>
 #include <thrust/sort.h>
 #include <thrust/unique.h>
@@ -420,6 +421,8 @@ int main(int argc, char* argv[]) {
         profiler.updateProfiler(benchmark.getCheckpointID(),
                                 visibleAtoms, drawnAtoms, 0, 0);
 
+        nvtxRangePushA("OOC Frame");
+
         Frustum frustum(camera);
 
         // Fill OocConstants
@@ -476,15 +479,20 @@ int main(int argc, char* argv[]) {
         cst.atomsColor = glm::vec3(0.8f, 0.1f, 0.1f);
         cst.diffuse    = 0.9f;
 
+        nvtxRangePushA("Upload Constants");
         uploadOocConstants(cst, renderStream);
         uploadOocRasterConstants(cst, renderStream);
+        nvtxRangePop();
 
         // ── Clear screen ──
+        nvtxRangePushA("Screen Clear");
         launchScreenClearOoc(outputSurface, depthBuffer,
                              screenWidth, screenHeight,
                              camera.getFar(), renderStream);
+        nvtxRangePop();
 
         // ── Phase 1: Octree BFS frustum culling ──
+        nvtxRangePushA("Octree BFS Frustum Culling");
         cudaMemsetAsync(gpu.d_visibleBlockCount, 0, sizeof(unsigned int), renderStream);
 
         unsigned int rootIdx = 0;
@@ -521,6 +529,7 @@ int main(int argc, char* argv[]) {
         cudaMemcpyAsync(h_visibleBlockCount, gpu.d_visibleBlockCount,
                         sizeof(unsigned int), cudaMemcpyDeviceToHost, renderStream);
         cudaStreamSynchronize(renderStream);
+        nvtxRangePop(); // Octree BFS Frustum Culling
         unsigned int numVisible = *h_visibleBlockCount;
         visibleAtoms = static_cast<int>(numVisible) * oocCfg.atomsPerBlock;
 
@@ -531,18 +540,23 @@ int main(int argc, char* argv[]) {
         if (numVisible > 0)
         {
             // ── Phase 2: Depth + area, sort, occlusion culling ──
+            nvtxRangePushA("Compute Block Depth+Area");
             launchComputeBlockDepthArea(
                 gpu.d_blockMeta, gpu.d_visibleBlockIds, numVisible,
                 gpu.d_depthInfo, renderStream);
+            nvtxRangePop();
 
+            nvtxRangePushA("Thrust Sort (Depth)");
             thrust::device_ptr<OocBlockDepthInfo> depthPtr(gpu.d_depthInfo);
             thrust::sort(thrust::cuda::par.on(renderStream),
                          depthPtr, depthPtr + numVisible, DepthInfoLess());
             cudaStreamSynchronize(renderStream);
+            nvtxRangePop();
 
             cudaMemsetAsync(gpu.d_filteredCount, 0, sizeof(unsigned int), renderStream);
 
             // Dispatch occlusion method
+            nvtxRangePushA("Occlusion Culling");
             switch (oocCfg.occlusionMethod) {
                 case OocOcclusionMethod::NONE:
                     launchNoOcclusionPassthrough(
@@ -589,6 +603,7 @@ int main(int argc, char* argv[]) {
                     }
                     break;
             }
+            nvtxRangePop(); // Occlusion Culling
 
             cudaMemcpyAsync(h_filteredCount, gpu.d_filteredCount,
                             sizeof(unsigned int), cudaMemcpyDeviceToHost, renderStream);
@@ -599,6 +614,7 @@ int main(int argc, char* argv[]) {
             if (numFiltered > 0)
             {
                 // ── Phase 3: Request generation ──
+                nvtxRangePushA("Request Generation");
                 cudaMemsetAsync(gpu.d_requestCount, 0, sizeof(unsigned int), renderStream);
                 launchComputeBlockRequests(
                     gpu.d_filteredBlockIds, numFiltered,
@@ -614,12 +630,14 @@ int main(int argc, char* argv[]) {
 
                 if (numRequests > 0)
                 {
+                    nvtxRangePushA("Thrust Sort+Unique (Requests)");
                     thrust::device_ptr<unsigned int> reqPtr(gpu.d_requestBuffer);
                     thrust::sort(thrust::cuda::par.on(renderStream),
                                  reqPtr, reqPtr + numRequests);
                     auto newEnd = thrust::unique(thrust::cuda::par.on(renderStream),
                                                 reqPtr, reqPtr + numRequests);
                     numRequests = static_cast<unsigned int>(newEnd - reqPtr);
+                    nvtxRangePop();
 
                     cudaMemcpyAsync(h_requestBuffer, gpu.d_requestBuffer,
                                     numRequests * sizeof(unsigned int),
@@ -631,19 +649,18 @@ int main(int argc, char* argv[]) {
                                 numFiltered * sizeof(unsigned int),
                                 cudaMemcpyDeviceToHost, renderStream);
                 cudaStreamSynchronize(renderStream);
+                nvtxRangePop(); // Request Generation
 
                 // ── Phase 4: CPU streaming (uploads go to write buffer, async) ──
+                nvtxRangePushA("CPU Streaming");
                 streamMgr.processRequests(
                     h_requestBuffer, numRequests,
                     h_filteredBlockIds, numFiltered,
                     frameId, uploadStream);
-                // No sync here — upload runs in parallel with render below.
-                // Uploaded blocks become available next frame after swapBuffers().
+                nvtxRangePop();
 
                 // ── Phase 5: Build active atom list + render ──
-                // Read from READ buffer (blocks loaded in previous frames).
-                // New blocks being uploaded to WRITE buffer will be available
-                // after swapBuffers() at the end of this frame.
+                nvtxRangePushA("Build Active Atom List");
                 cudaMemsetAsync(gpu.d_activeCount, 0, sizeof(unsigned int), renderStream);
                 launchBuildActiveAtomList(
                     streamMgr.getReadAtomPool(),
@@ -655,23 +672,28 @@ int main(int argc, char* argv[]) {
                 cudaMemcpyAsync(h_activeCount, gpu.d_activeCount,
                                 sizeof(unsigned int), cudaMemcpyDeviceToHost, renderStream);
                 cudaStreamSynchronize(renderStream);
+                nvtxRangePop(); // Build Active Atom List
                 activeCount = *h_activeCount;
                 drawnAtoms = static_cast<int>(activeCount);
 
                 if (activeCount > 0) {
+                    nvtxRangePushA("Sphere Raster OOC");
                     launchSphereRasterOoc(
                         gpu.d_activeAtoms, activeCount,
                         depthBuffer, outputSurface, renderStream);
                     cudaStreamSynchronize(renderStream);
+                    nvtxRangePop();
                 }
             }
         }
 
         // ── HiZ update (for next frame) ──
         if (useHiz && hizBuffer.isValid()) {
+            nvtxRangePushA("HiZ Downsample");
             launchHizDownsample(depthBuffer, hizBuffer.getSurface(),
                                 screenWidth, screenHeight,
                                 hizWidth, hizHeight, renderStream);
+            nvtxRangePop();
         }
 
         if (frameId % 60 == 0 && octreeVerbose)
@@ -682,11 +704,16 @@ int main(int argc, char* argv[]) {
         }
 
         // Ensure upload stream finished before swapping buffers
+        nvtxRangePushA("Swap Buffers");
         cudaStreamSynchronize(uploadStream);
         streamMgr.swapBuffers();
+        nvtxRangePop();
+
+        nvtxRangePop(); // OOC Frame
 
         glBindFramebuffer(GL_READ_FRAMEBUFFER, canvas.getFramebuffer().getId());
         isRunning = window.update();
+        glFinish();
         frameId++;
     }
 
