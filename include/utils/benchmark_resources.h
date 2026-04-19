@@ -219,20 +219,18 @@ std::vector<CylinderIndex> cylinder_package_scene(int gridWidth, int gridHeight,
 void complete_package_scene(int gridWidth, int gridHeight, int gridDepth, std::vector<glm::vec4>& spheres, int sphere_count, std::vector<CylinderIndex>& cylinders, int cylinder_count);
 
 /**
- * @brief Gets the strategic checkpoints and camera targets for a benchmarck on an specific scene.
- * 
- * Creates benchmark checkpoints and targets for the camera, depending on the amount of spheres and distance from one point to another on every axis in the 2D
- * grid that distributes the spheres.
- * 
- * @param sphere_count a reference to the value that represents the amount of spheres on the scene.
- * @param gridWidth the spaces along the width of the grid.
- * @param interleaveW the distance between checkpoints on the width axis.
- * @param interleaveH the distance between checkpoints on the height axis.
- * @param interleaveZ the distance between checkpoints on the depth axis.
- * 
- * @return vector of pairs with the checkpoints and camera targets.
+ * @brief Checkpoints for GRID_SCENE: exterior views only (no fly-through inside the volume).
+ *
+ * Builds (1) horizontal orbits around the center of mass at several radii and vertical slices,
+ * matching the spirit of benchmark2_loaded_molecules, and (2) samples along each axis from the
+ * center of mass toward the eight corners of the spheres' AABB (expanded by radii), from just
+ * outside the corner to farther out. Uses globals: interleaveAngle, interleaveZ, interleaveY,
+ * radFactor, and interleaveW (number of distance steps per corner axis).
+ *
+ * @param spheres Sphere centers (xyz) and radii (.w); must match the grid scene being benchmarked.
+ * @return Pairs (camera position, look-at target); target is the center of mass for these paths.
  */
-std::vector<std::pair<glm::vec3, glm::vec3>> benchmark1_structured_grid(int& sphere_count, int gridWidth, int interleaveW, int interleaveH, int interleaveZ);
+std::vector<std::pair<glm::vec3, glm::vec3>> benchmark1_structured_grid(const std::vector<glm::vec4>& spheres);
 
 /**
  * @brief Gets the strategic checkpoints and camera targets for a benchmarck on an specific scene.
@@ -268,21 +266,15 @@ std::vector<std::pair<glm::vec3, glm::vec3>> benchmark2_loaded_molecules(std::ve
 std::vector<std::pair<glm::vec3, glm::vec3>> benchmark2_loaded_molecules(std::vector<glm::vec4>& spheres, int interleaveAngle, int interleaveZ, int interleaveY, float radFactor);
 
 /**
- * @brief Gets the strategic checkpoints and camera targets for a benchmarck on an specific scene (3D regular spheres grid).
- * 
- * Creates benchmark checkpoints and targets for the camera, depending on the amount of spheres and distance from one point to another on every axis in the 3D grid.
- * 
- * @param sphere_count a reference to the value that represents the amount of spheres on the scene.
- * @param gridWidth the width of the grid that distributes the spheres.
- * @param gridHeight the height of the grid that distributes the spheres.
- * @param gridDepth the depth of the grid that distributes the spheres.
- * @param interleaveW the distance between checkpoints on the width axis.
- * @param interleaveH the distance between checkpoints on the height axis.
- * @param interleaveZ the distance between checkpoints on the depth axis.
- * 
- * @return vector of pairs with the checkpoints and camera targets.
+ * @brief Checkpoints for PACKAGE_SCENE: exterior views around a 3D block of spheres.
+ *
+ * Like GRID_SCENE checkpoints but adds full 3D coverage: orbits in the XZ, XY, and YZ planes
+ * (several radii, azimuth steps, and slices on the third axis), plus the eight COM→corner
+ * exterior samples. Uses globals interleaveAngle, interleaveZ, interleaveY, interleaveW, radFactor.
+ *
+ * @param spheres Sphere centers and radii for the package scene being benchmarked.
  */
-std::vector<std::pair<glm::vec3, glm::vec3>> benchmark3_package(int& sphere_count, int gridWidth, int gridHeight, int gridDepth, int interleaveW, int interleaveH, int interleaveZ);
+std::vector<std::pair<glm::vec3, glm::vec3>> benchmark3_package(const std::vector<glm::vec4>& spheres);
 
 /**
  * @brief Gets the vector of spheres depending on the global variables values set.

@@ -19,7 +19,7 @@ CameraInfoComponent::CameraInfoComponent(std::string name, Camera* camera) :
     
     // Near and Far
     addElement(std::make_unique<SliderElementTopBounded>("Near", camera->mNear, 0.1f, camera->mFar));
-    addElement(std::make_unique<SliderElementLowBounded>("Far", camera->mFar, camera->mNear, 1000.0f));
+    addElement(std::make_unique<SliderElementLowBounded>("Far", camera->mFar, camera->mNear, 100000.0f));
     
 
 }

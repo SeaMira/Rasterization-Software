@@ -88,6 +88,9 @@ public:
 
     int getNumSlots() const { return m_pool.numSlots; }
 
+    /** Device (VRAM) bytes allocated for pools, device staging, scatter metadata (excludes cudaHostAlloc). */
+    size_t deviceMemoryBytes() const;
+
 private:
     DoubleBufferedPool              m_pool;
     std::vector<OocBlockSlot>       m_cpuSlots[2];

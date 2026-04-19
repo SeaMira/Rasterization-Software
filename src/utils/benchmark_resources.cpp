@@ -1,3 +1,6 @@
+#include <algorithm>
+#include <cfloat>
+#include <cmath>
 #include <iostream>
 #include "utils/benchmark_resources.h"
 #include "molecule_loader/basic_loader.h"
@@ -180,50 +183,174 @@ void complete_package_scene(int gridWidth, int gridHeight, int gridDepth, std::v
     }
 }
 
-std::vector<std::pair<glm::vec3, glm::vec3>> benchmark1_structured_grid(int& sphere_count, int gridWidth, int interleaveW, int interleaveH, int interleaveZ)
+namespace {
+
+/** Exterior-only benchmark path for synthetic sphere clouds (grid sheet or 3D package). */
+std::vector<std::pair<glm::vec3, glm::vec3>> exterior_synthetic_benchmark_checkpoints(
+    const std::vector<glm::vec4>& spheres,
+    bool package3D)
 {
     std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints;
+    if (spheres.empty())
+        return {{glm::vec3(0.0f), glm::vec3(0.0f)}};
 
-    float h_delta = (sphere_count/gridWidth) * 2.0f / interleaveH;
-    float w_delta = (float)(gridWidth / interleaveW) * 2.0f;
-    for (int i = 0; i < interleaveW; i++)
+    glm::vec3 com(0.0f);
+    glm::vec3 minp(FLT_MAX);
+    glm::vec3 maxp(-FLT_MAX);
+    float maxR = 0.0f;
+    for (const auto& s : spheres)
     {
-        for (int j = 0; j < interleaveH; j++)
-        {
-            chkPoints.push_back(
-                {
-                    glm::vec3(w_delta*(float)i, h_delta*(float)j, - 3.0f), 
-                    glm::vec3(w_delta*(float)i, h_delta*(float)j, 1.0f)
-                }
-            );
-        }
+        glm::vec3 c(s);
+        float r = s.w;
+        maxR = std::max(maxR, r);
+        com += c;
+        minp = glm::min(minp, c - glm::vec3(r));
+        maxp = glm::max(maxp, c + glm::vec3(r));
     }
+    com /= static_cast<float>(spheres.size());
 
-    for (int i = 0; i < interleaveW; i++)
+    const int nAng = std::max(1, interleaveAngle);
+    const int nRad = std::max(1, interleaveZ);
+    const int nCorner = std::max(1, interleaveW);
+    const int sliceMax = std::max(0, interleaveY);
+
+    float x_dis_max = std::max(std::fabs(maxp.x - com.x), std::fabs(minp.x - com.x));
+    float y_dis_max = std::max(std::fabs(maxp.y - com.y), std::fabs(minp.y - com.y));
+    float z_dis_max = std::max(std::fabs(maxp.z - com.z), std::fabs(minp.z - com.z));
+
+    auto orbit_radius = [&](float a, float b, float rf) -> float {
+        float R = std::sqrt(a * a + b * b) * rf;
+        if (R < 1e-4f)
+            R = std::max(maxR * 4.0f, 1.0f);
+        return R;
+    };
+
+    const float d_theta = 360.0f / static_cast<float>(nAng);
+
+    // Orbit in XZ, multiple Y slices (works for flat grid and 3D)
     {
-        for (int j = 0; j < interleaveZ; j++)
+        float orbitRBase = orbit_radius(x_dis_max, z_dis_max, radFactor);
+        float d_radius = orbitRBase / static_cast<float>(nRad);
+        float y_min = minp.y;
+        float y_max = maxp.y;
+        float d_height = (sliceMax > 0 && y_max > y_min) ? (y_max - y_min) / static_cast<float>(sliceMax) : 0.0f;
+        for (int j = 1; j <= nRad; ++j)
         {
-            chkPoints.push_back(
-                {
-                    glm::vec3(w_delta*(float)i, h_delta*interleaveH/2.0f,  - (float)j - 1.0f), 
-                    glm::vec3(w_delta*(float)i, h_delta*interleaveH/2.0f, 0.0f)
-                }
-            );
-        }
-    }
-
-    int sn_entities = std::sqrt(sphere_count);
-    for (int j = 0; j < sn_entities; j++)
-    {
-        chkPoints.push_back(
+            float d = static_cast<float>(j) * d_radius;
+            for (int i = 0; i < nAng; ++i)
             {
-                glm::vec3(separation*(sn_entities/2), separation*(sn_entities/2),  - (float)j*separation - 1.0f), 
-                glm::vec3(separation*(sn_entities/2), separation*(sn_entities/2), 0.0f)
+                float ang = glm::radians(static_cast<float>(i) * d_theta);
+                float c0 = std::cos(ang);
+                float s0 = std::sin(ang);
+                for (int k = 0; k <= sliceMax; ++k)
+                {
+                    float y = (sliceMax == 0 || y_max <= y_min) ? com.y : (y_min + static_cast<float>(k) * d_height);
+                    chkPoints.emplace_back(
+                        glm::vec3(com.x + d * c0, y, com.z + d * s0),
+                        glm::vec3(com.x, y, com.z));
+                }
             }
-        );
+        }
+    }
+
+    if (package3D)
+    {
+        // Orbit in XY, multiple Z slices
+        {
+            float orbitRBase = orbit_radius(x_dis_max, y_dis_max, radFactor);
+            float d_radius = orbitRBase / static_cast<float>(nRad);
+            float z_min = minp.z;
+            float z_max = maxp.z;
+            float d_depth = (sliceMax > 0 && z_max > z_min) ? (z_max - z_min) / static_cast<float>(sliceMax) : 0.0f;
+            for (int j = 1; j <= nRad; ++j)
+            {
+                float d = static_cast<float>(j) * d_radius;
+                for (int i = 0; i < nAng; ++i)
+                {
+                    float ang = glm::radians(static_cast<float>(i) * d_theta);
+                    float c0 = std::cos(ang);
+                    float s0 = std::sin(ang);
+                    for (int k = 0; k <= sliceMax; ++k)
+                    {
+                        float z = (sliceMax == 0 || z_max <= z_min) ? com.z : (z_min + static_cast<float>(k) * d_depth);
+                        chkPoints.emplace_back(
+                            glm::vec3(com.x + d * c0, com.y + d * s0, z),
+                            glm::vec3(com.x, com.y, z));
+                    }
+                }
+            }
+        }
+        // Orbit in YZ, multiple X slices
+        {
+            float orbitRBase = orbit_radius(y_dis_max, z_dis_max, radFactor);
+            float d_radius = orbitRBase / static_cast<float>(nRad);
+            float x_min = minp.x;
+            float x_max = maxp.x;
+            float d_width = (sliceMax > 0 && x_max > x_min) ? (x_max - x_min) / static_cast<float>(sliceMax) : 0.0f;
+            for (int j = 1; j <= nRad; ++j)
+            {
+                float d = static_cast<float>(j) * d_radius;
+                for (int i = 0; i < nAng; ++i)
+                {
+                    float ang = glm::radians(static_cast<float>(i) * d_theta);
+                    float c0 = std::cos(ang);
+                    float s0 = std::sin(ang);
+                    for (int k = 0; k <= sliceMax; ++k)
+                    {
+                        float x = (sliceMax == 0 || x_max <= x_min) ? com.x : (x_min + static_cast<float>(k) * d_width);
+                        chkPoints.emplace_back(
+                            glm::vec3(x, com.y + d * c0, com.z + d * s0),
+                            glm::vec3(x, com.y, com.z));
+                    }
+                }
+            }
+        }
+    }
+
+    glm::vec3 diag = maxp - minp;
+    float diagonal = glm::length(diag);
+    if (diagonal < 1e-6f)
+        diagonal = std::max(maxR * 4.0f, 1.0f);
+
+    const float clearance = std::max(maxR * 2.5f, 0.5f);
+    const float farExtra = diagonal * std::max(radFactor, 1.0f);
+
+    for (int ix = 0; ix < 2; ++ix)
+    {
+        for (int iy = 0; iy < 2; ++iy)
+        {
+            for (int iz = 0; iz < 2; ++iz)
+            {
+                glm::vec3 corner(
+                    ix ? maxp.x : minp.x,
+                    iy ? maxp.y : minp.y,
+                    iz ? maxp.z : minp.z);
+                glm::vec3 toCorner = corner - com;
+                float len = glm::length(toCorner);
+                if (len < 1e-5f)
+                    continue;
+                glm::vec3 u = toCorner / len;
+
+                for (int s = 0; s < nCorner; ++s)
+                {
+                    float alpha = (nCorner == 1) ? 0.5f : static_cast<float>(s) / static_cast<float>(nCorner - 1);
+                    float tNear = len + clearance;
+                    float tFar = len + clearance + farExtra;
+                    float t = tNear + alpha * (tFar - tNear);
+                    chkPoints.emplace_back(com + u * t, com);
+                }
+            }
+        }
     }
 
     return chkPoints;
+}
+
+} // namespace
+
+std::vector<std::pair<glm::vec3, glm::vec3>> benchmark1_structured_grid(const std::vector<glm::vec4>& spheres)
+{
+    return exterior_synthetic_benchmark_checkpoints(spheres, false);
 }
 
 
@@ -331,67 +458,9 @@ std::vector<std::pair<glm::vec3, glm::vec3>> benchmark2_loaded_molecules(std::ve
     return chkPoints;
 }
 
-std::vector<std::pair<glm::vec3, glm::vec3>> benchmark3_package(int& sphere_count, int gridWidth, int gridHeight, int gridDepth, int interleaveW, int interleaveH, int interleaveZ)
+std::vector<std::pair<glm::vec3, glm::vec3>> benchmark3_package(const std::vector<glm::vec4>& spheres)
 {
-    float w_delta = (float)gridWidth / interleaveW;
-    float h_delta = (float)gridHeight / interleaveH;
-    float d_delta = (float)gridDepth / interleaveZ;
-    
-    std::vector<std::pair<glm::vec3, glm::vec3>> chkPoints;
-
-    for (int i = 0; i < interleaveW; i++)
-    {
-        for (int j = 0; j < interleaveH; j++)
-        {
-            for (int k = 0; k <= interleaveZ; k++)
-            {
-                float x = (float)i * w_delta;
-                float y = (float)j * h_delta;
-                float z = (float)k * d_delta;
-                chkPoints.push_back(
-                    {
-                        glm::vec3(x, y, z),
-                        glm::vec3(x, y, z + 1.0f) 
-                    }
-                );
-
-            }
-        }
-    }
-
-    for (int i = 0; i < interleaveW; i++)
-    {
-        for (int j = 0; j < interleaveH; j++)
-        {
-            for (int k = 0; k <= interleaveZ; k++)
-            {
-                if (i == j && j == k)
-                {
-                    chkPoints.push_back(
-                        {
-                            glm::vec3((float)i*2.0f - 10.0f, (float)j*2.0f - 10.0f, (float)k*2.0f - 10.0f),
-                            glm::vec3((float)i*2.0f + 1.0f, (float)j*2.0f + 1.0f, (float)k*2.0f + 1.0f) 
-                        }
-                    );
-                }
-            }
-        }
-    }
-
-    for (int k = 0; k <= interleaveZ; k++)
-    {
-        
-        chkPoints.push_back(
-            {
-                glm::vec3((float)gridWidth, (float)gridHeight, -(float)k*2.0f),
-                glm::vec3((float)gridWidth, (float)gridHeight, 1.0f) 
-            }
-        );
-        
-    }
-    
-    return chkPoints;
-
+    return exterior_synthetic_benchmark_checkpoints(spheres, true);
 }
 
 
@@ -461,13 +530,13 @@ std::vector<std::pair<glm::vec3, glm::vec3>> getCheckpoints(int& sphere_count, s
         return benchmark2_loaded_molecules(spheres, cylinders, interleaveAngle, interleaveZ, interleaveY, radFactor);
         break;
     case SceneType::GRID_SCENE:
-        return benchmark1_structured_grid(sphere_count, gridWidth, interleaveW, interleaveH, interleaveZ);
+        return benchmark1_structured_grid(spheres);
         break;
     case SceneType::PACKAGE_SCENE:
-        return benchmark3_package(sphere_count, gridWidth, gridHeight, gridDepth, interleaveW, interleaveH, interleaveZ);
+        return benchmark3_package(spheres);
         break;
     default:
-        return benchmark1_structured_grid(sphere_count, gridWidth, interleaveW, interleaveH, interleaveZ);
+        return benchmark1_structured_grid(spheres);
         break;
     }
 }
@@ -480,13 +549,13 @@ std::vector<std::pair<glm::vec3, glm::vec3>> getCheckpoints(int& sphere_count, s
         return benchmark2_loaded_molecules(spheres, interleaveAngle, interleaveZ, interleaveY, radFactor);
         break;
     case SceneType::GRID_SCENE:
-        return benchmark1_structured_grid(sphere_count, gridWidth, interleaveW, interleaveH, interleaveZ);
+        return benchmark1_structured_grid(spheres);
         break;
     case SceneType::PACKAGE_SCENE:
-        return benchmark3_package(sphere_count, gridWidth, gridHeight, gridDepth, interleaveW, interleaveH, interleaveZ);
+        return benchmark3_package(spheres);
         break;
     default:
-        return benchmark1_structured_grid(sphere_count, gridWidth, interleaveW, interleaveH, interleaveZ);
+        return benchmark1_structured_grid(spheres);
         break;
     }
 }

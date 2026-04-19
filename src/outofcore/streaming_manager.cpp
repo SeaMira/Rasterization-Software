@@ -88,6 +88,24 @@ void StreamingManager::initialize(int numSlots,
               << (atomPoolBytes / (1024 * 1024)) << " MB per buffer." << std::endl;
 }
 
+size_t StreamingManager::deviceMemoryBytes() const
+{
+    if (m_pool.numSlots <= 0 || m_totalBlocks <= 0)
+        return 0;
+
+    const size_t atomPoolBytes =
+        static_cast<size_t>(m_pool.numSlots) * static_cast<size_t>(m_atomsPerBlock) * sizeof(glm::vec4);
+    const size_t slotMapBytes =
+        static_cast<size_t>(m_totalBlocks) * sizeof(int32_t);
+    const size_t pools = 2 * (atomPoolBytes + slotMapBytes);
+    const size_t dStaging = m_stagingCapacity;
+    const size_t mr = static_cast<size_t>(m_maxRequestsPerFrame);
+    const size_t scatter =
+        mr * sizeof(unsigned int) + mr * sizeof(int32_t) + mr * sizeof(unsigned int) +
+        mr * 2u * sizeof(uint32_t) + mr * 2u * sizeof(int32_t);
+    return pools + dStaging + scatter;
+}
+
 void StreamingManager::destroy()
 {
     for (int b = 0; b < 2; b++) {

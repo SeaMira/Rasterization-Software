@@ -170,6 +170,11 @@ public:
         Window::setupPipelineConfigGui(name, smallThreshold, tileSize, maxEntitiesPerTile, tilesX, tilesY);
     }
 
+    void setupOocTuningGui(std::string name, float& visibilityThreshold) override
+    {
+        Window::setupOocTuningGui(std::move(name), visibilityThreshold);
+    }
+
     /**
      * @brief Get the GL context handle.
      * 

@@ -31,6 +31,11 @@ void AppUI::addPipelineConfigComponent(std::string name,
         name, smallThreshold, tileSize, maxEntitiesPerTile, tilesX, tilesY));
 }
 
+void AppUI::addOocTuningComponent(std::string name, float& visibilityThreshold)
+{
+    components.push_back(std::make_unique<OocTuningComponent>(std::move(name), visibilityThreshold));
+}
+
 void AppUI::render()
 {
     for (auto& component : components)

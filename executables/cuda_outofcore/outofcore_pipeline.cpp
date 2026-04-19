@@ -22,6 +22,11 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <chrono>
+#include <fstream>
+#include <filesystem>
+#include <limits>
+#include <cstdint>
 
 #include <glm/glm.hpp>
 #include <glad/glad.h>
@@ -122,7 +127,7 @@ extern "C" void launchBuildActiveAtomList(
 extern "C" void launchSphereRasterOoc(
     const glm::vec4* d_activeAtoms, unsigned int activeCount,
     unsigned int* d_depthBuffer, cudaSurfaceObject_t outputImage,
-    cudaStream_t stream);
+    unsigned int* d_rasterAtomCount, cudaStream_t stream);
 
 // ─────────────────── Thrust comparator ───────────────────
 
@@ -161,6 +166,7 @@ struct OocGpuResources
 
     glm::vec4*    d_activeAtoms       = nullptr;
     unsigned int* d_activeCount       = nullptr;
+    unsigned int* d_rasterAtomCount   = nullptr;
 
     unsigned int* d_hizPassIndices    = nullptr;
     unsigned int* d_hizPassCount      = nullptr;
@@ -216,6 +222,7 @@ static void allocGpuResources(OocGpuResources& r,
 
     cudaMalloc(&r.d_activeAtoms, maxActiveAtoms * sizeof(glm::vec4));
     cudaMalloc(&r.d_activeCount, sizeof(unsigned int));
+    cudaMalloc(&r.d_rasterAtomCount, sizeof(unsigned int));
 
     cudaMalloc(&r.d_hizPassIndices, numBlocks * sizeof(unsigned int));
     cudaMalloc(&r.d_hizPassCount,   sizeof(unsigned int));
@@ -239,9 +246,238 @@ static void freeGpuResources(OocGpuResources& r) {
     cudaFree(r.d_requestCount);
     cudaFree(r.d_activeAtoms);
     cudaFree(r.d_activeCount);
+    cudaFree(r.d_rasterAtomCount);
     cudaFree(r.d_hizPassIndices);
     cudaFree(r.d_hizPassCount);
 }
+
+/** Sum of cudaMalloc allocations in `allocGpuResources` (octree pipeline buffers). */
+static size_t oocPipelineGpuDeviceBytes(const OocGpuResources& r, int maxRequestsPerFrame)
+{
+    const int numBlocks = r.maxBlocks;
+    const int numNodes  = r.maxOctreeNodes;
+    const int maxQueue  = numNodes + 8;
+    size_t s = 0;
+    s += static_cast<size_t>(numNodes) * sizeof(OocOctreeNode);
+    s += static_cast<size_t>(numBlocks) * sizeof(unsigned int);  // d_blockIndexBuffer
+    s += static_cast<size_t>(numBlocks) * sizeof(OocBlockMetadata);
+    s += static_cast<size_t>(numBlocks) * sizeof(unsigned int);  // d_blockAtomCounts
+    s += 2ull * static_cast<size_t>(maxQueue) * sizeof(unsigned int);
+    s += 2ull * sizeof(unsigned int);
+    s += static_cast<size_t>(numBlocks) * sizeof(unsigned int);
+    s += sizeof(unsigned int);
+    s += static_cast<size_t>(numBlocks) * sizeof(OocBlockDepthInfo);
+    s += static_cast<size_t>(numBlocks) * sizeof(unsigned int);
+    s += sizeof(unsigned int);
+    s += static_cast<size_t>(maxRequestsPerFrame) * sizeof(unsigned int);
+    s += sizeof(unsigned int);
+    s += static_cast<size_t>(r.maxActiveAtoms) * sizeof(glm::vec4);
+    s += sizeof(unsigned int);
+    s += sizeof(unsigned int);  // d_rasterAtomCount
+    s += static_cast<size_t>(numBlocks) * sizeof(unsigned int);
+    s += sizeof(unsigned int);
+    return s;
+}
+
+static void appendOocPreprocessAndVramCsv(
+    const std::string& csvPath,
+    const SceneSettings& settings,
+    int loadedAtomCount,
+    const ooc::PreprocessResult& prep,
+    size_t vramOocPipelineBytes,
+    size_t vramStreamingBytes,
+    size_t vramDepthBytes,
+    size_t vramHizBytes,
+    size_t vramColorEstBytes,
+    size_t cudaMemFreeBytes,
+    size_t cudaMemTotalBytes)
+{
+    if (csvPath.empty())
+        return;
+
+    std::filesystem::path p(csvPath);
+    if (p.has_parent_path())
+        std::filesystem::create_directories(p.parent_path());
+
+    const bool needHeader = !std::filesystem::exists(p) ||
+                            std::filesystem::file_size(p) == 0;
+
+    std::ofstream out(csvPath, std::ios::app);
+    if (!out) {
+        std::cerr << "[OOC] preprocess stats: cannot open " << csvPath << std::endl;
+        return;
+    }
+
+    if (needHeader) {
+        out << "scene_type,sphere_count,block_count,octree_node_count,"
+               "ms_morton_pipeline,ms_blocks_and_file,ms_octree_build,"
+               "host_structures_bytes,block_file_bytes,"
+               "vram_ooc_pipeline_bytes,vram_streaming_bytes,vram_depth_buffer_bytes,"
+               "vram_hiz_bytes,vram_color_rgba8_est_bytes,vram_sum_estimated_bytes,"
+               "cuda_mem_free_bytes,cuda_mem_total_bytes\n";
+    }
+
+    const auto& m = prep.metrics;
+    const size_t vramSum = vramOocPipelineBytes + vramStreamingBytes + vramDepthBytes +
+                           vramHizBytes + vramColorEstBytes;
+
+    out << settings.sceneType << ','
+        << loadedAtomCount << ','
+        << m.blockCount << ','
+        << m.octreeNodeCount << ','
+        << m.msMortonPipeline << ','
+        << m.msBlocksAndFile << ','
+        << m.msOctreeBuild << ','
+        << m.hostStructuresBytes << ','
+        << m.blockFileBytes << ','
+        << vramOocPipelineBytes << ','
+        << vramStreamingBytes << ','
+        << vramDepthBytes << ','
+        << vramHizBytes << ','
+        << vramColorEstBytes << ','
+        << vramSum << ','
+        << cudaMemFreeBytes << ','
+        << cudaMemTotalBytes << '\n';
+    out.close();
+    std::cout << "[OOC] preprocess/VRAM metrics -> " << csvPath << std::endl;
+}
+
+// ═════════════════════════════════════════════════════════
+// Batch statistics (CSV): accumulate N frames, write one row (append)
+// ═════════════════════════════════════════════════════════
+
+struct OocStatsBatchAccumulator {
+    int                  batchSize   = 0;
+    std::string          csvPath;
+    std::string          sceneType;
+    int                  sphereCount = 0;
+    int                  totalBlocks = 0;
+    int                  poolSlots   = 0;
+    uint64_t             batchIndex   = 0;
+    uint64_t             firstFrameId = 0;
+    int                  framesInBatch = 0;
+
+    uint64_t sumVisible   = 0;
+    uint64_t sumFiltered  = 0;
+    uint64_t sumRequests  = 0;
+    uint64_t sumActive    = 0;
+    uint32_t minVisible   = UINT32_MAX;
+    uint32_t maxVisible   = 0;
+    uint32_t minFiltered  = UINT32_MAX;
+    uint32_t maxFiltered  = 0;
+    uint32_t minRequests  = UINT32_MAX;
+    uint32_t maxRequests  = 0;
+    uint32_t minActive    = UINT32_MAX;
+    uint32_t maxActive    = 0;
+
+    double sumFrameMs     = 0.0;
+    double minFrameMs     = std::numeric_limits<double>::max();
+    double maxFrameMs     = 0.0;
+
+    void resetBatchSums() {
+        sumVisible = sumFiltered = sumRequests = sumActive = 0;
+        minVisible = minFiltered = minRequests = minActive = UINT32_MAX;
+        maxVisible = maxFiltered = maxRequests = maxActive = 0;
+        sumFrameMs = 0.0;
+        minFrameMs = std::numeric_limits<double>::max();
+        maxFrameMs = 0.0;
+        framesInBatch = 0;
+    }
+
+    void addFrame(uint32_t numVisible, uint32_t numFiltered, uint32_t numRequests,
+                  uint32_t activeCount, double frameMs, uint64_t frameId)
+    {
+        if (batchSize <= 0) return;
+        if (framesInBatch == 0)
+            firstFrameId = frameId;
+
+        sumVisible  += numVisible;
+        sumFiltered += numFiltered;
+        sumRequests += numRequests;
+        sumActive   += activeCount;
+        minVisible  = std::min(minVisible, numVisible);
+        maxVisible  = std::max(maxVisible, numVisible);
+        minFiltered = std::min(minFiltered, numFiltered);
+        maxFiltered = std::max(maxFiltered, numFiltered);
+        minRequests = std::min(minRequests, numRequests);
+        maxRequests = std::max(maxRequests, numRequests);
+        minActive   = std::min(minActive, activeCount);
+        maxActive   = std::max(maxActive, activeCount);
+
+        sumFrameMs += frameMs;
+        minFrameMs  = std::min(minFrameMs, frameMs);
+        maxFrameMs  = std::max(maxFrameMs, frameMs);
+        framesInBatch++;
+    }
+
+    void writeCsvRow(int framesRecorded)
+    {
+        if (framesRecorded <= 0 || csvPath.empty()) return;
+
+        std::filesystem::path p(csvPath);
+        if (p.has_parent_path())
+            std::filesystem::create_directories(p.parent_path());
+
+        const bool needHeader = !std::filesystem::exists(p) ||
+                                std::filesystem::file_size(p) == 0;
+
+        std::ofstream out(csvPath, std::ios::app);
+        if (!out) {
+            std::cerr << "[OOC] stats: cannot open " << csvPath << std::endl;
+            return;
+        }
+
+        if (needHeader) {
+            out << "batch_index,first_frame,last_frame,frames,scene_type,sphere_count,total_blocks,pool_slots,"
+                   "avg_numVisible,min_numVisible,max_numVisible,"
+                   "avg_numFiltered,min_numFiltered,max_numFiltered,"
+                   "avg_numRequests,min_numRequests,max_numRequests,"
+                   "avg_activeCount,min_activeCount,max_activeCount,"
+                   "avg_frame_ms,min_frame_ms,max_frame_ms\n";
+        }
+
+        double inv = 1.0 / static_cast<double>(framesRecorded);
+        double avgVis = static_cast<double>(sumVisible) * inv;
+        double avgFil = static_cast<double>(sumFiltered) * inv;
+        double avgReq = static_cast<double>(sumRequests) * inv;
+        double avgAct = static_cast<double>(sumActive) * inv;
+        double avgMs  = sumFrameMs * inv;
+
+        uint64_t lastFrame = firstFrameId + static_cast<uint64_t>(framesRecorded) - 1;
+
+        out << batchIndex << ','
+            << firstFrameId << ','
+            << lastFrame << ','
+            << framesRecorded << ','
+            << sceneType << ','
+            << sphereCount << ','
+            << totalBlocks << ','
+            << poolSlots << ','
+            << avgVis << ',' << minVisible << ',' << maxVisible << ','
+            << avgFil << ',' << minFiltered << ',' << maxFiltered << ','
+            << avgReq << ',' << minRequests << ',' << maxRequests << ','
+            << avgAct << ',' << minActive << ',' << maxActive << ','
+            << avgMs << ',' << minFrameMs << ',' << maxFrameMs << '\n';
+
+        out.close();
+        batchIndex++;
+    }
+
+    void flushCompleteBatch()
+    {
+        if (batchSize <= 0 || framesInBatch < batchSize) return;
+        writeCsvRow(framesInBatch);
+        resetBatchSums();
+    }
+
+    /** Call on exit if the last batch is incomplete but should still be saved. */
+    void flushPartialIfAny()
+    {
+        if (batchSize <= 0 || framesInBatch == 0) return;
+        writeCsvRow(framesInBatch);
+        resetBatchSums();
+    }
+};
 
 // ═════════════════════════════════════════════════════════
 // main
@@ -359,6 +595,34 @@ int main(int argc, char* argv[]) {
                          prep.blockFilePath, prep.blocks,
                          oocCfg.atomsPerBlock, oocCfg.maxRequestsPerFrame);
 
+    cudaDeviceSynchronize();
+    size_t vramOocPipe = oocPipelineGpuDeviceBytes(gpu, oocCfg.maxRequestsPerFrame);
+    size_t vramStream  = streamMgr.deviceMemoryBytes();
+    size_t vramDepth =
+        static_cast<size_t>(screenWidth) * static_cast<size_t>(screenHeight) *
+        sizeof(unsigned int);
+    size_t vramHiz = 0;
+    if (useHiz && hizBuffer.isValid()) {
+        vramHiz = static_cast<size_t>(hizWidth) * static_cast<size_t>(hizHeight) *
+                  sizeof(float);
+    }
+    size_t vramColorEst = static_cast<size_t>(screenWidth) *
+                          static_cast<size_t>(screenHeight) * 4ull;
+
+    size_t cudaFree = 0, cudaTotal = 0;
+    cudaMemGetInfo(&cudaFree, &cudaTotal);
+
+    const size_t vramSumEst = vramOocPipe + vramStream + vramDepth + vramHiz + vramColorEst;
+    std::cout << "[OOC] VRAM (estimated device buffers): pipeline=" << vramOocPipe
+              << " B, streaming=" << vramStream << " B, depth=" << vramDepth
+              << " B, HiZ=" << vramHiz << " B, color~RGBA8=" << vramColorEst
+              << " B, sum=" << vramSumEst << " B" << std::endl;
+    std::cout << "[OOC] cudaMemGetInfo: free=" << cudaFree << " total=" << cudaTotal << std::endl;
+
+    appendOocPreprocessAndVramCsv(
+        settings.oocPreprocessStatsCsvPath, settings, actualAtomCount, prep,
+        vramOocPipe, vramStream, vramDepth, vramHiz, vramColorEst, cudaFree, cudaTotal);
+
     // ── Benchmark / profiler ──
     Benchmark benchmark(cameraController, checkpoints);
     int visibleAtoms = 0, drawnAtoms = 0;
@@ -377,10 +641,12 @@ int main(int argc, char* argv[]) {
         {"Pool slots",     &poolSlots},
         {"Occlusion method", &oocMethodInt}
     };
+    float oocVisibilityThresholdUi = oocCfg.visibilityThreshold;
     window.setupSceneInfoGui("Scene Info", sceneData);
     window.setupCameraGui("Camera Info", &camera);
     window.setupInputInfoGui("Input Info");
     window.setupBenchmarkInfoGui("Benchmark", &benchmark);
+    window.setupOocTuningGui("Out-of-core", oocVisibilityThresholdUi);
 
     // ── CUDA streams ──
     cudaStream_t renderStream, uploadStream;
@@ -410,12 +676,22 @@ int main(int argc, char* argv[]) {
 
     uint64_t frameId = 0;
 
+    OocStatsBatchAccumulator oocStats;
+    oocStats.batchSize   = settings.oocStatsAccumulateFrames;
+    oocStats.csvPath     = settings.oocStatsCsvPath;
+    oocStats.sceneType   = settings.sceneType;
+    oocStats.sphereCount = sphereCount;
+    oocStats.totalBlocks = totalBlocks;
+    oocStats.poolSlots   = poolSlots;
+
     // ── Render loop ──
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
     bool isRunning = true;
 
     while (isRunning)
     {
+        const auto frameT0 = std::chrono::high_resolution_clock::now();
+        drawnAtoms = 0;
         cameraController.cameraUpdate();
         benchmark.update();
         profiler.updateProfiler(benchmark.getCheckpointID(),
@@ -442,7 +718,7 @@ int main(int argc, char* argv[]) {
         cst.fov           = camera.getFov();
         cst.totalBlocks   = totalBlocks;
         cst.octreeNodeCount = gpu.maxOctreeNodes;
-        cst.visibilityThreshold = oocCfg.visibilityThreshold;
+        cst.visibilityThreshold = std::max(oocVisibilityThresholdUi, 1e-6f);
         cst.maxPoolSlots  = poolSlots;
         cst.atomsPerBlock = oocCfg.atomsPerBlock;
         cst.occlusionMethod = static_cast<int>(oocCfg.occlusionMethod);
@@ -674,14 +950,20 @@ int main(int argc, char* argv[]) {
                 cudaStreamSynchronize(renderStream);
                 nvtxRangePop(); // Build Active Atom List
                 activeCount = *h_activeCount;
-                drawnAtoms = static_cast<int>(activeCount);
 
                 if (activeCount > 0) {
                     nvtxRangePushA("Sphere Raster OOC");
+                    cudaMemsetAsync(gpu.d_rasterAtomCount, 0, sizeof(unsigned int),
+                                    renderStream);
                     launchSphereRasterOoc(
                         gpu.d_activeAtoms, activeCount,
-                        depthBuffer, outputSurface, renderStream);
+                        depthBuffer, outputSurface,
+                        gpu.d_rasterAtomCount, renderStream);
                     cudaStreamSynchronize(renderStream);
+                    unsigned int rasterSubmitted = 0;
+                    cudaMemcpy(&rasterSubmitted, gpu.d_rasterAtomCount,
+                               sizeof(unsigned int), cudaMemcpyDeviceToHost);
+                    drawnAtoms = static_cast<int>(rasterSubmitted);
                     nvtxRangePop();
                 }
             }
@@ -700,7 +982,8 @@ int main(int argc, char* argv[]) {
         {
             std::cout << "[OOC] Frame " << frameId
                       << " visible=" << numVisible << " filtered=" << numFiltered
-                      << " requests=" << numRequests << " active=" << activeCount << std::endl;
+                      << " requests=" << numRequests << " active_list=" << activeCount
+                      << " raster_atoms=" << drawnAtoms << std::endl;
         }
 
         // Ensure upload stream finished before swapping buffers
@@ -714,8 +997,17 @@ int main(int argc, char* argv[]) {
         glBindFramebuffer(GL_READ_FRAMEBUFFER, canvas.getFramebuffer().getId());
         isRunning = window.update();
         glFinish();
+
+        const auto frameT1 = std::chrono::high_resolution_clock::now();
+        const double frameMs =
+            std::chrono::duration<double, std::milli>(frameT1 - frameT0).count();
+        oocStats.addFrame(numVisible, numFiltered, numRequests,
+                          static_cast<uint32_t>(std::max(0, drawnAtoms)), frameMs, frameId);
+        oocStats.flushCompleteBatch();
         frameId++;
     }
+
+    oocStats.flushPartialIfAny();
 
     // ── Cleanup ──
     cudaStreamDestroy(renderStream);

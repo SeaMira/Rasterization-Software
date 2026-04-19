@@ -303,6 +303,11 @@ void Window::setupPipelineConfigGui(std::string name,
     m_ui->addPipelineConfigComponent(name, smallThreshold, tileSize, maxEntitiesPerTile, tilesX, tilesY);
 }
 
+void Window::setupOocTuningGui(std::string name, float& visibilityThreshold)
+{
+    m_ui->addOocTuningComponent(std::move(name), visibilityThreshold);
+}
+
 void Window::startRenderImGui() const
 {
     ImGui_ImplSDL3_NewFrame();

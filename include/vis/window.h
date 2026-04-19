@@ -201,6 +201,9 @@ class Window
                                         int& tilesX,
                                         int& tilesY);
 
+    /** Out-of-core: slider bound to `visibility_threshold` uploaded to CUDA each frame. */
+    virtual void setupOocTuningGui(std::string name, float& visibilityThreshold);
+
     /**
      * @brief Start the ImGUI renderer.
      * 

@@ -62,8 +62,16 @@ struct SceneSettings
     int oocMaxBlockPoolSlots   = 2048;
     int oocMaxRequestsPerFrame = 256;
     float oocVisibilityThreshold = 0.01f;
-    // "none", "probabilistic", "probabilistic_overlap", "hiz"
+    // "none", "probabilistic", "probabilistic_overlap", "hiz", "hiz_probabilistic"
     std::string oocOcclusionMethod = "none";
+
+    /** If > 0, accumulate OOC metrics over this many frames, then append one CSV row. */
+    int oocStatsAccumulateFrames = 0;
+    /** Output path for batch statistics (append mode). */
+    std::string oocStatsCsvPath = "media/csv/cuda_outofcore/ooc_stats_batch.csv";
+
+    /** If non-empty, append one CSV row with preprocess timings, host sizes, and estimated VRAM after init. */
+    std::string oocPreprocessStatsCsvPath = "media/csv/cuda_outofcore/ooc_preprocess_metrics.csv";
 
     /**
      * @brief Gets the full path to the scene file.

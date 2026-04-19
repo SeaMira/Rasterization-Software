@@ -11,6 +11,7 @@
 #include "ui/components/input_info.h"
 #include "ui/components/benchmark_info.h"
 #include "ui/components/pipeline_config.h"
+#include "ui/components/ooc_tuning.h"
 
 /**
  * @class AppUI
@@ -68,6 +69,9 @@ public:
                                     int& maxEntitiesPerTile,
                                     int& tilesX,
                                     int& tilesY);
+
+    /** Out-of-core: live `visibility_threshold` for GPU kernels. */
+    void addOocTuningComponent(std::string name, float& visibilityThreshold);
 
     /**
      * @brief Renders the UI app by rendering all its associated components.

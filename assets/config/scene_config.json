@@ -44,6 +44,9 @@
     "max_block_pool_slots": 2048,
     "max_requests_per_frame": 256,
     "visibility_threshold": 0.01,
-    "occlusion_method": "hiz_probabilistic"
+    "occlusion_method": "hiz_probabilistic",
+    "stats_accumulate_frames": 0,
+    "stats_csv_path": "media/csv/cuda_outofcore/ooc_stats_batch.csv",
+    "preprocess_stats_csv_path": "media/csv/cuda_outofcore/ooc_preprocess_metrics.csv"
   }
 }

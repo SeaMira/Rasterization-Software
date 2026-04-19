@@ -206,6 +206,9 @@ SceneSettings SceneConfigLoader::loadFromFile(const std::string& configPath)
         settings.oocMaxRequestsPerFrame = parseInt(oocSection, "max_requests_per_frame", settings.oocMaxRequestsPerFrame);
         settings.oocVisibilityThreshold = parseFloat(oocSection, "visibility_threshold", settings.oocVisibilityThreshold);
         settings.oocOcclusionMethod     = parseString(oocSection, "occlusion_method", settings.oocOcclusionMethod);
+        settings.oocStatsAccumulateFrames = parseInt(oocSection, "stats_accumulate_frames", settings.oocStatsAccumulateFrames);
+        settings.oocStatsCsvPath          = parseString(oocSection, "stats_csv_path", settings.oocStatsCsvPath);
+        settings.oocPreprocessStatsCsvPath = parseString(oocSection, "preprocess_stats_csv_path", settings.oocPreprocessStatsCsvPath);
     }
 
     std::cout << "Configuration loaded successfully." << std::endl;
@@ -331,7 +334,10 @@ void SceneConfigLoader::saveToFile(const SceneSettings& settings, const std::str
     file << "        \"max_block_pool_slots\": " << settings.oocMaxBlockPoolSlots << ",\n";
     file << "        \"max_requests_per_frame\": " << settings.oocMaxRequestsPerFrame << ",\n";
     file << "        \"visibility_threshold\": " << settings.oocVisibilityThreshold << ",\n";
-    file << "        \"occlusion_method\": \"" << settings.oocOcclusionMethod << "\"\n";
+    file << "        \"occlusion_method\": \"" << settings.oocOcclusionMethod << "\",\n";
+    file << "        \"stats_accumulate_frames\": " << settings.oocStatsAccumulateFrames << ",\n";
+    file << "        \"stats_csv_path\": \"" << settings.oocStatsCsvPath << "\",\n";
+    file << "        \"preprocess_stats_csv_path\": \"" << settings.oocPreprocessStatsCsvPath << "\"\n";
     file << "    }\n";
 
     file << "}\n";

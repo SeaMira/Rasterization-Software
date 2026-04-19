@@ -15,6 +15,22 @@
 
 namespace ooc {
 
+/** Timing and size snapshot for the one-shot preprocess (CPU + block file on disk). */
+struct PreprocessMetrics {
+    /** AABB, Morton codes, sort by Morton, reorder atoms into `sortedAtoms`. */
+    double   msMortonPipeline = 0.0;
+    /** Partition into blocks, per-block AABB, write `block_data.bin`. */
+    double   msBlocksAndFile  = 0.0;
+    /** `buildReducedOctree` (octree + block index buffer). */
+    double   msOctreeBuild    = 0.0;
+    /** RAM of `blocks`, `octreeNodes`, `blockIndexBuffer` in `PreprocessResult` (after preprocess). */
+    size_t   hostStructuresBytes = 0;
+    /** Size of `block_data.bin` on disk (after successful write). */
+    size_t   blockFileBytes   = 0;
+    int      blockCount       = 0;
+    int      octreeNodeCount  = 0;
+};
+
 struct PreprocessResult {
     std::string                  blockFilePath;
     std::vector<OocBlockMetadata> blocks;
@@ -22,6 +38,7 @@ struct PreprocessResult {
     std::vector<uint32_t>        blockIndexBuffer;  ///< For leaves, blockRangeStart/End index here
     glm::vec3                    sceneMin;
     glm::vec3                    sceneMax;
+    PreprocessMetrics            metrics;
 };
 
 /**
