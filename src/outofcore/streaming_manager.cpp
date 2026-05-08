@@ -35,6 +35,11 @@ extern "C" void launchApplySlotMapUpdates(
     const int32_t* d_slots, unsigned int numUpdates,
     cudaStream_t stream);
 
+extern "C" void launchCopySlotsBetweenPools(
+    const glm::vec4* srcPool, glm::vec4* dstPool,
+    const int32_t* d_slotIds, unsigned int numSlots,
+    int atomsPerBlock, cudaStream_t stream);
+
 namespace ooc {
 
 StreamingManager::~StreamingManager()
@@ -51,7 +56,6 @@ void StreamingManager::initialize(int numSlots,
 {
     m_pool.numSlots       = numSlots;
     m_totalBlocks         = totalBlocks;
-    m_blockFilePath       = blockFilePath;
     m_blockMeta           = blockMeta;
     m_atomsPerBlock       = atomsPerBlock;
     m_maxRequestsPerFrame = maxRequestsPerFrame;
@@ -83,6 +87,17 @@ void StreamingManager::initialize(int numSlots,
     OOC_CUDA_CHECK(cudaMalloc(&m_d_slotMapBlockIds, m_maxRequestsPerFrame * 2 * sizeof(uint32_t)));
     OOC_CUDA_CHECK(cudaMalloc(&m_d_slotMapSlots,    m_maxRequestsPerFrame * 2 * sizeof(int32_t)));
 
+    // Phase 1: GPU buffer for delta slot IDs (incremental pool copy)
+    OOC_CUDA_CHECK(cudaMalloc(&m_d_deltaSlotIds, m_maxRequestsPerFrame * sizeof(int32_t)));
+
+    // Phase 5: Open persistent file reader + allocate read buffer
+    m_fileReader.open(blockFilePath);
+    m_readBuffer = new glm::vec4[m_atomsPerBlock];
+
+    // Phase 4: Initialize LRU set with all slots as free (timestamp 0)
+    m_lruSet.clear();
+    // Slots will be added to m_lruSet as they become valid
+
     std::cout << "[OOC] StreamingManager: " << numSlots << " slots, "
               << totalBlocks << " blocks, pool = "
               << (atomPoolBytes / (1024 * 1024)) << " MB per buffer." << std::endl;
@@ -103,7 +118,8 @@ size_t StreamingManager::deviceMemoryBytes() const
     const size_t scatter =
         mr * sizeof(unsigned int) + mr * sizeof(int32_t) + mr * sizeof(unsigned int) +
         mr * 2u * sizeof(uint32_t) + mr * 2u * sizeof(int32_t);
-    return pools + dStaging + scatter;
+    const size_t deltaSlotBuf = mr * sizeof(int32_t); // m_d_deltaSlotIds
+    return pools + dStaging + scatter + deltaSlotBuf;
 }
 
 void StreamingManager::destroy()
@@ -119,23 +135,26 @@ void StreamingManager::destroy()
     if (m_d_atomCounts)        { cudaFree(m_d_atomCounts);            m_d_atomCounts = nullptr; }
     if (m_d_slotMapBlockIds)   { cudaFree(m_d_slotMapBlockIds);       m_d_slotMapBlockIds = nullptr; }
     if (m_d_slotMapSlots)      { cudaFree(m_d_slotMapSlots);          m_d_slotMapSlots = nullptr; }
+    if (m_d_deltaSlotIds)      { cudaFree(m_d_deltaSlotIds);          m_d_deltaSlotIds = nullptr; }
+    // Phase 5: close persistent reader + free read buffer
+    m_fileReader.close();
+    delete[] m_readBuffer; m_readBuffer = nullptr;
+    // Phase 4: clear LRU
+    m_lruSet.clear();
 }
 
-int StreamingManager::findEvictionSlot(int bufIdx, uint64_t currentFrame) const {
-    int best = -1;
-    uint64_t oldest = currentFrame + 1;
-
-    for (int s = 0; s < m_pool.numSlots; s++)
-    {
+int StreamingManager::findEvictionSlot(int bufIdx, uint64_t /*currentFrame*/) const {
+    // Phase 4: O(log N) eviction via LRU set.
+    // First check for any invalid (free) slot — O(N) but only on cold start.
+    for (int s = 0; s < m_pool.numSlots; s++) {
         if (!m_cpuSlots[bufIdx][s].valid)
             return s;
-        if (m_cpuSlots[bufIdx][s].lastUsedFrame < oldest)
-        {
-            oldest = m_cpuSlots[bufIdx][s].lastUsedFrame;
-            best = s;
-        }
     }
-    return best;
+    // All slots valid → evict LRU from ordered set (O(1) lookup, O(log N) erase)
+    if (!m_lruSet.empty()) {
+        return m_lruSet.begin()->second; // slot with oldest timestamp
+    }
+    return -1;
 }
 
 void StreamingManager::processRequests(const uint32_t* h_requestBuffer,
@@ -149,25 +168,56 @@ void StreamingManager::processRequests(const uint32_t* h_requestBuffer,
     auto& slots  = m_cpuSlots[writeBuf];
     int readBuf  = m_pool.activeBuffer;
 
+    // ── Phase 1: Delta copy instead of full pool copy ──
+    // The write buffer is stale by one frame. Instead of copying the
+    // entire atom pool (~16 MB) and slot map, we replay ONLY the deltas
+    // from the previous frame's processRequests. First frame has empty
+    // deltas → both buffers are already identical (zeroed in initialize).
     slots = m_cpuSlots[readBuf];
-    OOC_CUDA_CHECK(cudaMemcpyAsync(
-        m_pool.d_blockSlotMap[writeBuf],
-        m_pool.d_blockSlotMap[readBuf],
-        static_cast<size_t>(m_totalBlocks) * sizeof(int32_t),
-        cudaMemcpyDeviceToDevice, uploadStream));
-    OOC_CUDA_CHECK(cudaMemcpyAsync(
-        m_pool.d_atomPool[writeBuf],
-        m_pool.d_atomPool[readBuf],
-        static_cast<size_t>(m_pool.numSlots) * m_atomsPerBlock * sizeof(glm::vec4),
-        cudaMemcpyDeviceToDevice, uploadStream));
 
-    std::unordered_set<uint32_t> usedBlockSet(h_usedBlockIds, h_usedBlockIds + usedCount);
-    for (int s = 0; s < m_pool.numSlots; s++) 
-    {
-        if (slots[s].valid && usedBlockSet.count(slots[s].blockId))
-            slots[s].lastUsedFrame = currentFrame;
+    uint32_t numDeltaSlots = static_cast<uint32_t>(m_prevDeltaSlots.size());
+    if (numDeltaSlots > 0) {
+        // Copy only the modified slot atom data from read → write
+        OOC_CUDA_CHECK(cudaMemcpyAsync(
+            m_d_deltaSlotIds, m_prevDeltaSlots.data(),
+            numDeltaSlots * sizeof(int32_t),
+            cudaMemcpyHostToDevice, uploadStream));
+        launchCopySlotsBetweenPools(
+            m_pool.d_atomPool[readBuf], m_pool.d_atomPool[writeBuf],
+            m_d_deltaSlotIds, numDeltaSlots,
+            m_atomsPerBlock, uploadStream);
     }
 
+    uint32_t numDeltaMap = static_cast<uint32_t>(m_prevDeltaMapBlockIds.size());
+    if (numDeltaMap > 0) {
+        // Replay slot map changes from previous frame
+        OOC_CUDA_CHECK(cudaMemcpyAsync(
+            m_d_slotMapBlockIds, m_prevDeltaMapBlockIds.data(),
+            numDeltaMap * sizeof(uint32_t),
+            cudaMemcpyHostToDevice, uploadStream));
+        OOC_CUDA_CHECK(cudaMemcpyAsync(
+            m_d_slotMapSlots, m_prevDeltaMapSlotIds.data(),
+            numDeltaMap * sizeof(int32_t),
+            cudaMemcpyHostToDevice, uploadStream));
+        launchApplySlotMapUpdates(
+            m_pool.d_blockSlotMap[writeBuf], m_d_slotMapBlockIds,
+            m_d_slotMapSlots, numDeltaMap, uploadStream);
+    }
+
+    // ── LRU timestamp refresh for blocks used this frame ──
+    // Phase 4: also update LRU set entries
+    std::unordered_set<uint32_t> usedBlockSet(h_usedBlockIds, h_usedBlockIds + usedCount);
+    for (int s = 0; s < m_pool.numSlots; s++)
+    {
+        if (slots[s].valid && usedBlockSet.count(slots[s].blockId)) {
+            // Phase 4: update LRU set — remove old entry, insert new timestamp
+            m_lruSet.erase({slots[s].lastUsedFrame, s});
+            slots[s].lastUsedFrame = currentFrame;
+            m_lruSet.insert({currentFrame, s});
+        }
+    }
+
+    // ── Prepare upload batch (same as before) ──
     std::vector<unsigned int> slotOffsets;
     std::vector<int32_t>      slotIds;
     std::vector<unsigned int> atomCounts;
@@ -207,23 +257,25 @@ void StreamingManager::processRequests(const uint32_t* h_requestBuffer,
         if (slot < 0) break;
 
         if (slots[slot].valid) {
+            // Phase 4: remove evicted slot from LRU set
+            m_lruSet.erase({slots[slot].lastUsedFrame, slot});
             slotMapBlockIds.push_back(slots[slot].blockId);
             slotMapSlots.push_back(-1);
         }
 
-        std::vector<glm::vec4> atomData;
-        if (!readBlock(m_blockFilePath, m_blockMeta[blockId], atomData))
-        {
-            std::cerr << "[OOC] readBlock FAILED for block " << blockId
-            << " path=" << m_blockFilePath << std::endl;
+        // Phase 5: read directly into staging buffer via persistent reader
+        // (no std::vector allocation, no fopen/fclose per block)
+        uint32_t count = m_fileReader.readBlockDirect(
+            m_blockMeta[blockId], m_readBuffer);
+        if (count == 0) {
+            std::cerr << "[OOC] readBlockDirect FAILED for block " << blockId << std::endl;
             continue;
         }
 
-        size_t count = atomData.size();
         if (stagingOffset + count > (m_stagingCapacity / sizeof(glm::vec4)))
             break;
 
-        std::memcpy(m_h_stagingBuffer + stagingOffset, atomData.data(),
+        std::memcpy(m_h_stagingBuffer + stagingOffset, m_readBuffer,
                     count * sizeof(glm::vec4));
 
         slotOffsets.push_back(static_cast<unsigned int>(stagingOffset));
@@ -237,11 +289,27 @@ void StreamingManager::processRequests(const uint32_t* h_requestBuffer,
         slots[slot].lastUsedFrame = currentFrame;
         slots[slot].valid         = true;
         loadedBlockSet.insert(blockId);
+        // Phase 4: insert new slot into LRU set
+        m_lruSet.insert({currentFrame, slot});
     }
+
+    // ── Record deltas for next frame's incremental copy ──
+    m_prevDeltaSlots.clear();
+    m_prevDeltaMapBlockIds.clear();
+    m_prevDeltaMapSlotIds.clear();
 
     uint32_t numUploads = static_cast<uint32_t>(slotOffsets.size());
     if (numUploads == 0) return;
 
+    // Track which slots are being modified this frame
+    m_prevDeltaSlots.reserve(numUploads);
+    for (uint32_t i = 0; i < numUploads; i++)
+        m_prevDeltaSlots.push_back(slotIds[i]);
+
+    m_prevDeltaMapBlockIds = slotMapBlockIds;
+    m_prevDeltaMapSlotIds  = slotMapSlots;
+
+    // ── Upload batch to GPU ──
     size_t totalAtoms = stagingOffset;
     OOC_CUDA_CHECK(cudaMemcpyAsync(
         m_d_stagingBuffer,

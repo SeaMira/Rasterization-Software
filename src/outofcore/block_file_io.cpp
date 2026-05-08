@@ -104,4 +104,43 @@ bool readBlock(const std::string& path,
     return true;
 }
 
+// ─────────────────── Phase 5: Persistent BlockFileReader ───────────────────
+
+BlockFileReader::~BlockFileReader() { close(); }
+
+bool BlockFileReader::open(const std::string& path) {
+    close();
+    m_file = fopen(path.c_str(), "rb");
+    if (!m_file) {
+        std::cerr << "[OOC] BlockFileReader: failed to open " << path << std::endl;
+        return false;
+    }
+    return true;
+}
+
+void BlockFileReader::close() {
+    if (m_file) { fclose(m_file); m_file = nullptr; }
+}
+
+uint32_t BlockFileReader::readBlockDirect(const OocBlockMetadata& meta,
+                                           glm::vec4* outBuffer)
+{
+    if (!m_file) return 0;
+
+#ifdef _MSC_VER
+    _fseeki64(m_file, static_cast<__int64>(meta.fileOffset), SEEK_SET);
+#else
+    fseeko(m_file, static_cast<off_t>(meta.fileOffset), SEEK_SET);
+#endif
+
+    glm::vec3 aabbMin, aabbMax;
+    uint32_t count;
+    if (fread(&aabbMin, sizeof(glm::vec3), 1, m_file) != 1) return 0;
+    if (fread(&aabbMax, sizeof(glm::vec3), 1, m_file) != 1) return 0;
+    if (fread(&count,   sizeof(uint32_t),  1, m_file) != 1) return 0;
+
+    if (fread(outBuffer, sizeof(glm::vec4), count, m_file) != count) return 0;
+    return count;
+}
+
 } // namespace ooc

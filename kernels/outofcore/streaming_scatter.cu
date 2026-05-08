@@ -78,3 +78,44 @@ extern "C" void launchApplySlotMapUpdates(
     applySlotMapUpdatesKernel<<<grid, block, 0, stream>>>(
         d_blockSlotMap, d_blockIds, d_slots, numUpdates);
 }
+
+// ═════════════════════════════════════════════════════════
+// Phase 1 (GigaVoxels-style): Copy specific slots between
+// double-buffered pools (delta update instead of full copy)
+// ═════════════════════════════════════════════════════════
+
+__global__ void copySlotsBetweenPoolsKernel(
+    const glm::vec4* __restrict__ srcPool,
+    glm::vec4*       __restrict__ dstPool,
+    const int32_t*   __restrict__ slotIds,
+    unsigned int                  numSlots)
+{
+    unsigned int slotIdx = blockIdx.x;
+    if (slotIdx >= numSlots) return;
+
+    int32_t slot = slotIds[slotIdx];
+    const glm::vec4* src = srcPool + static_cast<size_t>(slot) * scatterAtomsPerBlock;
+    glm::vec4* dst       = dstPool + static_cast<size_t>(slot) * scatterAtomsPerBlock;
+
+    for (unsigned int i = threadIdx.x;
+         i < static_cast<unsigned int>(scatterAtomsPerBlock);
+         i += blockDim.x)
+    {
+        dst[i] = src[i];
+    }
+}
+
+extern "C" void launchCopySlotsBetweenPools(
+    const glm::vec4* srcPool,
+    glm::vec4*       dstPool,
+    const int32_t*   d_slotIds,
+    unsigned int     numSlots,
+    int              atomsPerBlock,
+    cudaStream_t     stream)
+{
+    if (numSlots == 0) return;
+    cudaMemcpyToSymbolAsync(scatterAtomsPerBlock, &atomsPerBlock, sizeof(int), 0,
+                            cudaMemcpyHostToDevice, stream);
+    copySlotsBetweenPoolsKernel<<<numSlots, 256, 0, stream>>>(
+        srcPool, dstPool, d_slotIds, numSlots);
+}

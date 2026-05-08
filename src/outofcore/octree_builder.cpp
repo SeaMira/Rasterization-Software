@@ -81,8 +81,9 @@ void buildAt(std::vector<OocOctreeNode>& nodes,
     nodes[nodeIdx].aabbMin = aabbMin;
     nodes[nodeIdx].aabbMax = aabbMax;
     nodes[nodeIdx]._pad0 = 0.0f;
-    nodes[nodeIdx]._pad1 = 0.0f;
-    std::memset(nodes[nodeIdx]._reserved, 0, sizeof(nodes[nodeIdx]._reserved));
+    nodes[nodeIdx].lodOffset = -1;
+    nodes[nodeIdx].lodCount  = 0;
+    nodes[nodeIdx]._reserved[0] = 0;
 
     if (verbose) {
         std::cout << std::endl << std::string(depth * 2, ' ')

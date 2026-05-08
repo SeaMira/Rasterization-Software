@@ -26,6 +26,8 @@ static constexpr int OOC_DEFAULT_BLOCKS_PER_LEAF       = 4;
 static constexpr int OOC_DEFAULT_MAX_BLOCK_POOL_SLOTS  = 2048;
 static constexpr int OOC_DEFAULT_MAX_REQUESTS_PER_FRAME = 256;
 static constexpr float OOC_DEFAULT_VISIBILITY_THRESHOLD = 0.01f;
+static constexpr int   OOC_DEFAULT_LOD_MAX_ATOMS_PER_NODE = 64;
+static constexpr float OOC_DEFAULT_LOD_AREA_THRESHOLD = 0.005f; ///< Projected area fraction below which LOD is used
 
 /**
  * Magic number for the binary block file header ("OOCBLKDT").
@@ -84,11 +86,12 @@ struct OocOctreeNode {
     glm::vec3 aabbMin;
     float     _pad0;
     glm::vec3 aabbMax;
-    float     _pad1;
+    int32_t   lodOffset;       ///< Offset into LOD atom buffer (-1 = no LOD)
 
     int32_t  childBaseIndex;   ///< Index of first child (-1 = leaf)
     uint8_t  childMask;        ///< Bitmask of which of the 8 octants exist
-    uint8_t  _reserved[3];
+    uint8_t  _reserved[1];
+    uint16_t lodCount;         ///< Number of LOD atoms for this node (0 = none)
 
     int32_t  blockRangeStart;  ///< First block ID in this leaf (valid when leaf)
     int32_t  blockRangeEnd;    ///< Past-the-end block ID in this leaf
@@ -126,6 +129,10 @@ struct OocConstants {
 
     float     nearPlane;
     float     farPlane;
+
+    /** LOD rendering: projected area fraction threshold for using LOD atoms. */
+    float     lodAreaThreshold;
+    int       lodTotalAtoms;     ///< Total atoms in the LOD buffer
 };
 
 // ─────────────────── Block pool slot (CPU side) ───────────────────

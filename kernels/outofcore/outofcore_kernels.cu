@@ -114,6 +114,202 @@ extern "C" void launchOctreeFrustumCullLevel(
 }
 
 // ═════════════════════════════════════════════════════════
+// Phase 2: Indirect BFS variant — reads inCount from device
+// memory, eliminating the per-level CPU sync.
+// ═════════════════════════════════════════════════════════
+
+__global__ void octreeFrustumCullLevelIndirectKernel(
+    const OocOctreeNode* __restrict__ octree,
+    const unsigned int*  __restrict__ blockIndexBuffer,
+    const unsigned int*  __restrict__ inQueue,
+    const unsigned int*  __restrict__ d_inCount,
+    unsigned int*        __restrict__ outQueue,
+    unsigned int*        __restrict__ outCount,
+    unsigned int*        __restrict__ visibleBlockIds,
+    unsigned int*        __restrict__ visibleBlockCount,
+    int                               maxVisibleBlocks)
+{
+    // Read inCount from device memory into shared memory (one read per block)
+    __shared__ unsigned int s_inCount;
+    if (threadIdx.x == 0) s_inCount = *d_inCount;
+    __syncthreads();
+
+    unsigned int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= s_inCount) return;
+
+    unsigned int nodeIdx = inQueue[idx];
+    OocOctreeNode node   = octree[nodeIdx];
+
+    if (!aabbInsideFrustum(node.aabbMin, node.aabbMax)) return;
+
+    if (node.childBaseIndex < 0)
+    {
+        for (int i = node.blockRangeStart; i < node.blockRangeEnd; i++)
+        {
+            unsigned int bid = blockIndexBuffer[i];
+            unsigned int out = atomicAdd(visibleBlockCount, 1u);
+            if (out < static_cast<unsigned int>(maxVisibleBlocks))
+                visibleBlockIds[out] = bid;
+        }
+    } else
+    {
+        int childBase = node.childBaseIndex;
+        int childIdx  = 0;
+        for (int oct = 0; oct < 8; oct++)
+        {
+            if (node.childMask & (1u << oct))
+            {
+                unsigned int out = atomicAdd(outCount, 1u);
+                outQueue[out] = static_cast<unsigned int>(childBase + childIdx);
+                childIdx++;
+            }
+        }
+    }
+}
+
+extern "C" void launchOctreeFrustumCullLevelIndirect(
+    const OocOctreeNode* d_octree,
+    const unsigned int*  d_blockIndexBuffer,
+    const unsigned int*  d_inQueue,
+    const unsigned int*  d_inCount,
+    unsigned int*        d_outQueue,
+    unsigned int*        d_outCount,
+    unsigned int*        d_visibleBlockIds,
+    unsigned int*        d_visibleBlockCount,
+    int                  maxVisibleBlocks,
+    int                  maxQueueSize,
+    cudaStream_t         stream)
+{
+    if (maxQueueSize <= 0) return;
+    dim3 block(256);
+    dim3 grid((static_cast<unsigned int>(maxQueueSize) + block.x - 1) / block.x);
+    octreeFrustumCullLevelIndirectKernel<<<grid, block, 0, stream>>>(
+        d_octree, d_blockIndexBuffer, d_inQueue, d_inCount, d_outQueue, d_outCount,
+        d_visibleBlockIds, d_visibleBlockCount, maxVisibleBlocks);
+}
+
+// ═════════════════════════════════════════════════════════
+// Phase 3: LOD-aware BFS variant — renders LOD atoms for distant
+// internal nodes instead of descending into children.
+// ═════════════════════════════════════════════════════════
+
+__device__ inline float computeNodeAreaFraction(glm::vec3 bmin, glm::vec3 bmax) {
+    float sw = static_cast<float>(oocCst.screenWidth);
+    float sh = static_cast<float>(oocCst.screenHeight);
+    glm::vec2 smin(sw, sh), smax(0.0f, 0.0f);
+
+    for (int i = 0; i < 8; i++) {
+        glm::vec3 corner;
+        corner.x = (i & 1) ? bmax.x : bmin.x;
+        corner.y = (i & 2) ? bmax.y : bmin.y;
+        corner.z = (i & 4) ? bmax.z : bmin.z;
+        glm::vec4 clip = oocCst.viewProj * glm::vec4(corner, 1.0f);
+        if (clip.w > 0.1f) {
+            float iw = 1.0f / clip.w;
+            float sx = fminf(fmaxf((clip.x * iw * 0.5f + 0.5f) * sw, 0.0f), sw);
+            float sy = fminf(fmaxf((clip.y * iw * 0.5f + 0.5f) * sh, 0.0f), sh);
+            smin.x = fminf(smin.x, sx); smin.y = fminf(smin.y, sy);
+            smax.x = fmaxf(smax.x, sx); smax.y = fmaxf(smax.y, sy);
+        }
+    }
+
+    float area = fmaxf(0.0f, smax.x - smin.x) * fmaxf(0.0f, smax.y - smin.y);
+    return area / (sw * sh);
+}
+
+__global__ void octreeFrustumCullLevelLodKernel(
+    const OocOctreeNode* __restrict__ octree,
+    const unsigned int*  __restrict__ blockIndexBuffer,
+    const unsigned int*  __restrict__ inQueue,
+    const unsigned int*  __restrict__ d_inCount,
+    unsigned int*        __restrict__ outQueue,
+    unsigned int*        __restrict__ outCount,
+    unsigned int*        __restrict__ visibleBlockIds,
+    unsigned int*        __restrict__ visibleBlockCount,
+    int                               maxVisibleBlocks,
+    const glm::vec4*     __restrict__ lodAtomBuffer,
+    glm::vec4*           __restrict__ lodActiveAtoms,
+    unsigned int*        __restrict__ lodActiveCount,
+    int                               maxLodAtoms)
+{
+    __shared__ unsigned int s_inCount;
+    if (threadIdx.x == 0) s_inCount = *d_inCount;
+    __syncthreads();
+
+    unsigned int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= s_inCount) return;
+
+    unsigned int nodeIdx = inQueue[idx];
+    OocOctreeNode node   = octree[nodeIdx];
+
+    if (!aabbInsideFrustum(node.aabbMin, node.aabbMax)) return;
+
+    if (node.childBaseIndex < 0) {
+        // Leaf: output block IDs as usual
+        for (int i = node.blockRangeStart; i < node.blockRangeEnd; i++) {
+            unsigned int bid = blockIndexBuffer[i];
+            unsigned int out = atomicAdd(visibleBlockCount, 1u);
+            if (out < static_cast<unsigned int>(maxVisibleBlocks))
+                visibleBlockIds[out] = bid;
+        }
+    } else {
+        // Internal node: check if LOD is appropriate
+        bool useLod = false;
+        if (node.lodOffset >= 0 && node.lodCount > 0 && oocCst.lodAreaThreshold > 0.0f) {
+            float areaFrac = computeNodeAreaFraction(node.aabbMin, node.aabbMax);
+            useLod = (areaFrac < oocCst.lodAreaThreshold);
+        }
+
+        if (useLod) {
+            // Render LOD atoms directly instead of descending
+            unsigned int base = atomicAdd(lodActiveCount, static_cast<unsigned int>(node.lodCount));
+            if (base + node.lodCount <= static_cast<unsigned int>(maxLodAtoms)) {
+                for (int i = 0; i < node.lodCount; i++) {
+                    lodActiveAtoms[base + i] = lodAtomBuffer[node.lodOffset + i];
+                }
+            }
+        } else {
+            // Descend to children
+            int childBase = node.childBaseIndex;
+            int childIdx  = 0;
+            for (int oct = 0; oct < 8; oct++) {
+                if (node.childMask & (1u << oct)) {
+                    unsigned int out = atomicAdd(outCount, 1u);
+                    outQueue[out] = static_cast<unsigned int>(childBase + childIdx);
+                    childIdx++;
+                }
+            }
+        }
+    }
+}
+
+extern "C" void launchOctreeFrustumCullLevelLod(
+    const OocOctreeNode* d_octree,
+    const unsigned int*  d_blockIndexBuffer,
+    const unsigned int*  d_inQueue,
+    const unsigned int*  d_inCount,
+    unsigned int*        d_outQueue,
+    unsigned int*        d_outCount,
+    unsigned int*        d_visibleBlockIds,
+    unsigned int*        d_visibleBlockCount,
+    int                  maxVisibleBlocks,
+    int                  maxQueueSize,
+    const glm::vec4*     d_lodAtomBuffer,
+    glm::vec4*           d_lodActiveAtoms,
+    unsigned int*        d_lodActiveCount,
+    int                  maxLodAtoms,
+    cudaStream_t         stream)
+{
+    if (maxQueueSize <= 0) return;
+    dim3 block(256);
+    dim3 grid((static_cast<unsigned int>(maxQueueSize) + block.x - 1) / block.x);
+    octreeFrustumCullLevelLodKernel<<<grid, block, 0, stream>>>(
+        d_octree, d_blockIndexBuffer, d_inQueue, d_inCount, d_outQueue, d_outCount,
+        d_visibleBlockIds, d_visibleBlockCount, maxVisibleBlocks,
+        d_lodAtomBuffer, d_lodActiveAtoms, d_lodActiveCount, maxLodAtoms);
+}
+
+// ═════════════════════════════════════════════════════════
 // Kernel 2: Compute block depth, projected AABB rect, real density,
 //           and min NDC depth for HiZ
 // ═════════════════════════════════════════════════════════

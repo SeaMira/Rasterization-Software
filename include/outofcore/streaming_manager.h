@@ -5,6 +5,12 @@
  * Coordinates GPU request readback, LRU eviction, disk I/O, and async
  * cudaMemcpy uploads. Inspired by the LRU brick cache in GigaVoxels
  * (Crassin et al. 2009).
+ *
+ * --- Phase 1 optimisation (GigaVoxels-style incremental updates) ---
+ * Instead of copying the ENTIRE atom pool + slot map between double buffers
+ * every frame (~16 MB D2D), we track which slots changed in the previous
+ * frame and replay ONLY those deltas.  This reduces the D2D bandwidth from
+ * O(poolSize) to O(numUploadsLastFrame), typically <2 MB.
  */
 
 #ifndef OOC_STREAMING_MANAGER_H
@@ -12,11 +18,13 @@
 
 #include <string>
 #include <vector>
+#include <set>
 #include <cstdint>
 #include <cuda_runtime.h>
 #include <glm/glm.hpp>
 
 #include "outofcore/outofcore_types.h"
+#include "outofcore/block_file_io.h"
 
 namespace ooc {
 
@@ -95,10 +103,17 @@ private:
     DoubleBufferedPool              m_pool;
     std::vector<OocBlockSlot>       m_cpuSlots[2];
     std::vector<OocBlockMetadata>   m_blockMeta;
-    std::string                     m_blockFilePath;
     int                             m_totalBlocks = 0;
     int                             m_atomsPerBlock = OOC_DEFAULT_ATOMS_PER_BLOCK;
     int                             m_maxRequestsPerFrame = OOC_DEFAULT_MAX_REQUESTS_PER_FRAME;
+
+    // Phase 5: Persistent file reader (eliminates fopen/fclose per block)
+    BlockFileReader                 m_fileReader;
+    glm::vec4*                      m_readBuffer = nullptr; ///< Pre-allocated CPU buffer (atomsPerBlock)
+
+    // Phase 4: O(log N) LRU via ordered set of (timestamp, slotId)
+    // Replaces the O(N) linear scan in findEvictionSlot.
+    std::set<std::pair<uint64_t, int>> m_lruSet;
 
     // Batched upload: pinned staging buffer + GPU staging
     glm::vec4*  m_h_stagingBuffer = nullptr;
@@ -111,6 +126,16 @@ private:
     unsigned int* m_d_atomCounts  = nullptr;
     uint32_t*     m_d_slotMapBlockIds = nullptr;
     int32_t*      m_d_slotMapSlots    = nullptr;
+
+    // ── Phase 1: Delta tracking for incremental pool updates ──
+    // Instead of full D2D pool copy, we replay only the deltas from the
+    // previous frame.  Each frame records which slots were modified; the
+    // next frame copies ONLY those slots from read→write before applying
+    // new uploads (GigaVoxels brick-cache style).
+    std::vector<int32_t>  m_prevDeltaSlots;       ///< Slot IDs modified last frame (atom data)
+    std::vector<uint32_t> m_prevDeltaMapBlockIds;  ///< Slot-map blockIds changed last frame
+    std::vector<int32_t>  m_prevDeltaMapSlotIds;   ///< Slot-map slot values changed last frame
+    int32_t*              m_d_deltaSlotIds = nullptr; ///< GPU buffer for delta slot IDs
 
     int findEvictionSlot(int bufIdx, uint64_t currentFrame) const;
 };

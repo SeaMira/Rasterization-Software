@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file tiled_raster_binning.cu
  * @brief Work-group expansion from RLE + unified tiled rasterization.
  * After sort+RLE, each tile's entities are split into work groups of SHARED_BATCH.
@@ -163,14 +163,20 @@ __global__ void tiledSphereRasterWGKernel(
 
     for (unsigned int i = 0; i < entityCount; i++) {
         glm::vec4 posR = shPosR[i];
-        float t = iSphereTiled(hybridCst.cameraPos, rd, glm::vec3(posR), posR.w);
+        // Sub-pixel anti-alias clamp: ensure the closest pixel center is
+        // always within `effRadius` of the sphere center, even for spheres
+        // smaller than a pixel at this depth.
+        glm::vec3 sphereCenter = glm::vec3(posR);
+        float distToSphere = glm::length(sphereCenter - hybridCst.cameraPos);
+        float effRadius = fmaxf(posR.w, 0.7071f * distToSphere * hybridCst.pxScale);
+        float t = iSphereTiled(hybridCst.cameraPos, rd, sphereCenter, effRadius);
         if (t > 0.0f) {
             glm::vec3 hit = ray * t;
             float depth = __fdividef(fmaf(hit.z, proj22, proj32), -hit.z);
             
             if (depth < finalDepth) {
                 hasHit = true;
-                glm::vec3 normal = fastNormalize(hybridCst.cameraPos + rd * t - glm::vec3(posR));
+                glm::vec3 normal = fastNormalize(hybridCst.cameraPos + rd * t - sphereCenter);
                 float lambert = fmaxf(0.0f, glm::dot(normal, -rd));
                 finalColor = glm::vec3(atomsColor[0], atomsColor[1], atomsColor[2]) * lambert * diffuse;
                 finalDepth = depth;
@@ -241,7 +247,14 @@ __global__ void tiledCylinderRasterWGKernel(
     for (unsigned int i = 0; i < entityCount; i++) {
         glm::vec3 pa = glm::vec3(shPa[i]), pb = glm::vec3(shPb[i]);
         float ra = shPa[i].w;
-        glm::vec4 tnor = iCylinderTiled(hybridCst.cameraPos, rd, pa, pb, ra);
+        // Sub-pixel anti-alias clamp on the tube radius. Use the farther
+        // endpoint so that even the thinnest visible part of the cylinder
+        // covers at least the diagonal half-pixel.
+        float dPa = glm::length(pa - hybridCst.cameraPos);
+        float dPb = glm::length(pb - hybridCst.cameraPos);
+        float dFar = fmaxf(dPa, dPb);
+        float effRa = fmaxf(ra, 0.7071f * dFar * hybridCst.pxScale);
+        glm::vec4 tnor = iCylinderTiled(hybridCst.cameraPos, rd, pa, pb, effRa);
         if (tnor.x > 0.0f) {
             float t = tnor.x;
             glm::vec3 hit = ray * t;

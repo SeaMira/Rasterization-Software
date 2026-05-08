@@ -15,6 +15,7 @@
 #ifndef OOC_BLOCK_FILE_IO_H
 #define OOC_BLOCK_FILE_IO_H
 
+#include <cstdio>
 #include <string>
 #include <vector>
 #include <glm/glm.hpp>
@@ -24,14 +25,6 @@ namespace ooc {
 
 /**
  * Write sorted atoms to a block file and populate block metadata.
- *
- * @param path       Output file path.
- * @param atoms      Sorted atom array (x,y,z,radius).
- * @param numAtoms   Total atom count.
- * @param sceneMin   Scene AABB minimum.
- * @param sceneMax   Scene AABB maximum.
- * @param[out] blocks Vector filled with metadata for every block written.
- * @return true on success.
  */
 bool writeBlockFile(const std::string& path,
                     const glm::vec4* atoms,
@@ -43,15 +36,42 @@ bool writeBlockFile(const std::string& path,
 
 /**
  * Read a single block's atom data from a previously written file.
- *
- * @param path   Block file path.
- * @param meta   Metadata for the block to read.
- * @param[out] outAtoms Atom data.
- * @return true on success.
+ * (Legacy — opens/closes file per call. Prefer BlockFileReader.)
  */
 bool readBlock(const std::string& path,
                const OocBlockMetadata& meta,
                std::vector<glm::vec4>& outAtoms);
+
+// ─────────────────────────────────────────────────────────
+// Phase 5: Persistent file reader — keeps file handle open
+// across all block reads within a session, eliminating
+// fopen/fclose overhead (~256 calls/frame → 0).
+// ─────────────────────────────────────────────────────────
+
+class BlockFileReader {
+public:
+    BlockFileReader() = default;
+    ~BlockFileReader();
+
+    BlockFileReader(const BlockFileReader&) = delete;
+    BlockFileReader& operator=(const BlockFileReader&) = delete;
+
+    bool open(const std::string& path);
+    void close();
+    bool isOpen() const { return m_file != nullptr; }
+
+    /**
+     * Read a block's atoms directly into a caller-owned buffer.
+     * No heap allocation — writes directly to outBuffer.
+     * @param meta      Block metadata (file offset, atom count).
+     * @param outBuffer Pre-allocated buffer (must hold at least meta.atomCount vec4s).
+     * @return Atom count actually read, or 0 on failure.
+     */
+    uint32_t readBlockDirect(const OocBlockMetadata& meta, glm::vec4* outBuffer);
+
+private:
+    FILE* m_file = nullptr;
+};
 
 } // namespace ooc
 

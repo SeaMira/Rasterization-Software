@@ -142,6 +142,7 @@ public:
             constants.rayStart = wCorner00;
             constants.dx = (wCorner10 - wCorner00) / (float)m_config.screenWidth;
             constants.dy = (wCorner01 - wCorner00) / (float)m_config.screenHeight;
+            constants.pxScale = 2.0f * fovTan / (float)m_config.screenHeight;
         }
 
         nvtxRangePushA("Upload Constants");

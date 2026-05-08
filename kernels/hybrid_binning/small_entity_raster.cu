@@ -117,20 +117,59 @@ __global__ void smallSphereRasterKernel(
     int screenMaxX = min(hybridCst.screenWidth,  __float2int_ru(fmaf(maxC.x, 0.5f, 0.5f) * hybridCst.screenWidth));
     int screenMaxY = min(hybridCst.screenHeight, __float2int_ru(fmaf(maxC.y, 0.5f, 0.5f) * hybridCst.screenHeight));
 
+    const float proj22 = hybridCst.proj[2][2];
+    const float proj32 = hybridCst.proj[3][2];
 
-    float difx = float(screenMaxX - screenMinX);
-    float dify = float(screenMaxY - screenMinY);
-    if (difx * dify <= 2.0f) return;
+    const int difx = screenMaxX - screenMinX;
+    const int dify = screenMaxY - screenMinY;
 
-    float proj22 = hybridCst.proj[2][2];
-    float proj32 = hybridCst.proj[3][2];
+    // ---- Point fallback for sub-pixel spheres ---------------------------
+    // Single-ray-per-pixel sampling produces concentric-ring moire when the
+    // sphere is smaller than a pixel: the ray may miss the sphere depending
+    // on sub-pixel alignment. For tiny bboxes we draw the projected center
+    // pixel directly with the sphere's center depth.
+    if (difx <= 1 && dify <= 1) {
+        glm::vec4 centerClip = hybridCst.proj * camSpace4;
+        if (centerClip.w > 1e-6f) {
+            float invW = __fdividef(1.0f, centerClip.w);
+            float ndcX = centerClip.x * invW;
+            float ndcY = centerClip.y * invW;
+            float ndcZ = centerClip.z * invW;
+            int px = __float2int_rd(fmaf(ndcX, 0.5f, 0.5f) * hybridCst.screenWidth);
+            int py = __float2int_rd(fmaf(ndcY, 0.5f, 0.5f) * hybridCst.screenHeight);
+            if (px >= 0 && px < hybridCst.screenWidth &&
+                py >= 0 && py < hybridCst.screenHeight) {
+                int pixelIdx = py * hybridCst.screenWidth + px;
+                unsigned int depthU = __float_as_uint(ndcZ);
+                unsigned int old = atomicMin(&depthBuffer[pixelIdx], depthU);
+                if (__uint_as_float(old) > ndcZ) {
+                    // Constant mid-range lambert keeps far points visually
+                    // consistent with shaded near spheres.
+                    glm::vec3 color = glm::vec3(atomsColor[0], atomsColor[1], atomsColor[2]) * 0.7f * diffuse;
+                    uchar4 ucharColor = make_uchar4(
+                        (unsigned char)(color.x * 255.0f),
+                        (unsigned char)(color.y * 255.0f),
+                        (unsigned char)(color.z * 255.0f), 255);
+                    surf2Dwrite(ucharColor, outputImage, px * sizeof(uchar4), py);
+                }
+            }
+        }
+        return;
+    }
+
+    // ---- Radius clamp for multi-pixel small spheres ---------------------
+    // Bumps the effective ray-test radius so that the closest pixel center
+    // (worst case sqrt(2)/2 px away) is guaranteed to hit. Without this,
+    // 2x2 / 2x3 / 3x2 bboxes still produce moire holes.
+    float pxSize = dist * hybridCst.pxScale;
+    float effRadius = fmaxf(radius, 0.7071f * pxSize);
 
     for (int py = screenMinY; py < screenMaxY; py++) {
         glm::vec3 rayColStart = hybridCst.rayStart + (float)py * hybridCst.dy;
         for (int px = screenMinX; px < screenMaxX; px++) {
             glm::vec3 ray = rayColStart + (float)px * hybridCst.dx;
             glm::vec3 rd = fastNormalize(ray.x * hybridCst.right + ray.y * hybridCst.up - ray.z * hybridCst.front);
-            float t = iSphere(hybridCst.cameraPos, rd, spherePos, radius);
+            float t = iSphere(hybridCst.cameraPos, rd, spherePos, effRadius);
 
             if (t > 0.0f) {
                 glm::vec3 hit = ray * t;
@@ -241,7 +280,45 @@ __global__ void smallCylinderRasterKernel(
         minX = min(minX, __float2int_rd(projectedPoints[i].x)); 
         maxX = max(maxX, __float2int_ru(projectedPoints[i].x));
     }
-    
+
+    // ---- Point fallback for sub-pixel cylinders -----------------------------
+    // Avoid concentric-ring moire from sub-pixel ray-cylinder tests by writing
+    // a single pixel at the projected midpoint when the impostor footprint is
+    // <=1x1 pixel.
+    if ((maxX - minX) <= 1 && (maxY - minY) <= 1) {
+        glm::vec3 midWorld = (pa + pb) * 0.5f;
+        glm::vec4 midClip = hybridCst.proj * hybridCst.view * glm::vec4(midWorld, 1.0f);
+        if (midClip.w > 1e-6f) {
+            float invW = __fdividef(1.0f, midClip.w);
+            float ndcX = midClip.x * invW;
+            float ndcY = midClip.y * invW;
+            float ndcZ = midClip.z * invW;
+            int ppx = __float2int_rd(fmaf(ndcX, 0.5f, 0.5f) * hybridCst.screenWidth);
+            int ppy = __float2int_rd(fmaf(ndcY, 0.5f, 0.5f) * hybridCst.screenHeight);
+            if (ppx >= 0 && ppx < hybridCst.screenWidth &&
+                ppy >= 0 && ppy < hybridCst.screenHeight) {
+                int pixelIdx = ppy * hybridCst.screenWidth + ppx;
+                unsigned int depthU = __float_as_uint(ndcZ);
+                unsigned int old = atomicMin(&depthBuffer[pixelIdx], depthU);
+                if (__uint_as_float(old) > ndcZ) {
+                    glm::vec3 color = glm::vec3(bondsColor[0], bondsColor[1], bondsColor[2]) * 0.7f * diffuse;
+                    uchar4 ucharColor = make_uchar4(
+                        (unsigned char)(color.x * 255.0f),
+                        (unsigned char)(color.y * 255.0f),
+                        (unsigned char)(color.z * 255.0f), 255);
+                    surf2Dwrite(ucharColor, outputImage, ppx * sizeof(uchar4), ppy);
+                }
+            }
+        }
+        return;
+    }
+
+    // ---- Radius clamp for sub-pixel-thick cylinders -------------------------
+    // dV1 is the FARTHER endpoint distance (post-swap). Pixel world-size at
+    // that depth bounds how thin the projected cylinder can get. The clamp
+    // guarantees the closest pixel center is always within `effRadius` of the
+    // cylinder axis, removing moire holes along the tube.
+    const float effRadius = fmaxf(radius, 0.7071f * dV1 * hybridCst.pxScale);
 
     for (int py = fminf(hybridCst.screenHeight-1, maxY); py >= fmaxf(0, minY); --py)
     {
@@ -288,7 +365,7 @@ __global__ void smallCylinderRasterKernel(
             {
                 glm::vec3 ray = rayColStart + (float)px * hybridCst.dx;
                 glm::vec3 rd = fastNormalize(ray.x * hybridCst.right + ray.y * hybridCst.up - ray.z * hybridCst.front);
-                glm::vec4 tnor = iCylinder(glm::vec3(hybridCst.cameraPos), rd, pa, pb, radius);
+                glm::vec4 tnor = iCylinder(glm::vec3(hybridCst.cameraPos), rd, pa, pb, effRadius);
                 int index = px + hybridCst.screenWidth*py;
 
                 if (tnor.x > 0.0f) {

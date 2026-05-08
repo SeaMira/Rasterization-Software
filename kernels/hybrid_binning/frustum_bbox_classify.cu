@@ -202,8 +202,11 @@ __global__ void sphereFrustumBBoxClassifyKernel(
     float width = screenMax.x - screenMin.x;
     float height = screenMax.y - screenMin.y;
     float area = width * height;
-    if (area < 1.0f) return;
-    
+    // NOTE: Sub-pixel entities are NOT discarded here. The small-entity raster
+    // uses a point-fallback (1-pixel write at the projected center) for bboxes
+    // <= 1x1 to avoid concentric-ring moire artifacts caused by single-ray-
+    // per-pixel sub-pixel sampling.
+
     if (area <= (float)hybridCst.smallEntityThreshold) 
     {
         unsigned int outIdx = atomicAdd(smallSphereCount, 1u);
@@ -215,7 +218,7 @@ __global__ void sphereFrustumBBoxClassifyKernel(
         int tileMinX = (int)(screenMin.x / TILE_SIZE);
         int tileMinY = (int)(screenMin.y / TILE_SIZE);
         int tileMaxX = (int)(screenMax.x / TILE_SIZE);
-        int tileMaxY = (int)(screenMax.y / TILE_SIZE)+1;
+        int tileMaxY = (int)(screenMax.y / TILE_SIZE);
         if (tileMinX < 0) tileMinX = 0;
         if (tileMinY < 0) tileMinY = 0;
         if (tileMaxX >= hybridCst.tilesX) tileMaxX = hybridCst.tilesX - 1;
@@ -282,8 +285,9 @@ __global__ void cylinderFrustumBBoxClassifyKernel(
     }
     
     float area = quadArea(projectedPoints[0], projectedPoints[1], projectedPoints[2], projectedPoints[3]);
-    if (area < 1.0f) return;
-    
+    // NOTE: Sub-pixel cylinders are NOT discarded here; the small-cylinder
+    // raster uses point-fallback for tiny bboxes (see small_entity_raster.cu).
+
     if (area <= (float)hybridCst.smallEntityThreshold) {
         unsigned int outIdx = atomicAdd(smallCylinderCount, 1u);
         if (outIdx < (unsigned int)hybridCst.cylinderCount)

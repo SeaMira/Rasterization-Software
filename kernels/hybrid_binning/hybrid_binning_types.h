@@ -80,6 +80,11 @@ struct HybridConstants {
     glm::vec3 rayStart; ///< Corner (0,0) ray direction in camera space
     glm::vec3 dx;       ///< Per-pixel delta along x in camera space
     glm::vec3 dy;       ///< Per-pixel delta along y in camera space
+
+    /** Vertical pixel angular size = 2*tan(fov/2)/screenHeight. World-space
+     *  pixel size at depth `dist` is `dist * pxScale`. Used for sub-pixel
+     *  radius clamping (anti-alias) and point-fallback decisions. */
+    float pxScale;
 };
 
 /** Device-side color constants for raster (atoms/bonds); defined in small_entity_raster.cu */

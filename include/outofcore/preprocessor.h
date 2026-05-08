@@ -36,6 +36,7 @@ struct PreprocessResult {
     std::vector<OocBlockMetadata> blocks;
     std::vector<OocOctreeNode>    octreeNodes;
     std::vector<uint32_t>        blockIndexBuffer;  ///< For leaves, blockRangeStart/End index here
+    std::vector<glm::vec4>       lodAtoms;          ///< LOD atom buffer (referenced by octreeNodes[i].lodOffset)
     glm::vec3                    sceneMin;
     glm::vec3                    sceneMax;
     PreprocessMetrics            metrics;
