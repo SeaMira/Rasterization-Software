@@ -254,15 +254,6 @@ __global__ void smallCylinderRasterKernel(
     const glm::vec4 v3Proj = hybridCst.proj * glm::vec4(v3, 1.0f);
     const glm::vec4 v4Proj = hybridCst.proj * glm::vec4(v4, 1.0f);
 
-    // Defense in depth: with the new classifier this should never trigger,
-    // but if any impostor vertex is at/behind the near plane the perspective
-    // divide produces sign-flipped NDC, which previously made one thread
-    // sweep the whole screen and triggered WDDM preemption.
-    if (v1Proj.w <= 1e-3f || v2Proj.w <= 1e-3f ||
-        v3Proj.w <= 1e-3f || v4Proj.w <= 1e-3f) {
-        return;
-    }
-
     glm::vec3 ndcv1Proj = glm::vec3(__fdividef(v1Proj.x, v1Proj.w), __fdividef(v1Proj.y, v1Proj.w), __fdividef(v1Proj.z, v1Proj.w));
     glm::vec3 ndcv2Proj = glm::vec3(__fdividef(v2Proj.x, v2Proj.w), __fdividef(v2Proj.y, v2Proj.w), __fdividef(v2Proj.z, v2Proj.w));
     glm::vec3 ndcv3Proj = glm::vec3(__fdividef(v3Proj.x, v3Proj.w), __fdividef(v3Proj.y, v3Proj.w), __fdividef(v3Proj.z, v3Proj.w));
