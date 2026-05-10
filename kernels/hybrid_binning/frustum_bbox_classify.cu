@@ -118,16 +118,11 @@ __device__ inline void computeSphereBBox(
 
 /**
  * Compute the screen-space AABB of a cylinder from an 8-corner camera-space
- * AABB. Out-parameters:
- *   `allCornersValid` is set to false when at least one of the 8 corners has
- *   `clip.w <= eps` (i.e. the cylinder straddles the near plane). In that
- *   case the returned AABB is built only from the valid corners, so the
- *   caller MUST treat it as a lower-bound and route the entity through the
- *   tiled path (never through the per-thread small raster).
+ * AABB. Corners with `clip.w <= eps` (behind/at the near plane) are skipped
+ * so the perspective divide never produces sign-flipped NDC.
  *
- * Returns false when no corner can be projected reliably (entirely behind
- * the camera): the bbox is meaningless and the caller should drop the
- * entity for this frame.
+ * Returns false when no corner can be projected reliably — the cylinder is
+ * essentially behind the camera and the bbox is meaningless.
  *
  * NOTE: the previous implementation built a 4-vertex impostor and divided
  * x/y by clip.w with no sign check. For cylinders straddling the near plane
@@ -143,8 +138,7 @@ __device__ inline bool computeCylinderScreenAABB(
     const glm::vec3& pb,
     float radius,
     glm::vec2& screenMin,
-    glm::vec2& screenMax,
-    bool& allCornersValid)
+    glm::vec2& screenMax)
 {
     glm::vec4 camA = hybridCst.view * glm::vec4(pa, 1.0f);
     glm::vec4 camB = hybridCst.view * glm::vec4(pb, 1.0f);
@@ -185,7 +179,6 @@ __device__ inline bool computeCylinderScreenAABB(
         }
     }
 
-    allCornersValid = (validCount == 8);
     if (validCount == 0) {
         screenMin = glm::vec2(0.0f);
         screenMax = glm::vec2(0.0f);
@@ -280,8 +273,7 @@ __global__ void cylinderFrustumBBoxClassifyKernel(
     if (hybridCst.benchmark) atomicAdd(frustumPassedCount, 1u);
 
     glm::vec2 screenMin, screenMax;
-    bool allCornersValid;
-    if (!computeCylinderScreenAABB(pa, pb, radius, screenMin, screenMax, allCornersValid)) {
+    if (!computeCylinderScreenAABB(pa, pb, radius, screenMin, screenMax)) {
         // Cylinder cannot be projected reliably (entirely behind camera);
         // skip raster work to avoid feeding garbage geometry downstream.
         return;
@@ -302,10 +294,7 @@ __global__ void cylinderFrustumBBoxClassifyKernel(
     // NOTE: Sub-pixel cylinders are NOT discarded here; the small-cylinder
     // raster uses point-fallback for tiny bboxes (see small_entity_raster.cu).
 
-    // A cylinder straddling the near plane has a partial bbox; never let it
-    // enter the per-thread small kernel (which projects an impostor that
-    // would also be degenerate). Force it to the tiled path.
-    if (allCornersValid && area <= (float)hybridCst.smallEntityThreshold) {
+    if (area <= (float)hybridCst.smallEntityThreshold) {
         unsigned int outIdx = atomicAdd(smallCylinderCount, 1u);
         if (outIdx < (unsigned int)hybridCst.cylinderCount)
             smallCylinderIndices[outIdx] = idx;

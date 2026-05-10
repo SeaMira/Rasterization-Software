@@ -173,9 +173,6 @@ void executeSpherePipelineBinning(
     cudaMemcpyAsync(r->h_smallCount, r->d_smallCount, sizeof(unsigned int), cudaMemcpyDeviceToHost, stream);
     cudaMemcpyAsync(r->h_pairCount, r->d_pairCount, sizeof(unsigned int), cudaMemcpyDeviceToHost, stream);
     cudaMemcpyAsync(r->h_frustumPassedCount, r->d_frustumPassedCount, sizeof(unsigned int), cudaMemcpyDeviceToHost, stream);
-    // Same reasoning as the cylinder pipeline: the async copies are queued
-    // behind the classify kernel, so we sync before reading h_* on host.
-    cudaStreamSynchronize(stream);
     nvtxRangePop(); // Sphere: Classify
 
     unsigned int smallCount = *r->h_smallCount;

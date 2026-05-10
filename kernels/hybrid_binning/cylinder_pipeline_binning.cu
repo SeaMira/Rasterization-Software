@@ -172,11 +172,6 @@ void executeCylinderPipelineBinning(
     cudaMemcpyAsync(r->h_smallCount, r->d_smallCount, sizeof(unsigned int), cudaMemcpyDeviceToHost, stream);
     cudaMemcpyAsync(r->h_pairCount, r->d_pairCount, sizeof(unsigned int), cudaMemcpyDeviceToHost, stream);
     cudaMemcpyAsync(r->h_frustumPassedCount, r->d_frustumPassedCount, sizeof(unsigned int), cudaMemcpyDeviceToHost, stream);
-    // The async copies above are queued behind the classify kernel; we must
-    // wait for them before consuming the counters from host pinned memory,
-    // otherwise we read stale values from a previous frame and may launch
-    // the small raster with an inflated count + stale indices.
-    cudaStreamSynchronize(stream);
     nvtxRangePop(); // Cylinder: Classify
 
     unsigned int smallCount = *r->h_smallCount;

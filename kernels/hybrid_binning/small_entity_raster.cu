@@ -290,23 +290,6 @@ __global__ void smallCylinderRasterKernel(
         maxX = max(maxX, __float2int_ru(projectedPoints[i].x));
     }
 
-    // Hard cap: a "small" cylinder must fit comfortably inside a few times
-    // the configured threshold. If it doesn't, the classifier produced a
-    // false positive (legacy data, race, or stale h_smallCount); bail out
-    // so this thread cannot block the whole GPU.
-    {
-        const int clampedMinX = max(0, minX);
-        const int clampedMinY = max(0, minY);
-        const int clampedMaxX = min(hybridCst.screenWidth,  maxX);
-        const int clampedMaxY = min(hybridCst.screenHeight, maxY);
-        const int bboxW = clampedMaxX - clampedMinX;
-        const int bboxH = clampedMaxY - clampedMinY;
-        if (bboxW <= 0 || bboxH <= 0) return;
-        const long long bboxArea = (long long)bboxW * (long long)bboxH;
-        const long long maxSmallArea = (long long)hybridCst.smallEntityThreshold * 4LL;
-        if (bboxArea > maxSmallArea) return;
-    }
-
     // ---- Point fallback for sub-pixel cylinders -----------------------------
     // Avoid concentric-ring moire from sub-pixel ray-cylinder tests by writing
     // a single pixel at the projected midpoint when the impostor footprint is
