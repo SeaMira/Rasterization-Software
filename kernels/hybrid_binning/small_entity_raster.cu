@@ -254,6 +254,15 @@ __global__ void smallCylinderRasterKernel(
     const glm::vec4 v3Proj = hybridCst.proj * glm::vec4(v3, 1.0f);
     const glm::vec4 v4Proj = hybridCst.proj * glm::vec4(v4, 1.0f);
 
+    // Defense in depth: with the new classifier this should never trigger,
+    // but if any impostor vertex is at/behind the near plane the perspective
+    // divide produces sign-flipped NDC, which previously made one thread
+    // sweep the whole screen and triggered WDDM preemption.
+    if (v1Proj.w <= 1e-3f || v2Proj.w <= 1e-3f ||
+        v3Proj.w <= 1e-3f || v4Proj.w <= 1e-3f) {
+        return;
+    }
+
     glm::vec3 ndcv1Proj = glm::vec3(__fdividef(v1Proj.x, v1Proj.w), __fdividef(v1Proj.y, v1Proj.w), __fdividef(v1Proj.z, v1Proj.w));
     glm::vec3 ndcv2Proj = glm::vec3(__fdividef(v2Proj.x, v2Proj.w), __fdividef(v2Proj.y, v2Proj.w), __fdividef(v2Proj.z, v2Proj.w));
     glm::vec3 ndcv3Proj = glm::vec3(__fdividef(v3Proj.x, v3Proj.w), __fdividef(v3Proj.y, v3Proj.w), __fdividef(v3Proj.z, v3Proj.w));
@@ -279,6 +288,23 @@ __global__ void smallCylinderRasterKernel(
         maxY = max(maxY, __float2int_ru(projectedPoints[i].y));
         minX = min(minX, __float2int_rd(projectedPoints[i].x)); 
         maxX = max(maxX, __float2int_ru(projectedPoints[i].x));
+    }
+
+    // Hard cap: a "small" cylinder must fit comfortably inside a few times
+    // the configured threshold. If it doesn't, the classifier produced a
+    // false positive (legacy data, race, or stale h_smallCount); bail out
+    // so this thread cannot block the whole GPU.
+    {
+        const int clampedMinX = max(0, minX);
+        const int clampedMinY = max(0, minY);
+        const int clampedMaxX = min(hybridCst.screenWidth,  maxX);
+        const int clampedMaxY = min(hybridCst.screenHeight, maxY);
+        const int bboxW = clampedMaxX - clampedMinX;
+        const int bboxH = clampedMaxY - clampedMinY;
+        if (bboxW <= 0 || bboxH <= 0) return;
+        const long long bboxArea = (long long)bboxW * (long long)bboxH;
+        const long long maxSmallArea = (long long)hybridCst.smallEntityThreshold * 4LL;
+        if (bboxArea > maxSmallArea) return;
     }
 
     // ---- Point fallback for sub-pixel cylinders -----------------------------

@@ -116,66 +116,87 @@ __device__ inline void computeSphereBBox(
     centerDepth = centerClip.z / centerClip.w;
 }
 
-__device__ inline void computeCylinderBBox(
+/**
+ * Compute the screen-space AABB of a cylinder from an 8-corner camera-space
+ * AABB. Out-parameters:
+ *   `allCornersValid` is set to false when at least one of the 8 corners has
+ *   `clip.w <= eps` (i.e. the cylinder straddles the near plane). In that
+ *   case the returned AABB is built only from the valid corners, so the
+ *   caller MUST treat it as a lower-bound and route the entity through the
+ *   tiled path (never through the per-thread small raster).
+ *
+ * Returns false when no corner can be projected reliably (entirely behind
+ * the camera): the bbox is meaningless and the caller should drop the
+ * entity for this frame.
+ *
+ * NOTE: the previous implementation built a 4-vertex impostor and divided
+ * x/y by clip.w with no sign check. For cylinders straddling the near plane
+ * (one endpoint behind the camera, very common for cylinders), `clip.w`
+ * could collapse to ~0 or flip sign, producing garbage NDC and ultimately
+ * a tiny shoelace area (`quadArea`) that misclassified large cylinders as
+ * "small". Those entities then drove the per-thread small raster kernel to
+ * iterate the full screen, triggering WDDM preemption and the GPU context
+ * churn observed in Nsight Graphics for `Cylinder: Small Raster`.
+ */
+__device__ inline bool computeCylinderScreenAABB(
     const glm::vec3& pa,
     const glm::vec3& pb,
     float radius,
-    glm::vec2 projectedPoints[4])
+    glm::vec2& screenMin,
+    glm::vec2& screenMax,
+    bool& allCornersValid)
 {
     glm::vec4 camA = hybridCst.view * glm::vec4(pa, 1.0f);
     glm::vec4 camB = hybridCst.view * glm::vec4(pb, 1.0f);
-    
-    glm::vec3 camImpPosA, camImpPosB;
-    if ( camA.z < camB.z )
-	{
-		camImpPosA = glm::vec3(camB);
-		camImpPosB = glm::vec3(camA);
-	}
-	else
-	{
-		camImpPosA = glm::vec3(camA);
-		camImpPosB = glm::vec3(camB);
-	}
-    glm::vec3 center = normalize( ( camImpPosA + camImpPosB ) * 0.5f );
-    // Cylinder axis
-    const glm::vec3 z = normalize(camImpPosB - camImpPosA);
 
-    // Find orthonormal x,y axes orthogonal to cylinder axis
-    glm::vec3 x = normalize(cross(center, z));
-    glm::vec3 y = normalize(cross(x, z)); // make full basis
+    glm::vec3 axis = glm::vec3(camB) - glm::vec3(camA);
+    float axisLenSq = glm::dot(axis, axis);
+    glm::vec3 e = radius * glm::sqrt(glm::max(glm::vec3(0.0f),
+                                              glm::vec3(1.0f) - axis * axis / fmaxf(axisLenSq, 1e-12f)));
 
-    // Compute impostor construction vectors.
-    const float dV0 = length( camImpPosA );
-    const float dV1 = length( camImpPosB );
+    const glm::vec3 a = glm::vec3(camA);
+    const glm::vec3 b = glm::vec3(camB);
+    const glm::vec3 corners[8] = {
+        a + e,
+        a - e,
+        b + e,
+        b - e,
+        a + glm::vec3( e.x, -e.y,  e.z),
+        a + glm::vec3(-e.x,  e.y,  e.z),
+        b + glm::vec3( e.x, -e.y,  e.z),
+        b + glm::vec3(-e.x,  e.y,  e.z)
+    };
 
-    const float sinAngle = __fdividef(radius, dV0);
-    float		angle	 = asinf( sinAngle );
-    const glm::vec3	y1		 = y * radius;
-    const glm::vec3	x2		 = x * radius * __cosf( angle );
-    const glm::vec3	y2		 = y1 * sinAngle;
-    angle				 = asinf( __fdividef(radius, dV1) );
-    const glm::vec3 x3		 = x * ( dV1 - radius ) * __tanf( angle );
+    glm::vec2 minC( 1e6f);
+    glm::vec2 maxC(-1e6f);
+    int validCount = 0;
+    #pragma unroll
+    for (int i = 0; i < 8; ++i) {
+        glm::vec4 clip = hybridCst.proj * glm::vec4(corners[i], 1.0f);
+        if (clip.w > 1e-3f) {
+            float iw = 1.0f / clip.w;
+            float x = clip.x * iw;
+            float y = clip.y * iw;
+            minC.x = fminf(minC.x, x);
+            minC.y = fminf(minC.y, y);
+            maxC.x = fmaxf(maxC.x, x);
+            maxC.y = fmaxf(maxC.y, y);
+            ++validCount;
+        }
+    }
 
-    // Compute impostors vertices.
-    const glm::vec3 v1 = camImpPosA - x2 + y2;
-    const glm::vec3 v2 = camImpPosA + x2 + y2;
-    const glm::vec3 v3 = camImpPosB - x3 + y1;
-    const glm::vec3 v4 = camImpPosB + x3 + y1;
+    allCornersValid = (validCount == 8);
+    if (validCount == 0) {
+        screenMin = glm::vec2(0.0f);
+        screenMax = glm::vec2(0.0f);
+        return false;
+    }
 
-    const glm::vec4 v1Proj = hybridCst.proj * glm::vec4(v1, 1.0f);
-    const glm::vec4 v2Proj = hybridCst.proj * glm::vec4(v2, 1.0f);
-    const glm::vec4 v3Proj = hybridCst.proj * glm::vec4(v3, 1.0f);
-    const glm::vec4 v4Proj = hybridCst.proj * glm::vec4(v4, 1.0f);
-
-    glm::vec3 ndcv1Proj = glm::vec3(__fdividef(v1Proj.x, v1Proj.w), __fdividef(v1Proj.y, v1Proj.w), __fdividef(v1Proj.z, v1Proj.w));
-    glm::vec3 ndcv2Proj = glm::vec3(__fdividef(v2Proj.x, v2Proj.w), __fdividef(v2Proj.y, v2Proj.w), __fdividef(v2Proj.z, v2Proj.w));
-    glm::vec3 ndcv3Proj = glm::vec3(__fdividef(v3Proj.x, v3Proj.w), __fdividef(v3Proj.y, v3Proj.w), __fdividef(v3Proj.z, v3Proj.w));
-    glm::vec3 ndcv4Proj = glm::vec3(__fdividef(v4Proj.x, v4Proj.w), __fdividef(v4Proj.y, v4Proj.w), __fdividef(v4Proj.z, v4Proj.w));
-
-    projectedPoints[0] = glm::vec2(ndcv1Proj);
-    projectedPoints[1] = glm::vec2(ndcv2Proj);
-    projectedPoints[2] = glm::vec2(ndcv4Proj);
-    projectedPoints[3] = glm::vec2(ndcv3Proj);
+    screenMin.x = floorf((minC.x * 0.5f + 0.5f) * (float)hybridCst.screenWidth );
+    screenMin.y = floorf((minC.y * 0.5f + 0.5f) * (float)hybridCst.screenHeight);
+    screenMax.x = ceilf ((maxC.x * 0.5f + 0.5f) * (float)hybridCst.screenWidth );
+    screenMax.y = ceilf ((maxC.y * 0.5f + 0.5f) * (float)hybridCst.screenHeight);
+    return true;
 }
 
 __global__ void sphereFrustumBBoxClassifyKernel(
@@ -235,17 +256,6 @@ __global__ void sphereFrustumBBoxClassifyKernel(
     }
 }
 
-// Compute area of quadrilateral using shoelace formula
-__device__ inline float quadArea(const glm::vec2& q0, const glm::vec2& q1, const glm::vec2& q2, const glm::vec2& q3) 
-{
-    return 0.5f * fabsf(
-        (q0.x * q1.y - q1.x * q0.y) +
-        (q1.x * q2.y - q2.x * q1.y) +
-        (q2.x * q3.y - q3.x * q2.y) +
-        (q3.x * q0.y - q0.x * q3.y)
-    );
-}
-
 __global__ void cylinderFrustumBBoxClassifyKernel(
     const Cylinder* __restrict__ cylinders,
     const glm::vec4* __restrict__ spheres,
@@ -258,7 +268,7 @@ __global__ void cylinderFrustumBBoxClassifyKernel(
 {
     const unsigned int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= hybridCst.cylinderCount) return;
-    
+
     Cylinder cyl = cylinders[idx];
     glm::vec4 sA = spheres[cyl.sphereIndexA];
     glm::vec4 sB = spheres[cyl.sphereIndexB];
@@ -266,39 +276,42 @@ __global__ void cylinderFrustumBBoxClassifyKernel(
     glm::vec3 pb = glm::vec3(sB);
     float radius = cyl.radius;
     if (!isCylinderInsideFrustum(pa, pb, radius)) return;
-    
-    if (hybridCst.benchmark) atomicAdd(frustumPassedCount, 1u);
-    
-    glm::vec2 projectedPoints[4];
-    computeCylinderBBox(pa, pb, radius, projectedPoints);
 
-    // Convert NDC to screen coordinates and compute screen bbox
-    float screenMinX = 1e6f, screenMinY = 1e6f, screenMaxX = -1e6f, screenMaxY = -1e6f;
-    for (int i = 0; i < 4; i++) 
-    {
-        projectedPoints[i].x = fmaf(projectedPoints[i].x, 0.5f, 0.5f) * (float)hybridCst.screenWidth;
-        projectedPoints[i].y = fmaf(projectedPoints[i].y, 0.5f, 0.5f) * (float)hybridCst.screenHeight;
-        if (projectedPoints[i].x < screenMinX) screenMinX = projectedPoints[i].x;
-        if (projectedPoints[i].y < screenMinY) screenMinY = projectedPoints[i].y;
-        if (projectedPoints[i].x > screenMaxX) screenMaxX = projectedPoints[i].x;
-        if (projectedPoints[i].y > screenMaxY) screenMaxY = projectedPoints[i].y;
+    if (hybridCst.benchmark) atomicAdd(frustumPassedCount, 1u);
+
+    glm::vec2 screenMin, screenMax;
+    bool allCornersValid;
+    if (!computeCylinderScreenAABB(pa, pb, radius, screenMin, screenMax, allCornersValid)) {
+        // Cylinder cannot be projected reliably (entirely behind camera);
+        // skip raster work to avoid feeding garbage geometry downstream.
+        return;
     }
-    
-    float area = quadArea(projectedPoints[0], projectedPoints[1], projectedPoints[2], projectedPoints[3]);
+
+    // Clamp screen bbox to viewport before computing classification area.
+    // Using the AABB (not a shoelace of an oriented quad) means the area
+    // monotonically reflects the on-screen footprint and is robust against
+    // degenerate impostor projections.
+    float screenMinX = fmaxf(0.0f, screenMin.x);
+    float screenMinY = fmaxf(0.0f, screenMin.y);
+    float screenMaxX = fminf((float)hybridCst.screenWidth,  screenMax.x);
+    float screenMaxY = fminf((float)hybridCst.screenHeight, screenMax.y);
+
+    float width  = fmaxf(0.0f, screenMaxX - screenMinX);
+    float height = fmaxf(0.0f, screenMaxY - screenMinY);
+    float area   = width * height;
     // NOTE: Sub-pixel cylinders are NOT discarded here; the small-cylinder
     // raster uses point-fallback for tiny bboxes (see small_entity_raster.cu).
 
-    if (area <= (float)hybridCst.smallEntityThreshold) {
+    // A cylinder straddling the near plane has a partial bbox; never let it
+    // enter the per-thread small kernel (which projects an impostor that
+    // would also be degenerate). Force it to the tiled path.
+    if (allCornersValid && area <= (float)hybridCst.smallEntityThreshold) {
         unsigned int outIdx = atomicAdd(smallCylinderCount, 1u);
         if (outIdx < (unsigned int)hybridCst.cylinderCount)
             smallCylinderIndices[outIdx] = idx;
-        } 
-    else 
+    }
+    else
     {
-        screenMinX = fmaxf(0.0f, screenMinX);
-        screenMinY = fmaxf(0.0f, screenMinY);
-        screenMaxX = fminf((float)hybridCst.screenWidth, screenMaxX);
-        screenMaxY = fminf((float)hybridCst.screenHeight, screenMaxY);
         int tileMinX = (int)(screenMinX / TILE_SIZE);
         int tileMinY = (int)(screenMinY / TILE_SIZE);
         int tileMaxX = (int)(screenMaxX / TILE_SIZE);
