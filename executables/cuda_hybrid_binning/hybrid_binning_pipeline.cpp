@@ -158,9 +158,9 @@ public:
         launchScreenClear(outputImage, d_depthBuffer, m_config.screenWidth, m_config.screenHeight, camera.getFar(), stream);
         nvtxRangePop();
 
-        nvtxRangePushA("Sphere Pipeline Binning");
-        executeSpherePipelineBinning(d_spheres, m_sphereCount, d_depthBuffer, outputImage, &m_sphereResources, stream);
-        nvtxRangePop();
+        // nvtxRangePushA("Sphere Pipeline Binning");
+        // executeSpherePipelineBinning(d_spheres, m_sphereCount, d_depthBuffer, outputImage, &m_sphereResources, stream);
+        // nvtxRangePop();
 
         nvtxRangePushA("Cylinder Pipeline Binning");
         executeCylinderPipelineBinning(d_cylinders, d_spheres, m_cylinderCount, d_depthBuffer, outputImage, &m_cylinderResources, stream);
