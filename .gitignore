@@ -37,3 +37,9 @@
 /assets/molecules/*.cif
 *.ngfx-gputrace
 *.ngfx-gputrace.layout
+
+# Nsight analysis notebook phase table cache (large pickle)
+benchmark/nsight_analysis/phase_timing_rows.pkl
+benchmark/nsight_analysis/phase_timing_rows.meta.json
+benchmark/nsight_analysis/ooc_cu_ooc_yaml_agg.pkl
+benchmark/nsight_analysis/ooc_cu_ooc_yaml_agg.meta.json

@@ -1,0 +1,15 @@
+for scene_key, df in dfs.items():
+    cfg = SCENES[scene_key]
+    num_cols = [c for c in KEY_METRIC_IDS.keys() if c in df.columns]
+
+    for rng in focus_ranges:
+        sub = df[df['pipeline_range'] == rng][num_cols].dropna(axis=1, how='all')
+        if sub.shape[1] < 2:
+            continue
+        corr = sub.corr()
+        fig, ax = plt.subplots(figsize=(10, 8))
+        sns.heatmap(corr, annot=True, fmt='.2f', cmap='coolwarm',
+                    center=0, ax=ax, square=True)
+        ax.set_title(f"{cfg['label']} — Metric correlation: {rng}")
+        plt.tight_layout()
+        plt.show()

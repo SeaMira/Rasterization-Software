@@ -1,0 +1,8 @@
+for scene_key, df in dfs_ring.items():
+    cfg = SCENES[scene_key]
+    plot_metric_by_ring(df, 'l1tex_hit_pct',
+                        f"{cfg['label']} — L1TEX Hit Rate [%]",
+                        'L1TEX Hit %', threshold=70, threshold_label='70%')
+    plot_metric_by_ring(df, 'pcie_throughput',
+                        f"{cfg['label']} — PCIe Throughput [%]",
+                        'PCIe %', palette='magma')

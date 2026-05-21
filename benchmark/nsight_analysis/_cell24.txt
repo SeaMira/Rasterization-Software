@@ -1,0 +1,29 @@
+def plot_metric_by_ring(df, metric_col, title, ylabel, threshold=None, threshold_label=None,
+                        palette='viridis', figsize=(16, 7)):
+    fig, ax = plt.subplots(figsize=figsize)
+    ordered = [r for r in OOC_PIPELINE_RANGES if r in df['pipeline_range'].values]
+    sub = df[df['pipeline_range'].isin(ordered)].copy()
+    sub['pipeline_range'] = pd.Categorical(sub['pipeline_range'], categories=ordered, ordered=True)
+
+    sns.barplot(data=sub, x='pipeline_range', y=metric_col, hue='ring',
+                palette=palette, ax=ax, errorbar='sd')
+    if threshold is not None:
+        ax.axhline(threshold, ls='--', color='red', lw=1.5,
+                   label=threshold_label or f'{threshold}')
+    ax.set_title(title)
+    ax.set_ylabel(ylabel)
+    ax.set_xlabel('Pipeline stage')
+    ax.tick_params(axis='x', rotation=45)
+    ax.legend(title='Ring')
+    plt.tight_layout()
+    plt.show()
+
+
+for scene_key, df in dfs_ring.items():
+    cfg = SCENES[scene_key]
+    plot_metric_by_ring(df, 'gr_active_pct',
+                        f"{cfg['label']} — GR Cycles Active [%]",
+                        'GR Active %', threshold=80, threshold_label='80% (high utilization)')
+    plot_metric_by_ring(df, 'gr_idle_pct',
+                        f"{cfg['label']} — GPU Idle [%]",
+                        'GR Idle %', threshold=10, threshold_label='10% (baja inactividad)')

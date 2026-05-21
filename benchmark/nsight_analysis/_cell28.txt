@@ -1,0 +1,31 @@
+stall_cols = ['stall_short_scoreboard', 'stall_drain', 'stall_wait']
+
+for scene_key, df in dfs_ring.items():
+    cfg = SCENES[scene_key]
+
+    plot_metric_by_ring(df, 'warp_occ_pct',
+                        f"{cfg['label']} — SM Warp Occupancy [%]",
+                        'Warp Occupancy %', palette='crest')
+
+    # Stall stacked
+    stall_data = df.groupby(['ring', 'pipeline_range'])[stall_cols].mean().reset_index()
+    ordered = [r for r in OOC_PIPELINE_RANGES if r in stall_data['pipeline_range'].values]
+
+    for ring_id in sorted(df['ring'].unique()):
+        sub = stall_data[(stall_data['ring'] == ring_id) &
+                         stall_data['pipeline_range'].isin(ordered)].copy()
+        sub['pipeline_range'] = pd.Categorical(sub['pipeline_range'], categories=ordered, ordered=True)
+        sub = sub.sort_values('pipeline_range').set_index('pipeline_range')[stall_cols]
+
+        if sub.dropna(how='all').empty:
+            continue
+
+        sub.plot(kind='bar', stacked=True, figsize=(14, 5),
+                 color=['#e74c3c', '#3498db', '#2ecc71'])
+        plt.title(f"{cfg['label']} — Stall Breakdown, Ring {ring_id}")
+        plt.ylabel('Stall %')
+        plt.xlabel('Pipeline stage')
+        plt.xticks(rotation=45, ha='right')
+        plt.legend(['Short Scoreboard', 'Drain', 'Wait'])
+        plt.tight_layout()
+        plt.show()

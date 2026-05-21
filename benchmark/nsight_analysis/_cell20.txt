@@ -1,0 +1,28 @@
+for scene_key, df in dfs.items():
+    cfg = SCENES[scene_key]
+    pivot = df.pivot_table(
+        index='pipeline_range', columns='ring',
+        values='rel_frame_duration', aggfunc='mean'
+    )
+    ordered = [r for r in OOC_PIPELINE_RANGES if r in pivot.index]
+    pivot = pivot.loc[ordered]
+
+    fig, axes = plt.subplots(1, 2, figsize=(18, 7))
+
+    # Stacked bar
+    pivot.T.plot(kind='bar', stacked=True, ax=axes[0], colormap='tab20')
+    axes[0].set_title(f"{cfg['label']} — Frame fraction by stage")
+    axes[0].set_xlabel('Ring (distance)')
+    axes[0].set_ylabel('Frame fraction')
+    axes[0].legend(bbox_to_anchor=(1.02, 1), loc='upper left', fontsize=8)
+    axes[0].set_xticklabels([f'Ring {c}' for c in pivot.columns], rotation=0)
+
+    # Heatmap
+    sns.heatmap(pivot, annot=True, fmt='.3f', cmap='YlOrRd', ax=axes[1],
+                cbar_kws={'label': 'Frame fraction'})
+    axes[1].set_title(f"{cfg['label']} — Relative duration heatmap")
+    axes[1].set_ylabel('Pipeline stage')
+    axes[1].set_xlabel('Ring')
+
+    plt.tight_layout()
+    plt.show()

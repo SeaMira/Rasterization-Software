@@ -1,0 +1,28 @@
+focus_ranges = ['Sphere Raster OOC', 'Octree BFS Frustum Culling',
+                'Occlusion Culling', 'Build Active Atom List']
+focus_metrics = ['gr_active_pct', 'gr_idle_pct', 'l1tex_hit_pct',
+                 'pcie_throughput', 'warp_occ_pct', 'sm_issue_active']
+
+for scene_key, df in dfs.items():
+    cfg = SCENES[scene_key]
+    sub = df[df['pipeline_range'].isin(focus_ranges)].copy()
+    if sub.empty:
+        continue
+
+    for met in focus_metrics:
+        if sub[met].dropna().empty:
+            continue
+        fig, ax = plt.subplots(figsize=(12, 5))
+        for rng in focus_ranges:
+            rng_data = sub[sub['pipeline_range'] == rng].groupby('ring')[met].agg(['mean', 'std']).reset_index()
+            if rng_data['mean'].dropna().empty:
+                continue
+            ax.errorbar(rng_data['ring'], rng_data['mean'], yerr=rng_data['std'],
+                        marker='o', capsize=4, label=rng)
+        ax.set_title(f"{cfg['label']} — {met} vs distance")
+        ax.set_xlabel('Ring (1=near, 5=far)')
+        ax.set_ylabel(met)
+        ax.legend()
+        ax.set_xticks(sorted(df['ring'].unique()))
+        plt.tight_layout()
+        plt.show()

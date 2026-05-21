@@ -1,0 +1,71 @@
+if df_prep is None and PREPROCESS_CSV.is_file():
+    df_prep = load_preprocess_table()
+    df_prep['total_preprocess_ms'] = df_prep[['ms_morton_pipeline','ms_blocks_and_file','ms_octree_build']].sum(axis=1)
+    df_prep['atoms_per_ms'] = df_prep['sphere_count'] / df_prep['total_preprocess_ms']
+    df_prep['vram_used_MB'] = df_prep['vram_sum_estimated_bytes'] / (1024**2)
+    df_prep['block_file_MB'] = df_prep['block_file_bytes'] / (1024**2)
+    df_prep['host_MB'] = df_prep['host_structures_bytes'] / (1024**2)
+    df_prep['vram_free_MB'] = df_prep['cuda_mem_free_bytes'] / (1024**2)
+    df_prep['vram_total_MB'] = df_prep['cuda_mem_total_bytes'] / (1024**2)
+    df_prep['vram_pct_used'] = 100.0 * (1.0 - df_prep['cuda_mem_free_bytes'] / df_prep['cuda_mem_total_bytes'])
+
+    prep_grp = df_prep.groupby(['scene_type','sphere_count']).agg(
+        n_runs=('total_preprocess_ms','count'),
+        avg_ms=('total_preprocess_ms','mean'), std_ms=('total_preprocess_ms','std'),
+        min_ms=('total_preprocess_ms','min'), max_ms=('total_preprocess_ms','max'),
+        avg_morton=('ms_morton_pipeline','mean'), avg_blocks=('ms_blocks_and_file','mean'),
+        avg_octree=('ms_octree_build','mean'),
+        avg_throughput=('atoms_per_ms','mean'),
+        avg_vram_MB=('vram_used_MB','mean'), avg_vram_pct=('vram_pct_used','mean'),
+        avg_block_file_MB=('block_file_MB','mean'), avg_host_MB=('host_MB','mean'),
+        block_count=('block_count','first'), octree_nodes=('octree_node_count','first'),
+    ).reset_index().sort_values('sphere_count')
+
+    print('=== Preprocess: summary by scene/size ===')
+    display(prep_grp)
+
+    pkg = prep_grp[prep_grp['scene_type'].str.contains('PACKAGE')].copy()
+    if len(pkg) >= 2:
+        fig, axes = plt.subplots(2, 3, figsize=(20, 10))
+
+        ax = axes[0,0]
+        ax.errorbar(pkg['sphere_count']/1e6, pkg['avg_ms'], yerr=pkg['std_ms'].fillna(0),
+                    marker='o', capsize=4)
+        ax.set_xscale('log'); ax.set_yscale('log')
+        ax.set_xlabel('Spheres (millions)'); ax.set_ylabel('Total time (ms)')
+        ax.set_title('Preprocess time vs entity count')
+
+        ax = axes[0,1]
+        for col, lbl in [('avg_morton','Morton+sort'), ('avg_blocks','Blocks+file'), ('avg_octree','Octree')]:
+            ax.plot(pkg['sphere_count']/1e6, pkg[col], marker='o', label=lbl)
+        ax.set_xscale('log'); ax.set_yscale('log')
+        ax.set_xlabel('Spheres (millions)'); ax.set_ylabel('ms')
+        ax.set_title('Preprocess phase breakdown'); ax.legend()
+
+        ax = axes[0,2]
+        ax.plot(pkg['sphere_count']/1e6, pkg['avg_throughput'], marker='s', color='green')
+        ax.set_xscale('log')
+        ax.set_xlabel('Spheres (millions)'); ax.set_ylabel('Atoms/ms')
+        ax.set_title('Preprocess throughput')
+
+        ax = axes[1,0]
+        ax.bar(pkg['sphere_count'].astype(str), pkg['avg_vram_MB'], color='steelblue')
+        ax.set_xlabel('Spheres'); ax.set_ylabel('Estimated VRAM (MB)')
+        ax.set_title('Total estimated VRAM'); ax.tick_params(axis='x', rotation=45)
+
+        ax = axes[1,1]
+        ax.bar(pkg['sphere_count'].astype(str), pkg['avg_vram_pct'], color='coral')
+        ax.axhline(100, ls='--', color='red', lw=1)
+        ax.set_xlabel('Spheres'); ax.set_ylabel('% VRAM used')
+        ax.set_title('% GPU VRAM used'); ax.tick_params(axis='x', rotation=45)
+
+        ax = axes[1,2]
+        ax.plot(pkg['sphere_count']/1e6, pkg['avg_block_file_MB'], marker='o', label='Block file')
+        ax.plot(pkg['sphere_count']/1e6, pkg['avg_host_MB'], marker='^', label='Host structs')
+        ax.set_xscale('log'); ax.set_yscale('log')
+        ax.set_xlabel('Spheres (millions)'); ax.set_ylabel('MB')
+        ax.set_title('On-disk and host data'); ax.legend()
+
+        plt.tight_layout(); plt.show()
+else:
+    print(f'\u26a0 Preprocess CSV not found at {PREPROCESS_CSV}')

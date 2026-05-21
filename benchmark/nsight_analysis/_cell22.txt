@@ -1,0 +1,8 @@
+for scene_key, df in dfs.items():
+    cfg = SCENES[scene_key]
+    grp = df.groupby(['ring', 'pipeline_range'])['rel_frame_duration'].mean().reset_index()
+    idx = grp.groupby('ring')['rel_frame_duration'].idxmax()
+    bottleneck = grp.loc[idx][['ring', 'pipeline_range', 'rel_frame_duration']]
+    bottleneck.columns = ['Ring', 'Bottleneck stage', 'Frame fraction']
+    print(f"\n=== {cfg['label']} — Bottleneck by distance ===")
+    display(bottleneck.reset_index(drop=True))
