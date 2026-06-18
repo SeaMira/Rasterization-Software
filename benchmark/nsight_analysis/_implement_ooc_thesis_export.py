@@ -76,7 +76,7 @@ CELL_SOURCES = {
 - **`ring`** = camera distance (`range1`…`range5` in the filename); **`position`** = YAML replica (1–3).
 - **`RelativeFrameDuration`** is the fraction of frame time per pipeline stage.
 - **Analysis stages** exclude `Screen Clear`, `Blit Framebuffer`, `Swap Window`, and `cub::DeviceRadixSort` (eight core stages); remaining fractions are **renormalized** to sum to 1 per capture.
-- There are **no** `range*_frames.txt` under CU_OOC — only relative stage shares and Nsight counters, not absolute ms per stage.
+- **`rangeN_frames.txt`** files (under each scene's YAML folder) hold Nsight Graphics frame times in ms, split by `------` into three positional replicas per ring.
 - **`HiZ Downsample`** often has no GPU counters (NaN); duration share is still valid.
 - Bar charts in §6–8 use **`dfs_ring`**. §9 keeps **`dfs`** for error bars across replicas.
 - With **`SAVE_FIGURES = True`**, plots are saved under `img/chapter3/results/ooc/` in the thesis tree.

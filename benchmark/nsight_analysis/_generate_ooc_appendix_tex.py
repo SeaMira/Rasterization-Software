@@ -32,10 +32,12 @@ SECTION_TITLES = {
     "nsight/metrics_vs_ring": "GPU metrics vs camera ring",
     "nsight/correlation": "Metric correlation by pipeline stage",
     "nsight/memory_bound": "Memory-bound vs compute-bound scatter",
+    "nsight/frame_ms_by_ring": "Nsight frame time by camera ring",
     "nsight/panels": "Composite vertical panels",
     "cross_scene": "Cross-scene metric comparisons",
     "batch": "Batch runtime summaries",
-    "batch/frame_ms_scatter": "Frame time vs batch counters (per scene)",
+    "batch/streaming_by_visibility": "Peak block requests vs batch\\_index",
+    "batch/occlusion_by_visibility": "Occlusion ratio at fixed views (by avg_numVisible)",
     "batch/timeseries": "Batch timeseries",
     "preprocess": "Preprocess metrics",
     "package": "PACKAGE scale analysis",
@@ -89,6 +91,16 @@ def _caption(rel: Path) -> str:
         return f"Metric correlation [{scene or stem}] for stage {stage}."
     if "memory_bound" in parts:
         return f"PCIe throughput vs SM issue active [{scene or stem}]."
+    if "frame_ms_by_ring" in parts:
+        if stem == "cross_scene":
+            return (
+                "Mean Nsight Graphics frame time by camera ring; grouped bars compare "
+                "all scenes (error bars: std over frames and positional replicas)."
+            )
+        return (
+            f"Mean Nsight Graphics frame time by camera ring [{scene or stem}] "
+            f"(error bars: std over frames and positional replicas)."
+        )
     if "panels" in parts:
         return f"Composite vertical panel [{stem.replace('_', ' ')}]."
     if "cross_scene" in parts:
@@ -99,32 +111,42 @@ def _caption(rel: Path) -> str:
         return "Batch summary boxplots across scenes."
     if rel.name == "performance_distributions.png":
         return "Batch performance distributions across scenes."
+    if "streaming_by_visibility" in parts:
+        return (
+            f"Peak block requests per batch vs. batch\\_index [{scene or stem}]."
+        )
+    if "occlusion_by_visibility" in parts:
+        if (scene or stem).lower() == "g500m":
+            return (
+                f"Occlusion efficiency ratio vs batch_index for top post-occlusion block levels "
+                f"[{scene or stem}] (10 groups)."
+            )
+        return (
+            f"Occlusion efficiency ratio vs batch_index for top visible-block levels "
+            f"[{scene or stem}]."
+        )
     if rel.name == "streaming_requests_grid.png":
         return "Streaming request decay across PACKAGE scenes."
     if rel.name == "occlusion_ratio_grid.png":
         return "Post-occlusion efficiency across PACKAGE scenes."
-    if rel.name == "scaling_fps_loglog.png":
-        return "Mean FPS vs entity count (log--log scale)."
     if rel.name == "pool_and_atom_fraction.png":
-        return "Pool residency and atom-fraction metrics."
-    if rel.name == "fps_vs_active_atoms.png":
-        return "FPS vs active atom count."
+        return "Pool residency and atom-fraction metrics (coverage, not VRAM)."
     if rel.name == "correlation_grid.png":
         return "Batch metric correlation grid across scenes."
-    if "frame_ms_scatter" in parts:
-        return (
-            f"Mean frame time vs streaming requests, post-occlusion blocks, "
-            f"frustum-visible blocks, and rasterized atoms [{scene or stem}] "
-            f"(one point per batch; no ring attribution)."
-        )
     if rel.name == "preprocess_overview.png":
-        return "Preprocess phase timings, throughput, and VRAM usage."
+        return (
+            "Preprocess phase timings, throughput, stacked GPU buffer allocations at init "
+            "(pipeline, streaming, depth, HiZ, color), and cudaMemGetInfo usage."
+        )
     if rel.name == "scaling_blocks_octree.png":
         return "Block count, octree node count, and block-file size vs scale."
     if rel.name == "raster_fraction_vs_scale.png":
         return "Raster stage fraction vs PACKAGE scale."
     if rel.name == "nsight_vs_profiler_frame_ms.png":
-        return "Nsight YAML stage composition vs profiler frame time."
+        return (
+            "Left: mean batch avg_frame_ms from profiler CSV (not Nsight range*_frames.txt). "
+            "Right: Nsight Build Active Atom List fraction vs mean activeCount."
+        )
 
     return f"OOC result figure: {rel.as_posix()}."
 
