@@ -73,6 +73,8 @@ PLOT_EXPORT_CELL = r'''
 from pathlib import Path
 import re
 
+from _thesis_chart_style import apply_thesis_chart_style, panel_col_wrap, style_time_per_mark_figure
+
 FIG_ROOT = Path(r"D:\Users\Escritorio\U\Ot2026-2doSemM\tesis-magister-latex\img\chapter3\results\compact")
 SAVE_FIGURES = True
 FIG_DPI = 150
@@ -168,6 +170,9 @@ def save_figure(fig, path):
 '''
 
 GRAFICAR_CELL = r'''
+from _thesis_chart_style import apply_thesis_chart_style, panel_col_wrap, style_time_per_mark_figure
+
+
 def filtrar_grid_insuficientes(df, min_rangos=4):
     conteo_rangos = df.groupby(
         ['Version', 'Shader', 'Rule_Name', 'Metric_Name', 'Grid']
@@ -212,13 +217,15 @@ def graficar_regla_por_columnas(
     data_plot['Dataset_Num'] = data_plot['Dataset'].str.extract(r'(\d+)').astype(int)
     data_plot = data_plot.sort_values('Dataset_Num')
 
+    n_panels = len(metrics_to_keep)
+    col_wrap, legend_out = panel_col_wrap(n_panels)
     g = sns.catplot(
         data=data_plot,
         x="Dataset",
         y="Value_Avg",
         hue="Grid",
         col="Metric_Name",
-        col_wrap=3,
+        col_wrap=col_wrap,
         kind="point",
         sharey=False,
         height=8,
@@ -226,14 +233,15 @@ def graficar_regla_por_columnas(
         palette="viridis",
         markers="o",
         linestyles="-",
+        legend_out=legend_out,
     )
-    g.fig.subplots_adjust(top=0.9)
-    g.fig.suptitle(
-        f"Análisis: '{rule_name}' ({version_target})\nShader {shader_target}",
-        fontsize=15,
+    apply_thesis_chart_style(
+        g,
+        n_panels=n_panels,
+        col_wrap=col_wrap,
+        legend_out=legend_out,
+        suptitle=f"Analysis: {rule_name} ({version_target})\nShader: {shader_target}",
     )
-    g.set_axis_labels("Rango", "Valor")
-    g.set_titles("{col_name}")
 
     if save_path is None and SAVE_FIGURES:
         save_path = thesis_figure_path(version_target, rule_name, shader_target)
@@ -273,25 +281,31 @@ def plot_time_per_mark_compact(df_summary, version_target, save_path=None, show=
         return None
     sub["Dataset_Num"] = sub["Dataset"].str.extract(r"(\d+)").astype(int)
     sub = sub.sort_values("Dataset_Num")
+    n_panels = sub["Shader_Name"].nunique()
+    col_wrap, legend_out = panel_col_wrap(n_panels)
     g = sns.catplot(
         data=sub,
         x="Dataset",
         y="Duration_ms",
         hue="Grid",
         col="Shader_Name",
-        col_wrap=3,
+        col_wrap=col_wrap,
         kind="point",
         sharey=False,
-        height=6,
+        height=8,
         aspect=1.2,
         palette="viridis",
         markers="o",
         linestyles="-",
+        legend_out=legend_out,
     )
-    g.fig.subplots_adjust(top=0.88)
-    g.fig.suptitle(f"Frame time per marked range — {version_target} (compact grids)", fontsize=14)
-    g.set_axis_labels("Range", "Duration (ms)")
-    g.set_titles("{col_name}")
+    style_time_per_mark_figure(
+        g,
+        n_panels=n_panels,
+        col_wrap=col_wrap,
+        legend_out=legend_out,
+        suptitle=f"Frame time per marked range — {version_target}\n(compact grids)",
+    )
 
     if save_path is None and SAVE_FIGURES:
         vf = VERSION_FOLDER.get(version_target, version_target.lower())

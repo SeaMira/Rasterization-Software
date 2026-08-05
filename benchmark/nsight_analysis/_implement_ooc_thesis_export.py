@@ -121,7 +121,7 @@ for sk, dr in dfs_ring.items():
 def nsight_scene_summary(dfs_ring_map):
     rows = []
     for sk, dr in dfs_ring_map.items():
-        row = {"escena_id": sk}
+        row = {"scene_id": sk}
         for stage in OOC_NSIGHT_FOCUS_STAGES:
             row[_rel_col(stage)] = dr.loc[dr["pipeline_range"] == stage, "rel_frame_duration"].mean()
         row["rel_ooc_core"] = dr.loc[dr["pipeline_range"].isin(OOC_NSIGHT_FOCUS_STAGES), "rel_frame_duration"].sum()
@@ -131,18 +131,18 @@ def nsight_scene_summary(dfs_ring_map):
 
 if df_batch_all is not None and not df_batch_all.empty and "dfs_ring" in dir():
     prof = (
-        df_batch_all.groupby("escena_id", observed=True)
+        df_batch_all.groupby("scene_id", observed=True)
         .agg(
             frame_ms_mean=("avg_frame_ms", "mean"), fps_mean=("avg_fps", "mean"),
             visible_mean=("avg_numVisible", "mean"), filtered_mean=("avg_numFiltered", "mean"),
             requests_mean=("avg_numRequests", "mean"), active_mean=("avg_activeCount", "mean"),
         ).reset_index()
     )
-    joined = nsight_scene_summary(dfs_ring).merge(prof, on="escena_id")
+    joined = nsight_scene_summary(dfs_ring).merge(prof, on="scene_id")
     display(joined.round(4))
-    pkg = joined[joined["escena_id"].str.match(r"^g\d+m$", na=False)].copy()
+    pkg = joined[joined["scene_id"].str.match(r"^g\d+m$", na=False)].copy()
     if len(pkg) >= 2:
-        pkg["sphere_M"] = pkg["escena_id"].str.extract(r"^g(\d+)m$")[0].astype(float)
+        pkg["sphere_M"] = pkg["scene_id"].str.extract(r"^g(\d+)m$")[0].astype(float)
         fig, ax = plt.subplots(1, 2, figsize=(11, 4))
         ax[0].scatter(pkg["sphere_M"], pkg["frame_ms_mean"], s=90)
         ax[0].set_xscale("log")
@@ -390,7 +390,7 @@ if df_batch_all is None or df_batch_all.empty:
     print('No batch stats in', _profiler_csv_dir())
 else:
     print('\n=== Summary by scene ===')
-    summary = df_batch_all.groupby('escena_id').agg(
+    summary = df_batch_all.groupby('scene_id').agg(
         sphere_count=('sphere_count','first'), total_blocks=('total_blocks','first'),
         pool_slots=('pool_slots','first'), n_batches=('avg_fps','count'),
         fps_mean=('avg_fps','mean'), fps_std=('avg_fps','std'),
@@ -401,24 +401,24 @@ else:
     display(summary)
 
     fig, axes = plt.subplots(2, 2, figsize=(18, 12))
-    order = sorted(df_batch_all['escena_id'].unique(), key=lambda x: _scene_sort_key(x))
-    sns.boxplot(data=df_batch_all, x='escena_id', y='avg_fps', order=order, ax=axes[0,0], palette='viridis')
+    order = sorted(df_batch_all['scene_id'].unique(), key=lambda x: _scene_sort_key(x))
+    sns.boxplot(data=df_batch_all, x='scene_id', y='avg_fps', order=order, ax=axes[0,0], palette='viridis')
     axes[0,0].set_title('FPS distribution by scene'); axes[0,0].set_xlabel('Scene'); axes[0,0].set_ylabel('FPS')
     axes[0,0].tick_params(axis='x', rotation=30)
-    sns.boxplot(data=df_batch_all, x='escena_id', y='avg_frame_ms', order=order, ax=axes[0,1], palette='magma')
+    sns.boxplot(data=df_batch_all, x='scene_id', y='avg_frame_ms', order=order, ax=axes[0,1], palette='magma')
     axes[0,1].set_title('Frame time (ms) by scene'); axes[0,1].set_xlabel('Scene'); axes[0,1].set_ylabel('ms')
     axes[0,1].tick_params(axis='x', rotation=30)
-    sns.boxplot(data=df_batch_all, x='escena_id', y='avg_activeCount', order=order, ax=axes[1,0], palette='crest')
+    sns.boxplot(data=df_batch_all, x='scene_id', y='avg_activeCount', order=order, ax=axes[1,0], palette='crest')
     axes[1,0].set_title('Rasterized atoms by scene'); axes[1,0].set_xlabel('Scene'); axes[1,0].set_ylabel('Atoms')
     axes[1,0].tick_params(axis='x', rotation=30)
-    sns.boxplot(data=df_batch_all, x='escena_id', y='avg_numRequests', order=order, ax=axes[1,1], palette='flare')
+    sns.boxplot(data=df_batch_all, x='scene_id', y='avg_numRequests', order=order, ax=axes[1,1], palette='flare')
     axes[1,1].set_title('Streaming-requested blocks by scene'); axes[1,1].set_xlabel('Scene')
     axes[1,1].set_ylabel('Requests/batch'); axes[1,1].tick_params(axis='x', rotation=30)
     plt.tight_layout()
     show_and_save(fig, "batch/summary_boxplots.png")
 
     for bk in order:
-        sub = df_batch_all[df_batch_all['escena_id'] == bk].copy()
+        sub = df_batch_all[df_batch_all['scene_id'] == bk].copy()
         lbl = sub['label'].iloc[0]
         fig, axes = plt.subplots(2, 2, figsize=(16, 10))
         fig.suptitle(f'{lbl} ({bk})', fontsize=14)
@@ -439,7 +439,7 @@ else:
 
     fig, ax = plt.subplots(figsize=(12, 7))
     for bk in order:
-        sub = df_batch_all[df_batch_all['escena_id'] == bk]
+        sub = df_batch_all[df_batch_all['scene_id'] == bk]
         ax.scatter(sub['avg_activeCount'], sub['avg_fps'], s=15, alpha=0.5, label=bk)
     ax.set_xlabel('Mean rasterized atoms'); ax.set_ylabel('Mean FPS')
     ax.set_title('FPS vs rasterized atoms (all scenes)')
@@ -450,7 +450,7 @@ else:
 38: r'''if BATCH_CSVS and 'df_batch_all' in dir():
     pkg_only = df_batch_all[df_batch_all['scene_type'].str.contains('PACKAGE', na=False)].copy()
     if not pkg_only.empty:
-        sc_grp = pkg_only.groupby('escena_id').agg(
+        sc_grp = pkg_only.groupby('scene_id').agg(
             sphere_count=('sphere_count','first'),
             fps_mean=('avg_fps','mean'), fps_std=('avg_fps','std'),
             fps_median=('avg_fps', 'median'),
@@ -484,7 +484,7 @@ else:
         show_and_save(fig, "batch/scaling_fps_loglog.png")
 ''',
 40: r'''if BATCH_CSVS and 'df_batch_all' in dir():
-    order = sorted(df_batch_all['escena_id'].unique(), key=lambda x: _scene_sort_key(x))
+    order = sorted(df_batch_all['scene_id'].unique(), key=lambda x: _scene_sort_key(x))
     n = len(order)
     cols = min(3, n)
     rows = (n + cols - 1) // cols
@@ -493,7 +493,7 @@ else:
     for idx, bk in enumerate(order):
         r, c = divmod(idx, cols)
         ax = axes[r][c]
-        sub = df_batch_all[df_batch_all['escena_id'] == bk].sort_values('batch_index')
+        sub = df_batch_all[df_batch_all['scene_id'] == bk].sort_values('batch_index')
         ax.semilogy(sub['batch_index'], sub['avg_numRequests'].clip(lower=0.1), marker='.', ms=3)
         ax.set_title(bk); ax.set_xlabel('Batch'); ax.set_ylabel('Requests (log)')
         ax.grid(True, alpha=0.3)
@@ -508,7 +508,7 @@ else:
     for idx, bk in enumerate(order):
         r, c = divmod(idx, cols)
         ax = axes[r][c]
-        sub = df_batch_all[df_batch_all['escena_id'] == bk].sort_values('batch_index')
+        sub = df_batch_all[df_batch_all['scene_id'] == bk].sort_values('batch_index')
         ratio = sub['avg_numFiltered'] / sub['avg_numVisible'].replace(0, np.nan)
         ax.plot(sub['batch_index'], ratio, marker='.', ms=3, color='teal')
         ax.set_title(bk); ax.set_ylim(0, 1); ax.grid(True, alpha=0.3)
@@ -519,19 +519,23 @@ else:
     show_and_save(fig, "batch/occlusion_ratio_grid.png")
 ''',
 42: r'''if BATCH_CSVS and 'df_batch_all' in dir():
-    order = sorted(df_batch_all['escena_id'].unique(), key=lambda x: _scene_sort_key(x))
+    order = sorted(df_batch_all['scene_id'].unique(), key=lambda x: _scene_sort_key(x))
     fig, axes = plt.subplots(1, 2, figsize=(16, 6))
     df_batch_all['pool_util_pct'] = 100.0 * df_batch_all['avg_numVisible'] / df_batch_all['pool_slots'].replace(0, np.nan)
-    sns.boxplot(data=df_batch_all, x='escena_id', y='pool_util_pct', order=order, ax=axes[0], palette='coolwarm')
-    axes[0].set_title('Pool utilization (visible blocks / slots)'); axes[0].tick_params(axis='x', rotation=30)
+    sns.boxplot(data=df_batch_all, x='scene_id', y='pool_util_pct', order=order, ax=axes[0], palette='coolwarm')
+    axes[0].set_title('Pool utilization (visible blocks / slots)')
+    axes[0].set_xlabel('scene_id')
+    axes[0].tick_params(axis='x', rotation=30)
     df_batch_all['atom_fraction_pct'] = 100.0 * df_batch_all['avg_activeCount'] / df_batch_all['sphere_count'].replace(0, np.nan)
-    sns.boxplot(data=df_batch_all, x='escena_id', y='atom_fraction_pct', order=order, ax=axes[1], palette='RdYlGn')
-    axes[1].set_title('% rasterized atoms vs total scene spheres'); axes[1].tick_params(axis='x', rotation=30)
+    sns.boxplot(data=df_batch_all, x='scene_id', y='atom_fraction_pct', order=order, ax=axes[1], palette='RdYlGn')
+    axes[1].set_title('% rasterized atoms vs total scene spheres')
+    axes[1].set_xlabel('scene_id')
+    axes[1].tick_params(axis='x', rotation=30)
     plt.tight_layout()
     show_and_save(fig, "batch/pool_and_atom_fraction.png")
 ''',
 44: r'''if BATCH_CSVS and 'df_batch_all' in dir():
-    order = sorted(df_batch_all['escena_id'].unique(), key=lambda x: _scene_sort_key(x))
+    order = sorted(df_batch_all['scene_id'].unique(), key=lambda x: _scene_sort_key(x))
     corr_cols = ['avg_frame_ms','avg_fps','avg_numVisible','avg_numFiltered','avg_numRequests','avg_activeCount']
     n = len(order)
     cols_per_row = min(3, n)
@@ -541,7 +545,7 @@ else:
     for idx, bk in enumerate(order):
         r, c = divmod(idx, cols_per_row)
         ax = axes[r][c]
-        sub = df_batch_all[df_batch_all['escena_id'] == bk][corr_cols].dropna()
+        sub = df_batch_all[df_batch_all['scene_id'] == bk][corr_cols].dropna()
         if len(sub) >= 3:
             corr = sub.corr()
             sns.heatmap(corr, annot=True, fmt='.2f', cmap='RdBu_r', center=0, vmin=-1, vmax=1, ax=ax, cbar=False,
@@ -555,12 +559,12 @@ else:
     show_and_save(fig, "batch/correlation_grid.png")
 ''',
 46: r'''if BATCH_CSVS and 'df_batch_all' in dir():
-    order = sorted(df_batch_all['escena_id'].unique(), key=lambda x: _scene_sort_key(x))
+    order = sorted(df_batch_all['scene_id'].unique(), key=lambda x: _scene_sort_key(x))
     n = len(order)
     fig, axes = plt.subplots(2, n, figsize=(5*n, 8), squeeze=False)
     fig.suptitle('Performance distributions per scene', fontsize=14)
     for idx, bk in enumerate(order):
-        sub = df_batch_all[df_batch_all['escena_id'] == bk]
+        sub = df_batch_all[df_batch_all['scene_id'] == bk]
         axes[0, idx].hist(sub['avg_fps'], bins=40, alpha=0.7, color='steelblue', edgecolor='white')
         axes[0, idx].set_title(f'{bk} - FPS')
         axes[1, idx].hist(sub['avg_frame_ms'], bins=40, alpha=0.7, color='coral', edgecolor='white')
@@ -652,13 +656,32 @@ def set_cell_source(cell, text: str):
     cell["execution_count"] = None
 
 
+def sanitize_notebook_scene_labels(nb: dict) -> int:
+    """Rename escena_id -> scene_id in code cells (axis labels, column names)."""
+    n = 0
+    for cell in nb["cells"]:
+        if cell.get("cell_type") != "code":
+            continue
+        src = "".join(cell.get("source", []))
+        if "escena_id" not in src:
+            continue
+        cell["source"] = [
+            line.replace("escena_id", "scene_id") for line in cell["source"]
+        ]
+        n += 1
+    return n
+
+
 def main():
     nb = json.loads(NB_PATH.read_text(encoding="utf-8"))
     set_cell_source(nb["cells"][3], patch_config_cell("".join(nb["cells"][3]["source"])))
     for idx, src in CELL_SOURCES.items():
         set_cell_source(nb["cells"][idx], src)
+    renamed = sanitize_notebook_scene_labels(nb)
     NB_PATH.write_text(json.dumps(nb, ensure_ascii=False, indent=1), encoding="utf-8")
     print("Patched notebook cells:", sorted(CELL_SOURCES.keys()) + [3])
+    if renamed:
+        print(f"Renamed escena_id -> scene_id in {renamed} additional code cells")
 
 
 if __name__ == "__main__":
